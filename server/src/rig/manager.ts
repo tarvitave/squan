@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 import { getDb } from '../db/index.js'
-import type { Rig, RuntimeConfig } from '../types/index.js'
+import type { Project as Rig, RuntimeConfig } from '../types/index.js'
 
 const DEFAULT_RUNTIME: RuntimeConfig = {
   provider: 'claude',

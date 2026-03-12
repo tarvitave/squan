@@ -87,7 +87,7 @@ function toModel(r: DbConvoy): Convoy {
   return {
     id: r.id,
     name: r.name,
-    rigId: r.rig_id,
+    projectId: r.rig_id,
     beadIds: JSON.parse(r.bead_ids_json),
     status: r.status,
     createdAt: r.created_at,
