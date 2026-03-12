@@ -24,10 +24,10 @@ export default function App() {
       .then((r) => r.json())
       .then((data) =>
         setAgents(
-          data.map((p: { id: string; name: string; rigId: string; status: string; sessionId: string | null }) => ({
+          data.map((p: { id: string; name: string; projectId: string; status: string; sessionId: string | null }) => ({
             id: p.id,
             name: p.name,
-            rigId: p.rigId,
+            projectId: p.projectId,
             status: p.status,
             sessionId: p.sessionId,
           }))

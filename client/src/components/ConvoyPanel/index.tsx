@@ -29,7 +29,7 @@ export function ConvoyPanel() {
             </span>
           </div>
           <div style={styles.meta}>
-            <span style={styles.rig}>{convoy.rigId}</span>
+            <span style={styles.rig}>{convoy.projectId}</span>
             <span style={styles.beadCount}>{convoy.beadIds.length} beads</span>
           </div>
         </div>

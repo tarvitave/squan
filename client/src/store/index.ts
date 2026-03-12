@@ -12,7 +12,7 @@ export interface Tab {
 export interface Agent {
   id: string
   name: string
-  rigId: string
+  projectId: string
   status: 'idle' | 'working' | 'stalled' | 'zombie' | 'done'
   sessionId: string | null
 }
@@ -27,7 +27,7 @@ export interface Rig {
 export interface ConvoyEntry {
   id: string
   name: string
-  rigId: string
+  projectId: string
   status: string
   beadIds: string[]
 }

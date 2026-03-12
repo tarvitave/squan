@@ -20,29 +20,32 @@ const STATUS_ICON: Record<Agent['status'], string> = {
 
 export function AgentTree() {
   const agents = useStore((s) => s.agents)
+  const rigs = useStore((s) => s.rigs)
   const addPaneToTab = useAppStore((s) => s.addPaneToTab)
   const activeTabId = useAppStore((s) => s.activeTabId)
 
-  // Group by rig
-  const byRig = agents.reduce<Record<string, Agent[]>>((acc, a) => {
-    ;(acc[a.rigId] ??= []).push(a)
+  const rigNameById = Object.fromEntries(rigs.map((r) => [r.id, r.name]))
+
+  // Group by project
+  const byProject = agents.reduce<Record<string, Agent[]>>((acc, a) => {
+    ;(acc[a.projectId] ??= []).push(a)
     return acc
   }, {})
 
   if (agents.length === 0) {
     return (
       <div style={styles.empty}>
-        <span style={styles.emptyText}>No agents</span>
+        <span style={styles.emptyText}>No WorkerBees</span>
       </div>
     )
   }
 
   return (
     <div style={styles.tree}>
-      {Object.entries(byRig).map(([rigId, rigAgents]) => (
-        <div key={rigId}>
-          <div style={styles.rigHeader}>{rigId}</div>
-          {rigAgents.map((agent) => (
+      {Object.entries(byProject).map(([projectId, projectAgents]) => (
+        <div key={projectId}>
+          <div style={styles.rigHeader}>{rigNameById[projectId] ?? projectId}</div>
+          {projectAgents.map((agent) => (
             <div
               key={agent.id}
               style={styles.agentRow}
