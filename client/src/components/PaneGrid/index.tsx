@@ -147,8 +147,9 @@ const styles = {
     gap: 16,
   },
   emptyText: {
-    color: '#555',
+    color: '#aaa',
     fontFamily: 'monospace',
+    fontSize: 14,
   },
   spawnBtn: {
     background: '#1a1a1a',

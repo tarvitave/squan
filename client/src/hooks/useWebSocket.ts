@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useStore } from '../store/index.js'
 
-const WS_URL = `ws://${window.location.host}/ws`
+const WS_URL = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`
 
 type DataCallback = (data: string) => void
 

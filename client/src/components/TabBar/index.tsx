@@ -1,13 +1,11 @@
 import { useStore } from '../../store/index.js'
 
 export function TabBar() {
-  const { tabs, activeTabId, setActiveTab, addTab, removeTab } = useStore((s) => ({
-    tabs: s.tabs,
-    activeTabId: s.activeTabId,
-    setActiveTab: s.setActiveTab,
-    addTab: s.addTab,
-    removeTab: s.removeTab,
-  }))
+  const tabs = useStore((s) => s.tabs)
+  const activeTabId = useStore((s) => s.activeTabId)
+  const setActiveTab = useStore((s) => s.setActiveTab)
+  const addTab = useStore((s) => s.addTab)
+  const removeTab = useStore((s) => s.removeTab)
 
   return (
     <div style={styles.bar}>

@@ -8,7 +8,8 @@ import { useStore } from './store/index.js'
 import { useWebSocket } from './hooks/useWebSocket.js'
 
 export default function App() {
-  const { tabs, activeTabId } = useStore((s) => ({ tabs: s.tabs, activeTabId: s.activeTabId }))
+  const tabs = useStore((s) => s.tabs)
+  const activeTabId = useStore((s) => s.activeTabId)
   const setAgents = useStore((s) => s.setAgents)
   const setConvoys = useStore((s) => s.setConvoys)
 
@@ -127,6 +128,6 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: '#444',
+    color: '#888',
   },
 }
