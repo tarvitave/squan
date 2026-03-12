@@ -66,7 +66,7 @@ export function TerminalPane({ sessionId, label, onClose }: Props) {
   }, [sessionId, subscribe, unsubscribe, sendInput, sendResize])
 
   return (
-    <div style={styles.wrapper}>
+    <div style={styles.wrapper} onClick={() => termRef.current?.focus()}>
       <div style={styles.titleBar}>
         <span style={styles.label}>{label ?? sessionId.slice(0, 8)}</span>
         {onClose && (

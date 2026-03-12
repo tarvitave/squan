@@ -21,7 +21,11 @@ export function useWebSocket() {
       ws.current = socket
 
       socket.onopen = () => {
-        // Flush any messages that were sent before the connection opened
+        // Re-subscribe to all active terminal sessions after reconnect
+        for (const sessionId of subscribers.current.keys()) {
+          socket.send(JSON.stringify({ type: 'subscribe', payload: { sessionId } }))
+        }
+        // Flush any messages queued while disconnected
         queue.current.forEach((msg) => socket.send(msg))
         queue.current = []
       }
