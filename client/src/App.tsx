@@ -48,15 +48,15 @@ export default function App() {
       {/* Left sidebar */}
       <div style={styles.sidebar}>
         <div style={{ ...styles.sidebarSection, flex: 'none' }}>
-          <div style={styles.sectionTitle}>Mayor</div>
+          <div style={styles.sectionTitle}>Mayor Lee</div>
           <MayorPanel />
         </div>
         <div style={{ ...styles.sidebarSection, flex: 'none' }}>
-          <div style={styles.sectionTitle}>Rigs</div>
+          <div style={styles.sectionTitle}>Projects</div>
           <RigPanel />
         </div>
         <div style={styles.sidebarSection}>
-          <div style={styles.sectionTitle}>Agents</div>
+          <div style={styles.sectionTitle}>WorkerBees</div>
           <AgentTree />
         </div>
         <div style={styles.sidebarSection}>

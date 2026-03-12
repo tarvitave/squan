@@ -45,9 +45,9 @@ export function useWebSocket() {
               timestamp: new Date().toISOString(),
             })
 
-            if (payload?.type === 'polecat.done') updateAgent(payload.polecatId as string, { status: 'done' })
-            if (payload?.type === 'polecat.stalled') updateAgent(payload.polecatId as string, { status: 'stalled' })
-            if (payload?.type === 'polecat.zombie') updateAgent(payload.polecatId as string, { status: 'zombie' })
+            if (payload?.type === 'workerbee.done') updateAgent(payload.workerbeeId as string, { status: 'done' })
+            if (payload?.type === 'workerbee.stalled') updateAgent(payload.workerbeeId as string, { status: 'stalled' })
+            if (payload?.type === 'workerbee.zombie') updateAgent(payload.workerbeeId as string, { status: 'zombie' })
           }
         } catch {
           // ignore parse errors

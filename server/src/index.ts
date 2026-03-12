@@ -3,8 +3,8 @@ import { createServer } from 'http'
 import { setupWsServer } from './ws/server.js'
 import { startWitness } from './witness/index.js'
 import { ptyManager } from './polecat/pty.js'
-import { polecatManager } from './polecat/manager.js'
-import { mayorManager } from './mayor/manager.js'
+import { workerBeeManager } from './polecat/manager.js'
+import { mayorLeeManager } from './mayor/manager.js'
 import { rigManager } from './rig/manager.js'
 import { convoyManager } from './convoy/manager.js'
 import { migrate } from './db/index.js'
@@ -19,47 +19,71 @@ app.use((_req, res, next) => {
   next()
 })
 
-// --- Rigs ---
-app.get('/api/rigs', async (_req, res) => {
+// --- Projects (formerly Rigs) ---
+app.get('/api/projects', async (_req, res) => {
+  res.json(await rigManager.listByTown('default'))
+})
+app.get('/api/rigs', async (_req, res) => {  // backwards compat
   res.json(await rigManager.listByTown('default'))
 })
 
-app.post('/api/rigs', async (req, res) => {
+app.post('/api/projects', async (req, res) => {
+  const { name, repoUrl, localPath } = req.body
+  res.json(await rigManager.add('default', name, repoUrl, localPath))
+})
+app.post('/api/rigs', async (req, res) => {  // backwards compat
   const { name, repoUrl, localPath } = req.body
   res.json(await rigManager.add('default', name, repoUrl, localPath))
 })
 
-// --- Polecats ---
-app.get('/api/polecats', async (_req, res) => {
-  res.json(await polecatManager.listAll())
+// --- WorkerBees (formerly Polecats) ---
+app.get('/api/workerbees', async (_req, res) => {
+  res.json(await workerBeeManager.listAll())
+})
+app.get('/api/polecats', async (_req, res) => {  // backwards compat
+  res.json(await workerBeeManager.listAll())
 })
 
-app.get('/api/rigs/:rigId/polecats', async (req, res) => {
-  res.json(await polecatManager.listByRig(req.params.rigId))
+app.get('/api/projects/:projectId/workerbees', async (req, res) => {
+  res.json(await workerBeeManager.listByProject(req.params.projectId))
 })
 
-app.post('/api/rigs/:rigId/polecats', async (req, res) => {
-  const polecat = await polecatManager.spawn(req.params.rigId, req.body.beadId)
-  res.json(polecat)
+app.post('/api/projects/:projectId/workerbees', async (req, res) => {
+  const bee = await workerBeeManager.spawn(req.params.projectId, req.body.beadId)
+  res.json(bee)
+})
+app.post('/api/rigs/:rigId/polecats', async (req, res) => {  // backwards compat
+  const bee = await workerBeeManager.spawn(req.params.rigId, req.body.beadId)
+  res.json(bee)
 })
 
-app.delete('/api/polecats/:id', async (req, res) => {
-  await polecatManager.nuke(req.params.id)
+app.delete('/api/workerbees/:id', async (req, res) => {
+  await workerBeeManager.nuke(req.params.id)
   res.json({ ok: true })
 })
 
-// --- Mayor ---
-app.post('/api/mayor/start', async (req, res) => {
-  res.json(await mayorManager.start(req.body.townId ?? 'default'))
+// --- Mayor Lee ---
+app.post('/api/mayor-lee/start', async (req, res) => {
+  res.json(await mayorLeeManager.start(req.body.townId ?? 'default'))
+})
+app.post('/api/mayor/start', async (req, res) => {  // backwards compat
+  res.json(await mayorLeeManager.start(req.body.townId ?? 'default'))
 })
 
-app.post('/api/mayor/stop', async (req, res) => {
-  await mayorManager.stop(req.body.townId ?? 'default')
+app.post('/api/mayor-lee/stop', async (req, res) => {
+  await mayorLeeManager.stop(req.body.townId ?? 'default')
+  res.json({ ok: true })
+})
+app.post('/api/mayor/stop', async (req, res) => {  // backwards compat
+  await mayorLeeManager.stop(req.body.townId ?? 'default')
   res.json({ ok: true })
 })
 
-app.get('/api/mayor', async (_req, res) => {
-  res.json(await mayorManager.get('default'))
+app.get('/api/mayor-lee', async (_req, res) => {
+  res.json(await mayorLeeManager.get('default'))
+})
+app.get('/api/mayor', async (_req, res) => {  // backwards compat
+  res.json(await mayorLeeManager.get('default'))
 })
 
 // --- Convoys ---
@@ -68,8 +92,8 @@ app.get('/api/convoys', async (_req, res) => {
 })
 
 app.post('/api/convoys', async (req, res) => {
-  const { name, rigId, beadIds } = req.body
-  res.json(await convoyManager.create(name, rigId, beadIds))
+  const { name, projectId, rigId, beadIds } = req.body
+  res.json(await convoyManager.create(name, projectId ?? rigId, beadIds))
 })
 
 app.post('/api/convoys/:id/beads', async (req, res) => {

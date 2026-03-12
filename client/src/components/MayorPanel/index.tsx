@@ -80,7 +80,7 @@ export function MayorPanel() {
     <div style={styles.panel}>
       <div style={styles.row}>
         <span style={{ ...styles.dot, background: isRunning ? '#4ec9b0' : '#444' }} />
-        <span style={styles.label}>Mayor</span>
+        <span style={styles.label}>Mayor Lee</span>
         <span style={{ ...styles.status, color: isRunning ? '#4ec9b0' : '#555' }}>
           {isRunning ? 'running' : 'stopped'}
         </span>

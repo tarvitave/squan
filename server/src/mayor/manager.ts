@@ -2,14 +2,15 @@ import { v4 as uuidv4 } from 'uuid'
 import { getDb } from '../db/index.js'
 import { ptyManager } from '../polecat/pty.js'
 import { broadcastEvent } from '../ws/server.js'
-import type { Mayor } from '../types/index.js'
+import type { MayorLee } from '../types/index.js'
 
-export const mayorManager = {
-  async start(townId: string): Promise<Mayor> {
+// mayorLeeManager — manages Mayor Lee, the orchestrator agent
+export const mayorLeeManager = {
+  async start(townId: string): Promise<MayorLee> {
     const db = getDb()
 
     const existing = await db.execute({ sql: 'SELECT * FROM mayors WHERE town_id = ?', args: [townId] })
-    const row = existing.rows[0] as unknown as DbMayor | undefined
+    const row = existing.rows[0] as unknown as DbRow | undefined
 
     if (row?.session_id) {
       return toModel(row)
@@ -21,7 +22,7 @@ export const mayorManager = {
       shell: process.env.MAYOR_COMMAND ?? 'claude',
       cwd: repoPath,
       env: {
-        SQUANSQ_ROLE: 'mayor',
+        SQUANSQ_ROLE: 'mayor-lee',
         SQUANSQ_TOWN: townId,
         ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? '',
       },
@@ -42,7 +43,7 @@ export const mayorManager = {
 
     broadcastEvent({
       id: uuidv4(),
-      type: 'mayor.started',
+      type: 'mayorlee.started',
       payload: { mayorId: id, townId, sessionId },
       timestamp: now,
     })
@@ -53,7 +54,7 @@ export const mayorManager = {
   async stop(townId: string) {
     const db = getDb()
     const result = await db.execute({ sql: 'SELECT * FROM mayors WHERE town_id = ?', args: [townId] })
-    const row = result.rows[0] as unknown as DbMayor | undefined
+    const row = result.rows[0] as unknown as DbRow | undefined
     if (!row) return
     if (row.session_id) {
       ptyManager.kill(row.session_id)
@@ -64,29 +65,32 @@ export const mayorManager = {
     })
     broadcastEvent({
       id: uuidv4(),
-      type: 'mayor.stopped',
+      type: 'mayorlee.stopped',
       payload: { mayorId: row.id, townId },
       timestamp: new Date().toISOString(),
     })
   },
 
-  async get(townId: string): Promise<Mayor | null> {
+  async get(townId: string): Promise<MayorLee | null> {
     const db = getDb()
     const result = await db.execute({ sql: 'SELECT * FROM mayors WHERE town_id = ?', args: [townId] })
-    const row = result.rows[0] as unknown as DbMayor | undefined
+    const row = result.rows[0] as unknown as DbRow | undefined
     return row ? toModel(row) : null
   },
 }
 
-interface DbMayor {
+// Backwards compat alias
+export const mayorManager = mayorLeeManager
+
+interface DbRow {
   id: string
   town_id: string
   session_id: string | null
-  status: Mayor['status']
+  status: MayorLee['status']
   created_at: string
 }
 
-function toModel(r: DbMayor): Mayor {
+function toModel(r: DbRow): MayorLee {
   return {
     id: r.id,
     townId: r.town_id,

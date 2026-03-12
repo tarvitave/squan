@@ -1,16 +1,16 @@
 import { useStore } from '../../store/index.js'
 
 const EVENT_COLOR: Record<string, string> = {
-  'polecat.spawned': '#4ec9b0',
-  'polecat.done': '#608b4e',
-  'polecat.stalled': '#ce9178',
-  'polecat.zombie': '#f44747',
+  'workerbee.spawned': '#4ec9b0',
+  'workerbee.done': '#608b4e',
+  'workerbee.stalled': '#ce9178',
+  'workerbee.zombie': '#f44747',
   'convoy.created': '#569cd6',
   'convoy.landed': '#608b4e',
   'hook.created': '#888',
   'hook.completed': '#4ec9b0',
-  'mayor.started': '#dcdcaa',
-  'mayor.stopped': '#888',
+  'mayorlee.started': '#dcdcaa',
+  'mayorlee.stopped': '#888',
 }
 
 export function EventStream() {

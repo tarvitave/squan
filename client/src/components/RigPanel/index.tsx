@@ -42,14 +42,14 @@ export function RigPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       })
-      const polecat = await res.json()
-      if (polecat.sessionId) {
-        const hasSession = tabs.some((t) => t.panes.includes(polecat.sessionId))
+      const bee = await res.json()
+      if (bee.sessionId) {
+        const hasSession = tabs.some((t) => t.panes.includes(bee.sessionId))
         if (!hasSession) {
           if (activeTabId) {
-            addPaneToTab(activeTabId, polecat.sessionId)
+            addPaneToTab(activeTabId, bee.sessionId)
           } else {
-            addTab(rig.name, [polecat.sessionId])
+            addTab(rig.name, [bee.sessionId])
           }
         }
       }
@@ -104,7 +104,7 @@ export function RigPanel() {
         </div>
       ) : (
         <button style={styles.newRigBtn} onClick={() => setShowForm(true)}>
-          + Add Rig
+          + Add Project
         </button>
       )}
     </div>
