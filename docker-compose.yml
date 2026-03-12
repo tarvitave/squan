@@ -1,0 +1,25 @@
+services:
+  server:
+    image: ghcr.io/tarvitave/squansq-server:latest
+    restart: unless-stopped
+    environment:
+      PORT: "3001"
+      DB_URL: "file:/data/squansq.db"
+    volumes:
+      - db_data:/data
+    # node-pty requires pty device access
+    cap_add:
+      - SYS_PTRACE
+    devices:
+      - /dev/ptmx:/dev/ptmx
+
+  client:
+    image: ghcr.io/tarvitave/squansq-client:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - server
+
+volumes:
+  db_data:

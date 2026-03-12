@@ -1,0 +1,99 @@
+import { WebSocketServer, WebSocket } from 'ws'
+import { Server } from 'http'
+import { v4 as uuidv4 } from 'uuid'
+import type { WsMessage, SquansqEvent } from '../types/index.js'
+import { ptyManager } from '../polecat/pty.js'
+
+// Map of clientId → WebSocket
+const clients = new Map<string, WebSocket>()
+
+// Map of clientId → Set of subscribed terminal session IDs
+const subscriptions = new Map<string, Set<string>>()
+
+export function setupWsServer(httpServer: Server) {
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws' })
+
+  wss.on('connection', (ws) => {
+    const clientId = uuidv4()
+    clients.set(clientId, ws)
+    subscriptions.set(clientId, new Set())
+
+    ws.on('message', (raw) => {
+      try {
+        const msg: WsMessage = JSON.parse(raw.toString())
+        handleMessage(clientId, ws, msg)
+      } catch {
+        send(ws, { type: 'error', payload: { message: 'Invalid JSON' } })
+      }
+    })
+
+    ws.on('close', () => {
+      subscriptions.get(clientId)?.forEach((sessionId) => {
+        ptyManager.unsubscribe(sessionId, clientId)
+      })
+      clients.delete(clientId)
+      subscriptions.delete(clientId)
+    })
+
+    send(ws, { type: 'ack', payload: { clientId } })
+  })
+
+  return wss
+}
+
+function handleMessage(clientId: string, ws: WebSocket, msg: WsMessage) {
+  switch (msg.type) {
+    case 'subscribe': {
+      const sessionId = msg.payload?.sessionId as string
+      if (!sessionId) return
+      subscriptions.get(clientId)?.add(sessionId)
+      ptyManager.subscribe(sessionId, clientId, (data: string) => {
+        send(ws, { type: 'event', id: sessionId, payload: { type: 'terminal.data', data } })
+      })
+      break
+    }
+
+    case 'unsubscribe': {
+      const sessionId = msg.payload?.sessionId as string
+      if (!sessionId) return
+      subscriptions.get(clientId)?.delete(sessionId)
+      ptyManager.unsubscribe(sessionId, clientId)
+      break
+    }
+
+    case 'terminal.input': {
+      const sessionId = msg.payload?.sessionId as string
+      const data = msg.payload?.data as string
+      if (sessionId && data) {
+        ptyManager.write(sessionId, data)
+      }
+      break
+    }
+
+    case 'terminal.resize': {
+      const sessionId = msg.payload?.sessionId as string
+      const cols = msg.payload?.cols as number
+      const rows = msg.payload?.rows as number
+      if (sessionId && cols && rows) {
+        ptyManager.resize(sessionId, cols, rows)
+      }
+      break
+    }
+  }
+}
+
+// Broadcast a domain event to all connected clients
+export function broadcastEvent(event: SquansqEvent) {
+  const msg: WsMessage = { type: 'event', payload: event as unknown as Record<string, unknown> }
+  for (const ws of clients.values()) {
+    if (ws.readyState === WebSocket.OPEN) {
+      send(ws, msg)
+    }
+  }
+}
+
+function send(ws: WebSocket, msg: WsMessage) {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(msg))
+  }
+}
