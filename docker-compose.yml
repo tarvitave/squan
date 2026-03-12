@@ -9,6 +9,8 @@ services:
       SQUANSQ_REPO_PATH: "/repo"
     volumes:
       - db_data:/data
+      # Persist claude auth across container restarts (complete OAuth once, stays logged in)
+      - claude_auth:/root/.claude
       # Mount the squansq repo so claude agents can read/edit the code
       - /opt/squansq-repo:/repo
     cap_add:
@@ -29,3 +31,4 @@ services:
 
 volumes:
   db_data:
+  claude_auth:
