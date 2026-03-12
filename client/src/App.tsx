@@ -5,6 +5,7 @@ import { AgentTree } from './components/AgentTree/index.js'
 import { ConvoyPanel } from './components/ConvoyPanel/index.js'
 import { EventStream } from './components/EventStream/index.js'
 import { MayorPanel } from './components/MayorPanel/index.js'
+import { RigPanel } from './components/RigPanel/index.js'
 import { useStore } from './store/index.js'
 import { useWebSocket } from './hooks/useWebSocket.js'
 
@@ -49,6 +50,10 @@ export default function App() {
         <div style={{ ...styles.sidebarSection, flex: 'none' }}>
           <div style={styles.sectionTitle}>Mayor</div>
           <MayorPanel />
+        </div>
+        <div style={{ ...styles.sidebarSection, flex: 'none' }}>
+          <div style={styles.sectionTitle}>Rigs</div>
+          <RigPanel />
         </div>
         <div style={styles.sidebarSection}>
           <div style={styles.sectionTitle}>Agents</div>

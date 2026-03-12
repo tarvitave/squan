@@ -8,6 +8,7 @@ interface Props {
 
 export function PaneGrid({ tab }: Props) {
   const addPaneToTab = useStore((s) => s.addPaneToTab)
+  const removePaneFromTab = useStore((s) => s.removePaneFromTab)
   const updateTabLayout = useStore((s) => s.updateTabLayout)
 
   if (tab.panes.length === 0) {
@@ -64,7 +65,12 @@ export function PaneGrid({ tab }: Props) {
       </div>
       <div style={gridStyle}>
         {tab.panes.map((sessionId) => (
-          <TerminalPane key={sessionId} sessionId={sessionId} label={sessionId.slice(0, 8)} />
+          <TerminalPane
+            key={sessionId}
+            sessionId={sessionId}
+            label={sessionId.slice(0, 8)}
+            onClose={() => removePaneFromTab(tab.id, sessionId)}
+          />
         ))}
       </div>
     </div>
