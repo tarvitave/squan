@@ -27,12 +27,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY package.json ./
 RUN npm install --omit=dev
 
+# Install Claude Code CLI so polecats/mayor can run it
+RUN npm install -g @anthropic-ai/claude-code
+
 COPY --from=builder /app/dist ./dist
 
 RUN mkdir -p /data
 
 ENV PORT=3001
 ENV DB_URL=file:/data/squansq.db
+# Set via docker-compose or GitHub secret — never hardcode
+ENV ANTHROPIC_API_KEY=""
+ENV SQUANSQ_REPO_PATH=/repo
 
 EXPOSE 3001
 

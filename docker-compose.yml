@@ -5,8 +5,12 @@ services:
     environment:
       PORT: "3001"
       DB_URL: "file:/data/squansq.db"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+      SQUANSQ_REPO_PATH: "/repo"
     volumes:
       - db_data:/data
+      # Mount the squansq repo so claude agents can read/edit the code
+      - /opt/squansq-repo:/repo
     cap_add:
       - SYS_PTRACE
     devices:

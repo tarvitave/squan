@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import { getDb } from '../db/index.js'
 import { ptyManager } from './pty.js'
+import { rigManager } from '../rig/manager.js'
 import { broadcastEvent } from '../ws/server.js'
 import type { Polecat } from '../types/index.js'
 
@@ -16,11 +17,20 @@ export const polecatManager = {
     const id = uuidv4()
     const name = await allocateName(rigId)
     const branch = `polecat/${name}-${Date.now()}`
-    const worktreePath = `/tmp/squansq/${rigId}/${name}`
+
+    // Look up rig to get the repo path and runtime command
+    const rig = await rigManager.getById(rigId)
+    const worktreePath = rig?.localPath ?? `/tmp/squansq/${rigId}/${name}`
+    const command = rig?.runtime.command ?? 'bash'
 
     const sessionId = ptyManager.spawn({
-      cwd: process.env.USERPROFILE ?? process.env.HOME,
-      env: { SQUANSQ_POLECAT: name, SQUANSQ_RIG: rigId },
+      shell: command,
+      cwd: worktreePath,
+      env: {
+        SQUANSQ_POLECAT: name,
+        SQUANSQ_RIG: rigId,
+        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? '',
+      },
     })
 
     const now = new Date().toISOString()

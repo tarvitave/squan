@@ -16,8 +16,15 @@ export const mayorManager = {
     }
 
     const id = row?.id ?? uuidv4()
+    const repoPath = process.env.SQUANSQ_REPO_PATH ?? process.env.HOME ?? '/opt/squansq-repo'
     const sessionId = ptyManager.spawn({
-      env: { SQUANSQ_ROLE: 'mayor', SQUANSQ_TOWN: townId },
+      shell: process.env.MAYOR_COMMAND ?? 'claude',
+      cwd: repoPath,
+      env: {
+        SQUANSQ_ROLE: 'mayor',
+        SQUANSQ_TOWN: townId,
+        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? '',
+      },
     })
 
     const now = new Date().toISOString()
