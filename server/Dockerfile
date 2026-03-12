@@ -42,4 +42,7 @@ ENV SQUANSQ_REPO_PATH=/repo
 
 EXPOSE 3001
 
-CMD ["node", "dist/index.js"]
+# Startup script: configure claude with the API key, then start server
+COPY start.sh ./
+RUN chmod +x start.sh
+CMD ["./start.sh"]
