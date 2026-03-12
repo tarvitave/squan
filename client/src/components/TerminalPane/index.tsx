@@ -40,6 +40,7 @@ export function TerminalPane({ sessionId, label, onClose }: Props) {
     term.loadAddon(links)
     term.open(containerRef.current)
     fit.fit()
+    term.focus()
 
     termRef.current = term
     fitRef.current = fit
