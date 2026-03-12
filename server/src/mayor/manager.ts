@@ -24,7 +24,6 @@ export const mayorLeeManager = {
       env: {
         SQUANSQ_ROLE: 'mayor-lee',
         SQUANSQ_TOWN: townId,
-        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? '',
       },
     })
 

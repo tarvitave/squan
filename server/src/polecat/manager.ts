@@ -30,7 +30,6 @@ export const workerBeeManager = {
       env: {
         SQUANSQ_WORKERBEE: name,
         SQUANSQ_PROJECT: projectId,
-        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? '',
       },
     })
 
