@@ -7,21 +7,25 @@ import { EventStream } from './components/EventStream/index.js'
 import { MayorPanel } from './components/MayorPanel/index.js'
 import { RigPanel } from './components/RigPanel/index.js'
 import { Footer } from './components/Footer/index.js'
+import { AuthPage } from './components/AuthPage/index.js'
 import { useStore } from './store/index.js'
 import { useWebSocket } from './hooks/useWebSocket.js'
+import { apiFetch } from './lib/api.js'
 
 export default function App() {
+  const token = useStore((s) => s.token)
+  const user = useStore((s) => s.user)
+  const clearAuth = useStore((s) => s.clearAuth)
   const tabs = useStore((s) => s.tabs)
   const activeTabId = useStore((s) => s.activeTabId)
   const setAgents = useStore((s) => s.setAgents)
   const setConvoys = useStore((s) => s.setConvoys)
 
-  // Establish WebSocket connection
   useWebSocket()
 
-  // Initial data load
   useEffect(() => {
-    fetch('/api/workerbees')
+    if (!token) return
+    apiFetch('/api/workerbees')
       .then((r) => r.json())
       .then((data) =>
         setAgents(
@@ -36,11 +40,13 @@ export default function App() {
       )
       .catch(() => {})
 
-    fetch('/api/convoys')
+    apiFetch('/api/convoys')
       .then((r) => r.json())
       .then(setConvoys)
       .catch(() => {})
-  }, [setAgents, setConvoys])
+  }, [token, setAgents, setConvoys])
+
+  if (!token) return <AuthPage />
 
   const activeTab = tabs.find((t) => t.id === activeTabId)
 
@@ -50,7 +56,12 @@ export default function App() {
       <div style={styles.sidebar}>
         <div style={styles.versionBar}>
           <span style={styles.appName}>squansq</span>
-          <span style={styles.version}>v{__APP_VERSION__}</span>
+          <div style={styles.versionRight}>
+            <span style={styles.version}>v{__APP_VERSION__}</span>
+            <button style={styles.signOutBtn} onClick={clearAuth} title={`Signed in as ${user?.email}`}>
+              ⎋
+            </button>
+          </div>
         </div>
         <div style={{ ...styles.sidebarSection, flex: 'none' }}>
           <div style={styles.sectionTitle}>Mayor Lee</div>
@@ -124,10 +135,24 @@ const styles = {
     fontWeight: 'bold' as const,
     letterSpacing: '0.05em',
   },
+  versionRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+  },
   version: {
     fontSize: 10,
     fontFamily: 'monospace',
     color: '#444',
+  },
+  signOutBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#444',
+    cursor: 'pointer',
+    fontSize: 12,
+    padding: 0,
+    lineHeight: 1,
   },
   sidebarSection: {
     display: 'flex',

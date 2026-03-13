@@ -8,15 +8,60 @@ import { mayorLeeManager } from './mayor/manager.js'
 import { rigManager } from './rig/manager.js'
 import { convoyManager } from './convoy/manager.js'
 import { migrate } from './db/index.js'
+import { register, login, getUserById, updateApiKey, requireAuth } from './auth/index.js'
+import type { AuthRequest } from './auth/index.js'
 
 const app = express()
 app.use(express.json())
 
 app.use((_req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*')
-  res.header('Access-Control-Allow-Headers', 'Content-Type')
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+  if (_req.method === 'OPTIONS') { res.sendStatus(204); return }
   next()
+})
+
+// --- Auth (public) ---
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { email, password, anthropicApiKey } = req.body
+    if (!email || !password) { res.status(400).json({ error: 'Email and password required' }); return }
+    res.json(await register(email, password, anthropicApiKey))
+  } catch (e: any) {
+    res.status(400).json({ error: e.message })
+  }
+})
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body
+    if (!email || !password) { res.status(400).json({ error: 'Email and password required' }); return }
+    res.json(await login(email, password))
+  } catch (e: any) {
+    res.status(401).json({ error: e.message })
+  }
+})
+
+// Health — public
+app.get('/api/health', (_req, res) => {
+  res.json({ ok: true, ts: new Date().toISOString() })
+})
+
+// --- Auth middleware for all routes below ---
+app.use('/api', requireAuth as any)
+
+// --- Current user ---
+app.get('/api/auth/me', async (req: AuthRequest, res) => {
+  const user = await getUserById(req.userId!)
+  res.json(user)
+})
+
+app.put('/api/auth/api-key', async (req: AuthRequest, res) => {
+  const { anthropicApiKey } = req.body
+  if (!anthropicApiKey) { res.status(400).json({ error: 'anthropicApiKey required' }); return }
+  await updateApiKey(req.userId!, anthropicApiKey)
+  res.json({ ok: true })
 })
 
 // --- Projects (formerly Rigs) ---
@@ -48,12 +93,14 @@ app.get('/api/projects/:projectId/workerbees', async (req, res) => {
   res.json(await workerBeeManager.listByProject(req.params.projectId))
 })
 
-app.post('/api/projects/:projectId/workerbees', async (req, res) => {
-  const bee = await workerBeeManager.spawn(req.params.projectId, req.body.beadId, req.body.task)
+app.post('/api/projects/:projectId/workerbees', async (req: AuthRequest, res) => {
+  const user = await getUserById(req.userId!)
+  const bee = await workerBeeManager.spawn(req.params.projectId, req.body.beadId, req.body.task, user?.anthropicApiKey ?? undefined)
   res.json(bee)
 })
-app.post('/api/rigs/:rigId/polecats', async (req, res) => {  // backwards compat
-  const bee = await workerBeeManager.spawn(req.params.rigId, req.body.beadId, req.body.task)
+app.post('/api/rigs/:rigId/polecats', async (req: AuthRequest, res) => {  // backwards compat
+  const user = await getUserById(req.userId!)
+  const bee = await workerBeeManager.spawn(req.params.rigId, req.body.beadId, req.body.task, user?.anthropicApiKey ?? undefined)
   res.json(bee)
 })
 
@@ -73,11 +120,13 @@ app.delete('/api/workerbees/:id', async (req, res) => {
 })
 
 // --- Mayor Lee ---
-app.post('/api/mayor-lee/start', async (req, res) => {
-  res.json(await mayorLeeManager.start(req.body.townId ?? 'default'))
+app.post('/api/mayor-lee/start', async (req: AuthRequest, res) => {
+  const user = await getUserById(req.userId!)
+  res.json(await mayorLeeManager.start(req.body.townId ?? 'default', user?.anthropicApiKey ?? undefined))
 })
-app.post('/api/mayor/start', async (req, res) => {  // backwards compat
-  res.json(await mayorLeeManager.start(req.body.townId ?? 'default'))
+app.post('/api/mayor/start', async (req: AuthRequest, res) => {  // backwards compat
+  const user = await getUserById(req.userId!)
+  res.json(await mayorLeeManager.start(req.body.townId ?? 'default', user?.anthropicApiKey ?? undefined))
 })
 
 app.post('/api/mayor-lee/stop', async (req, res) => {
@@ -142,11 +191,6 @@ app.post('/api/terminals', (req, res) => {
 app.delete('/api/terminals/:id', (req, res) => {
   ptyManager.kill(req.params.id)
   res.json({ ok: true })
-})
-
-// --- Health ---
-app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, ts: new Date().toISOString() })
 })
 
 const PORT = process.env.PORT ?? 3001

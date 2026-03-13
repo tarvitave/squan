@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useStore } from '../../store/index.js'
+import { apiFetch } from '../../lib/api.js'
 
 interface MayorState {
   id: string
@@ -19,7 +20,7 @@ export function MayorPanel() {
 
   const fetchMayor = useCallback(async () => {
     try {
-      const res = await fetch('/api/mayor')
+      const res = await apiFetch('/api/mayor')
       if (res.ok) setMayor(await res.json())
     } catch { /* server not ready yet */ }
   }, [])
@@ -43,9 +44,8 @@ export function MayorPanel() {
   const handleStart = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/mayor/start', {
+      const res = await apiFetch('/api/mayor/start', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ townId: 'default' }),
       })
       const data = await res.json()
@@ -59,9 +59,8 @@ export function MayorPanel() {
   const handleStop = async () => {
     setLoading(true)
     try {
-      await fetch('/api/mayor/stop', {
+      await apiFetch('/api/mayor/stop', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ townId: 'default' }),
       })
       await fetchMayor()
@@ -78,9 +77,8 @@ export function MayorPanel() {
     if (!message.trim() || !mayor?.sessionId) return
     setSending(true)
     try {
-      await fetch('/api/mayor/message', {
+      await apiFetch('/api/mayor/message', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: message.trim() }),
       })
       setMessage('')

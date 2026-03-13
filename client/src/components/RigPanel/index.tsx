@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../../store/index.js'
 import type { Rig } from '../../store/index.js'
+import { apiFetch } from '../../lib/api.js'
 
 export function RigPanel() {
   const rigs = useStore((s) => s.rigs)
@@ -17,7 +18,7 @@ export function RigPanel() {
   const [spawning, setSpawning] = useState(false)
 
   useEffect(() => {
-    fetch('/api/projects')
+    apiFetch('/api/projects')
       .then((r) => r.json())
       .then(setRigs)
       .catch(() => {})
@@ -25,9 +26,8 @@ export function RigPanel() {
 
   const handleAdd = async () => {
     if (!form.name || !form.localPath) return
-    const res = await fetch('/api/projects', {
+    const res = await apiFetch('/api/projects', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form),
     })
     const rig = await res.json()
@@ -40,9 +40,8 @@ export function RigPanel() {
     if (!spawningRig) return
     setSpawning(true)
     try {
-      const res = await fetch(`/api/projects/${spawningRig.id}/workerbees`, {
+      const res = await apiFetch(`/api/projects/${spawningRig.id}/workerbees`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task: task.trim() || undefined }),
       })
       const bee = await res.json()

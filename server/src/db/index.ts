@@ -84,5 +84,13 @@ export async function migrate() {
       payload_json TEXT NOT NULL DEFAULT '{}',
       timestamp TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      anthropic_api_key TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `)
 }

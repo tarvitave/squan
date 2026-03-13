@@ -6,7 +6,7 @@ import type { MayorLee } from '../types/index.js'
 
 // mayorLeeManager — manages Mayor Lee, the orchestrator agent
 export const mayorLeeManager = {
-  async start(townId: string): Promise<MayorLee> {
+  async start(townId: string, apiKey?: string): Promise<MayorLee> {
     const db = getDb()
 
     const existing = await db.execute({ sql: 'SELECT * FROM mayors WHERE town_id = ?', args: [townId] })
@@ -18,13 +18,17 @@ export const mayorLeeManager = {
 
     const id = row?.id ?? uuidv4()
     const repoPath = process.env.SQUANSQ_REPO_PATH ?? process.env.HOME ?? '/opt/squansq-repo'
+
+    const env: Record<string, string> = {
+      SQUANSQ_ROLE: 'mayor-lee',
+      SQUANSQ_TOWN: townId,
+    }
+    if (apiKey) env.ANTHROPIC_API_KEY = apiKey
+
     const sessionId = ptyManager.spawn({
       shell: process.env.MAYOR_COMMAND ?? 'claude',
       cwd: repoPath,
-      env: {
-        SQUANSQ_ROLE: 'mayor-lee',
-        SQUANSQ_TOWN: townId,
-      },
+      env,
     })
 
     const now = new Date().toISOString()

@@ -1,10 +1,15 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+export interface AuthUser {
+  id: string
+  email: string
+  anthropicApiKey: string | null
+}
+
 export interface Tab {
   id: string
   label: string
-  // Which terminal session IDs are visible in this tab
   panes: string[]
   layout: 'single' | 'split-h' | 'split-v' | 'quad'
 }
@@ -40,6 +45,12 @@ export interface EventEntry {
 }
 
 interface SquansqState {
+  // Auth
+  token: string | null
+  user: AuthUser | null
+  setAuth: (token: string, user: AuthUser) => void
+  clearAuth: () => void
+
   // Tabs
   tabs: Tab[]
   activeTabId: string | null
@@ -73,6 +84,11 @@ let tabCounter = 1
 export const useStore = create<SquansqState>()(
   persist(
     (set) => ({
+      token: null,
+      user: null,
+      setAuth: (token, user) => set({ token, user }),
+      clearAuth: () => set({ token: null, user: null }),
+
       tabs: [{ id: 'tab-1', label: 'Mayor', panes: [], layout: 'single' }],
       activeTabId: 'tab-1',
 
@@ -127,8 +143,7 @@ export const useStore = create<SquansqState>()(
     }),
     {
       name: 'squansq-ui',
-      // Only persist tabs — agents/events are live data reloaded on connect
-      partialize: (s) => ({ tabs: s.tabs, activeTabId: s.activeTabId }),
+      partialize: (s) => ({ tabs: s.tabs, activeTabId: s.activeTabId, token: s.token, user: s.user }),
     }
   )
 )

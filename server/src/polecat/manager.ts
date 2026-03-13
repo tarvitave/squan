@@ -14,7 +14,7 @@ const NAME_POOL = [
 
 // workerBeeManager — manages WorkerBee (formerly Polecat) lifecycle
 export const workerBeeManager = {
-  async spawn(projectId: string, _beadId?: string, task?: string): Promise<WorkerBee> {
+  async spawn(projectId: string, _beadId?: string, task?: string, apiKey?: string): Promise<WorkerBee> {
     const db = getDb()
     const id = uuidv4()
     const name = await allocateName(projectId)
@@ -24,14 +24,17 @@ export const workerBeeManager = {
     const worktreePath = project?.localPath ?? `/tmp/squansq/${projectId}/${name}`
     const command = project?.runtime.command ?? 'bash'
 
+    const env: Record<string, string> = {
+      SQUANSQ_WORKERBEE: name,
+      SQUANSQ_PROJECT: projectId,
+      SQUANSQ_WORKERBEE_ID: id,
+    }
+    if (apiKey) env.ANTHROPIC_API_KEY = apiKey
+
     const sessionId = ptyManager.spawn({
       shell: command,
       cwd: worktreePath,
-      env: {
-        SQUANSQ_WORKERBEE: name,
-        SQUANSQ_PROJECT: projectId,
-        SQUANSQ_WORKERBEE_ID: id,
-      },
+      env,
     })
 
     // If a task was provided, send it to the agent after it initialises
