@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { getDb } from '../db/index.js'
 import { ptyManager } from '../polecat/pty.js'
 import { broadcastEvent } from '../ws/server.js'
+import { preconfigureClaudeAuth } from '../claude-auth.js'
 import type { MayorLee } from '../types/index.js'
 
 // mayorLeeManager — manages Mayor Lee, the orchestrator agent
@@ -18,6 +19,8 @@ export const mayorLeeManager = {
 
     const id = row?.id ?? uuidv4()
     const repoPath = process.env.SQUANSQ_REPO_PATH ?? process.env.HOME ?? '/opt/squansq-repo'
+
+    if (apiKey) preconfigureClaudeAuth(apiKey)
 
     const env: Record<string, string> = {
       SQUANSQ_ROLE: 'mayor-lee',

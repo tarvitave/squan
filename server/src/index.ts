@@ -9,6 +9,7 @@ import { rigManager } from './rig/manager.js'
 import { convoyManager } from './convoy/manager.js'
 import { migrate } from './db/index.js'
 import { register, login, getUserById, updateApiKey, requireAuth } from './auth/index.js'
+import { preconfigureClaudeAuth } from './claude-auth.js'
 
 const app = express()
 app.use(express.json())
@@ -180,7 +181,10 @@ app.get('/api/terminals', (_req, res) => {
 app.post('/api/terminals', async (req, res) => {
   const user = await getUserById(res.locals.userId as string)
   const env: Record<string, string> = {}
-  if (user?.anthropicApiKey) env.ANTHROPIC_API_KEY = user.anthropicApiKey
+  if (user?.anthropicApiKey) {
+    preconfigureClaudeAuth(user.anthropicApiKey)
+    env.ANTHROPIC_API_KEY = user.anthropicApiKey
+  }
   const id = ptyManager.spawn({
     shell: req.body.shell,
     cwd: req.body.cwd,

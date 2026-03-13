@@ -1,6 +1,7 @@
 import { TerminalPane } from '../TerminalPane/index.js'
 import type { Tab } from '../../store/index.js'
 import { useStore } from '../../store/index.js'
+import { apiFetch } from '../../lib/api.js'
 
 interface Props {
   tab: Tab
@@ -18,7 +19,7 @@ export function PaneGrid({ tab }: Props) {
         <button
           style={styles.spawnBtn}
           onClick={async () => {
-            const res = await fetch('/api/terminals', {
+            const res = await apiFetch('/api/terminals', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ cols: 120, rows: 30 }),
@@ -51,7 +52,7 @@ export function PaneGrid({ tab }: Props) {
         <button
           style={styles.addBtn}
           onClick={async () => {
-            const res = await fetch('/api/terminals', {
+            const res = await apiFetch('/api/terminals', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ cols: 120, rows: 30 }),
