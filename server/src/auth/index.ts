@@ -20,10 +20,6 @@ export interface AuthUser {
   anthropicApiKey: string | null
 }
 
-export interface AuthRequest extends Request {
-  userId?: string
-}
-
 export async function register(email: string, password: string, anthropicApiKey?: string): Promise<{ token: string; user: AuthUser }> {
   const db = getDb()
   const existing = await db.execute({ sql: 'SELECT id FROM users WHERE email = ?', args: [email.toLowerCase()] })
@@ -70,7 +66,8 @@ export async function updateApiKey(userId: string, apiKey: string): Promise<void
   await db.execute({ sql: 'UPDATE users SET anthropic_api_key = ? WHERE id = ?', args: [apiKey, userId] })
 }
 
-export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
+// Stores userId in res.locals (avoids extending Request type, which causes strict-mode errors)
+export function requireAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization
   if (!authHeader?.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Unauthorized' })
@@ -79,7 +76,7 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
   try {
     const token = authHeader.slice(7)
     const payload = jwt.verify(token, JWT_SECRET) as { userId: string }
-    req.userId = payload.userId
+    res.locals.userId = payload.userId
     next()
   } catch {
     res.status(401).json({ error: 'Invalid token' })

@@ -9,7 +9,6 @@ import { rigManager } from './rig/manager.js'
 import { convoyManager } from './convoy/manager.js'
 import { migrate } from './db/index.js'
 import { register, login, getUserById, updateApiKey, requireAuth } from './auth/index.js'
-import type { AuthRequest } from './auth/index.js'
 
 const app = express()
 app.use(express.json())
@@ -28,8 +27,8 @@ app.post('/api/auth/register', async (req, res) => {
     const { email, password, anthropicApiKey } = req.body
     if (!email || !password) { res.status(400).json({ error: 'Email and password required' }); return }
     res.json(await register(email, password, anthropicApiKey))
-  } catch (e: any) {
-    res.status(400).json({ error: e.message })
+  } catch (e: unknown) {
+    res.status(400).json({ error: (e as Error).message })
   }
 })
 
@@ -38,8 +37,8 @@ app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body
     if (!email || !password) { res.status(400).json({ error: 'Email and password required' }); return }
     res.json(await login(email, password))
-  } catch (e: any) {
-    res.status(401).json({ error: e.message })
+  } catch (e: unknown) {
+    res.status(401).json({ error: (e as Error).message })
   }
 })
 
@@ -49,18 +48,18 @@ app.get('/api/health', (_req, res) => {
 })
 
 // --- Auth middleware for all routes below ---
-app.use('/api', requireAuth as any)
+app.use('/api', requireAuth)
 
 // --- Current user ---
-app.get('/api/auth/me', async (req: AuthRequest, res) => {
-  const user = await getUserById(req.userId!)
+app.get('/api/auth/me', async (_req, res) => {
+  const user = await getUserById(res.locals.userId as string)
   res.json(user)
 })
 
-app.put('/api/auth/api-key', async (req: AuthRequest, res) => {
+app.put('/api/auth/api-key', async (req, res) => {
   const { anthropicApiKey } = req.body
   if (!anthropicApiKey) { res.status(400).json({ error: 'anthropicApiKey required' }); return }
-  await updateApiKey(req.userId!, anthropicApiKey)
+  await updateApiKey(res.locals.userId as string, anthropicApiKey)
   res.json({ ok: true })
 })
 
@@ -93,13 +92,13 @@ app.get('/api/projects/:projectId/workerbees', async (req, res) => {
   res.json(await workerBeeManager.listByProject(req.params.projectId))
 })
 
-app.post('/api/projects/:projectId/workerbees', async (req: AuthRequest, res) => {
-  const user = await getUserById(req.userId!)
+app.post('/api/projects/:projectId/workerbees', async (req, res) => {
+  const user = await getUserById(res.locals.userId as string)
   const bee = await workerBeeManager.spawn(req.params.projectId, req.body.beadId, req.body.task, user?.anthropicApiKey ?? undefined)
   res.json(bee)
 })
-app.post('/api/rigs/:rigId/polecats', async (req: AuthRequest, res) => {  // backwards compat
-  const user = await getUserById(req.userId!)
+app.post('/api/rigs/:rigId/polecats', async (req, res) => {  // backwards compat
+  const user = await getUserById(res.locals.userId as string)
   const bee = await workerBeeManager.spawn(req.params.rigId, req.body.beadId, req.body.task, user?.anthropicApiKey ?? undefined)
   res.json(bee)
 })
@@ -120,12 +119,12 @@ app.delete('/api/workerbees/:id', async (req, res) => {
 })
 
 // --- Mayor Lee ---
-app.post('/api/mayor-lee/start', async (req: AuthRequest, res) => {
-  const user = await getUserById(req.userId!)
+app.post('/api/mayor-lee/start', async (req, res) => {
+  const user = await getUserById(res.locals.userId as string)
   res.json(await mayorLeeManager.start(req.body.townId ?? 'default', user?.anthropicApiKey ?? undefined))
 })
-app.post('/api/mayor/start', async (req: AuthRequest, res) => {  // backwards compat
-  const user = await getUserById(req.userId!)
+app.post('/api/mayor/start', async (req, res) => {  // backwards compat
+  const user = await getUserById(res.locals.userId as string)
   res.json(await mayorLeeManager.start(req.body.townId ?? 'default', user?.anthropicApiKey ?? undefined))
 })
 
