@@ -37,7 +37,7 @@ export function AuthPage() {
   return (
     <div style={styles.root}>
       <div style={styles.card}>
-        <div style={styles.logo}>squansq</div>
+        <div style={styles.logo}>SquanSQ</div>
         <div style={styles.subtitle}>multi-agent orchestration</div>
 
         <div style={styles.tabs}>
@@ -108,6 +108,8 @@ export function AuthPage() {
           <a href="/privacy.html" target="_blank" style={styles.footerLink}>Privacy</a>
           <span style={styles.sep}>·</span>
           <a href="/terms.html" target="_blank" style={styles.footerLink}>Terms</a>
+          <span style={styles.sep}>·</span>
+          <a href="https://squansq.com/blog" target="_blank" rel="noopener noreferrer" style={styles.footerLink}>Blog</a>
         </div>
       </div>
     </div>
