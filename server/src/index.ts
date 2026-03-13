@@ -177,12 +177,16 @@ app.get('/api/terminals', (_req, res) => {
   res.json(ptyManager.list())
 })
 
-app.post('/api/terminals', (req, res) => {
+app.post('/api/terminals', async (req, res) => {
+  const user = await getUserById(res.locals.userId as string)
+  const env: Record<string, string> = {}
+  if (user?.anthropicApiKey) env.ANTHROPIC_API_KEY = user.anthropicApiKey
   const id = ptyManager.spawn({
     shell: req.body.shell,
     cwd: req.body.cwd,
     cols: req.body.cols ?? 120,
     rows: req.body.rows ?? 30,
+    env,
   })
   res.json({ id })
 })
