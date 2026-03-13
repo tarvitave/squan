@@ -38,7 +38,7 @@ export function AuthPage() {
     <div style={styles.root}>
       <div style={styles.card}>
         <div style={styles.logo}>SquanSQ</div>
-        <div style={styles.subtitle}>multi-agent orchestration</div>
+        <div style={styles.subtitle}>multi-agent orchestration for development</div>
 
         <div style={styles.tabs}>
           <button
