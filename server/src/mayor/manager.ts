@@ -26,11 +26,9 @@ export const mayorLeeManager = {
     if (apiKey) env.ANTHROPIC_API_KEY = apiKey
 
     const baseCommand = process.env.MAYOR_COMMAND ?? 'claude'
-    const args = apiKey && baseCommand === 'claude' ? ['--api-key', apiKey] : undefined
 
     const sessionId = ptyManager.spawn({
       shell: baseCommand,
-      args,
       cwd: repoPath,
       env,
     })

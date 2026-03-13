@@ -31,11 +31,8 @@ export const workerBeeManager = {
     }
     if (apiKey) env.ANTHROPIC_API_KEY = apiKey
 
-    const args = apiKey && command === 'claude' ? ['--api-key', apiKey] : undefined
-
     const sessionId = ptyManager.spawn({
       shell: command,
-      args,
       cwd: worktreePath,
       env,
     })

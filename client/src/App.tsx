@@ -8,14 +8,13 @@ import { MayorPanel } from './components/MayorPanel/index.js'
 import { RigPanel } from './components/RigPanel/index.js'
 import { Footer } from './components/Footer/index.js'
 import { AuthPage } from './components/AuthPage/index.js'
+import { AccountPanel } from './components/AccountPanel/index.js'
 import { useStore } from './store/index.js'
 import { useWebSocket } from './hooks/useWebSocket.js'
 import { apiFetch } from './lib/api.js'
 
 export default function App() {
   const token = useStore((s) => s.token)
-  const user = useStore((s) => s.user)
-  const clearAuth = useStore((s) => s.clearAuth)
   const tabs = useStore((s) => s.tabs)
   const activeTabId = useStore((s) => s.activeTabId)
   const setAgents = useStore((s) => s.setAgents)
@@ -54,15 +53,7 @@ export default function App() {
     <div style={styles.root}>
       {/* Left sidebar */}
       <div style={styles.sidebar}>
-        <div style={styles.versionBar}>
-          <span style={styles.appName}>squansq</span>
-          <div style={styles.versionRight}>
-            <span style={styles.version}>v{__APP_VERSION__}</span>
-            <button style={styles.signOutBtn} onClick={clearAuth} title={`Signed in as ${user?.email}`}>
-              Sign out
-            </button>
-          </div>
-        </div>
+        <AccountPanel />
         <div style={{ ...styles.sidebarSection, flex: 'none' }}>
           <div style={styles.sectionTitle}>Mayor Lee</div>
           <MayorPanel />
@@ -118,43 +109,6 @@ const styles = {
     display: 'flex',
     flexDirection: 'column' as const,
     overflow: 'hidden',
-  },
-  versionBar: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '6px 8px',
-    background: '#0a0a0a',
-    borderBottom: '1px solid #2d2d2d',
-    flexShrink: 0,
-  },
-  appName: {
-    fontSize: 11,
-    fontFamily: 'monospace',
-    color: '#4ec9b0',
-    fontWeight: 'bold' as const,
-    letterSpacing: '0.05em',
-  },
-  versionRight: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-  },
-  version: {
-    fontSize: 10,
-    fontFamily: 'monospace',
-    color: '#444',
-  },
-  signOutBtn: {
-    background: 'none',
-    border: '1px solid #333',
-    color: '#666',
-    cursor: 'pointer',
-    fontSize: 10,
-    padding: '2px 6px',
-    lineHeight: 1,
-    borderRadius: 3,
-    fontFamily: 'monospace',
   },
   sidebarSection: {
     display: 'flex',
