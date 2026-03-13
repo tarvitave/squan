@@ -14,6 +14,8 @@ const HISTORY_LIMIT = 2000 // lines
 
 class PtyManager {
   private sessions = new Map<string, PtySession>()
+  private lastOutputAt = new Map<string, Date>()
+  private exitCallbacks = new Map<string, (exitCode: number) => void>()
 
   spawn(opts: {
     id?: string
@@ -43,6 +45,7 @@ class PtyManager {
     }
 
     proc.onData((data) => {
+      this.lastOutputAt.set(id, new Date())
       // Append to history ring buffer
       session.history.push(data)
       if (session.history.length > HISTORY_LIMIT) {
@@ -54,8 +57,11 @@ class PtyManager {
       }
     })
 
-    proc.onExit(() => {
+    proc.onExit(({ exitCode }) => {
+      this.exitCallbacks.get(id)?.(exitCode ?? 0)
+      this.exitCallbacks.delete(id)
       this.sessions.delete(id)
+      this.lastOutputAt.delete(id)
     })
 
     this.sessions.set(id, session)
@@ -94,6 +100,18 @@ class PtyManager {
 
   list(): string[] {
     return Array.from(this.sessions.keys())
+  }
+
+  getLastOutputAt(sessionId: string): Date | null {
+    return this.lastOutputAt.get(sessionId) ?? null
+  }
+
+  getHistory(sessionId: string): string[] {
+    return this.sessions.get(sessionId)?.history ?? []
+  }
+
+  onSessionExit(sessionId: string, cb: (exitCode: number) => void) {
+    this.exitCallbacks.set(sessionId, cb)
   }
 }
 

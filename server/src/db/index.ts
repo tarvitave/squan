@@ -78,6 +78,42 @@ export async function migrate() {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS beads (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      convoy_id TEXT,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'open',
+      assignee_id TEXT,
+      depends_on TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS templates (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      content TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS snapshots (
+      id TEXT PRIMARY KEY,
+      workerbee_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      content TEXT NOT NULL,
+      captured_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS replay_frames (
+      id TEXT PRIMARY KEY,
+      workerbee_id TEXT NOT NULL,
+      content TEXT NOT NULL,
+      frame_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS events (
       id TEXT PRIMARY KEY,
       type TEXT NOT NULL,
@@ -93,4 +129,20 @@ export async function migrate() {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `)
+
+  // Additive column migrations — safe to run repeatedly (errors mean column already exists)
+  const alterStatements = [
+    `ALTER TABLE polecats ADD COLUMN task_description TEXT NOT NULL DEFAULT ''`,
+    `ALTER TABLE convoys ADD COLUMN description TEXT NOT NULL DEFAULT ''`,
+    `ALTER TABLE convoys ADD COLUMN assigned_workerbee_id TEXT`,
+    `ALTER TABLE beads ADD COLUMN depends_on TEXT NOT NULL DEFAULT '[]'`,
+    `ALTER TABLE polecats ADD COLUMN completion_note TEXT NOT NULL DEFAULT ''`,
+  ]
+  for (const sql of alterStatements) {
+    try {
+      await db.execute({ sql, args: [] })
+    } catch {
+      // Column already exists — ignore
+    }
+  }
 }

@@ -6,6 +6,8 @@ export type HookStatus = 'created' | 'active' | 'suspended' | 'completed' | 'arc
 
 export type ConvoyStatus = 'open' | 'in_progress' | 'landed' | 'cancelled'
 
+export type BeadStatus = 'open' | 'assigned' | 'in_progress' | 'done' | 'blocked'
+
 // --- AllProjects (workspace) ---
 export interface AllProjects {
   id: string
@@ -39,6 +41,8 @@ export interface WorkerBee {
   name: string
   branch: string
   worktreePath: string
+  taskDescription: string
+  completionNote: string
   status: AgentStatus
   hookId: string | null
   sessionId: string | null
@@ -53,6 +57,46 @@ export interface MayorLee {
   sessionId: string | null
   status: AgentStatus
   createdAt: string
+}
+
+// --- Bead (atomic unit of work) ---
+export interface Bead {
+  id: string
+  projectId: string
+  convoyId: string | null
+  title: string
+  description: string
+  status: BeadStatus
+  assigneeId: string | null
+  dependsOn: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+// --- Template (reusable CLAUDE.md content) ---
+export interface Template {
+  id: string
+  projectId: string
+  name: string
+  content: string
+  createdAt: string
+}
+
+// --- Snapshot (point-in-time PTY output capture) ---
+export interface Snapshot {
+  id: string
+  workerBeeId: string
+  sessionId: string
+  content: string
+  capturedAt: string
+}
+
+// --- ReplayFrame (30s-interval PTY output frame for session replay) ---
+export interface ReplayFrame {
+  id: string
+  workerBeeId: string
+  content: string
+  frameAt: string
 }
 
 // --- Hook (persistent work unit, git-worktree-backed) ---
@@ -72,8 +116,10 @@ export interface Hook {
 export interface Convoy {
   id: string
   name: string
+  description: string
   projectId: string
   beadIds: string[]
+  assignedWorkerBeeId: string | null
   status: ConvoyStatus
   createdAt: string
   updatedAt: string
@@ -93,13 +139,20 @@ export interface TerminalSession {
 // --- Events (streamed to browser clients) ---
 export type EventType =
   | 'workerbee.spawned'
+  | 'workerbee.working'
   | 'workerbee.done'
   | 'workerbee.stalled'
   | 'workerbee.zombie'
   | 'convoy.created'
   | 'convoy.landed'
+  | 'convoy.assigned'
+  | 'convoy.cancelled'
   | 'hook.created'
+  | 'hook.activated'
   | 'hook.completed'
+  | 'bead.created'
+  | 'bead.assigned'
+  | 'bead.done'
   | 'mayorlee.started'
   | 'mayorlee.stopped'
   | 'terminal.data'

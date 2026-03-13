@@ -10,7 +10,12 @@ export function useWebSocket() {
   const queue = useRef<string[]>([])          // messages buffered before connection opens
   const subscribers = useRef<Map<string, DataCallback>>(new Map())
   const pushEvent = useStore((s) => s.pushEvent)
+  const addAgent = useStore((s) => s.addAgent)
   const updateAgent = useStore((s) => s.updateAgent)
+  const addConvoy = useStore((s) => s.addConvoy)
+  const updateConvoy = useStore((s) => s.updateConvoy)
+  const addBead = useStore((s) => s.addBead)
+  const updateBead = useStore((s) => s.updateBead)
 
   useEffect(() => {
     let socket: WebSocket
@@ -49,9 +54,78 @@ export function useWebSocket() {
               timestamp: new Date().toISOString(),
             })
 
-            if (payload?.type === 'workerbee.done') updateAgent(payload.workerbeeId as string, { status: 'done' })
-            if (payload?.type === 'workerbee.stalled') updateAgent(payload.workerbeeId as string, { status: 'stalled' })
-            if (payload?.type === 'workerbee.zombie') updateAgent(payload.workerbeeId as string, { status: 'zombie' })
+            // WorkerBee events
+            if (payload?.type === 'workerbee.spawned') {
+              const p = payload as Record<string, unknown>
+              addAgent({
+                id: p.workerBeeId as string,
+                name: p.name as string,
+                projectId: p.projectId as string,
+                status: 'idle',
+                sessionId: p.sessionId as string | null,
+                taskDescription: (p.taskDescription as string) ?? '',
+                completionNote: '',
+                worktreePath: (p.worktreePath as string) ?? '',
+                branch: (p.branch as string) ?? '',
+              })
+            }
+            if (payload?.type === 'workerbee.working')
+              updateAgent(payload.workerBeeId as string, { status: 'working' })
+            if (payload?.type === 'workerbee.done')
+              updateAgent(payload.workerBeeId as string, { status: 'done', completionNote: (payload.note as string) ?? '' })
+            if (payload?.type === 'workerbee.stalled')
+              updateAgent(payload.workerBeeId as string, { status: 'stalled', completionNote: (payload.note as string) ?? '' })
+            if (payload?.type === 'workerbee.zombie')
+              updateAgent(payload.workerBeeId as string, { status: 'zombie' })
+
+            // Convoy events
+            if (payload?.type === 'convoy.created') {
+              const p = payload as Record<string, unknown>
+              addConvoy({
+                id: p.convoyId as string,
+                name: p.name as string,
+                description: (p.description as string) ?? '',
+                projectId: (p.rigId as string) ?? '',
+                status: 'open',
+                beadIds: (p.beadIds as string[]) ?? [],
+                assignedWorkerBeeId: null,
+              })
+            }
+            if (payload?.type === 'convoy.assigned') {
+              const p = payload as Record<string, unknown>
+              updateConvoy(p.convoyId as string, {
+                assignedWorkerBeeId: (p.workerBeeId as string | null) ?? null,
+                status: p.workerBeeId ? 'in_progress' : 'open',
+              })
+            }
+            if (payload?.type === 'convoy.landed') {
+              updateConvoy(payload.convoyId as string, { status: 'landed' })
+            }
+            if (payload?.type === 'convoy.cancelled') {
+              updateConvoy(payload.convoyId as string, { status: 'cancelled' })
+            }
+
+            // Bead events
+            if (payload?.type === 'bead.created') {
+              const p = payload as Record<string, unknown>
+              addBead({
+                id: p.beadId as string,
+                projectId: p.projectId as string,
+                convoyId: (p.convoyId as string | null) ?? null,
+                title: p.title as string,
+                description: '',
+                status: 'open',
+                assigneeId: null,
+                dependsOn: [],
+              })
+            }
+            if (payload?.type === 'bead.assigned') {
+              const p = payload as Record<string, unknown>
+              updateBead(p.beadId as string, { assigneeId: p.workerBeeId as string, status: 'assigned' })
+            }
+            if (payload?.type === 'bead.done') {
+              updateBead(payload.beadId as string, { status: 'done' })
+            }
           }
         } catch {
           // ignore parse errors
@@ -71,7 +145,7 @@ export function useWebSocket() {
       socket.onclose = null   // prevent reconnect on intentional unmount
       socket.close()
     }
-  }, [pushEvent, updateAgent])
+  }, [pushEvent, addAgent, updateAgent, addConvoy, updateConvoy, addBead, updateBead])
 
   // Safe send: queues if socket not yet open
   const safeSend = useCallback((msg: object) => {

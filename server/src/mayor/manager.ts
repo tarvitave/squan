@@ -1,3 +1,5 @@
+import { mkdirSync, writeFileSync } from 'fs'
+import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import { getDb } from '../db/index.js'
 import { ptyManager } from '../polecat/pty.js'
@@ -5,7 +7,9 @@ import { broadcastEvent } from '../ws/server.js'
 import { preconfigureClaudeAuth } from '../claude-auth.js'
 import type { MayorLee } from '../types/index.js'
 
-// mayorLeeManager — manages Mayor Lee, the orchestrator agent
+const DEFAULT_REPO_PATH = process.env.SQUANSQ_REPO_PATH ?? process.env.HOME ?? '/opt/squansq-repo'
+const SERVER_URL = `http://localhost:${process.env.PORT ?? 3001}`
+
 export const mayorLeeManager = {
   async start(townId: string, apiKey?: string): Promise<MayorLee> {
     const db = getDb()
@@ -18,13 +22,17 @@ export const mayorLeeManager = {
     }
 
     const id = row?.id ?? uuidv4()
-    const repoPath = process.env.SQUANSQ_REPO_PATH ?? process.env.HOME ?? '/opt/squansq-repo'
+    const repoPath = DEFAULT_REPO_PATH
 
     if (apiKey) preconfigureClaudeAuth(apiKey)
+
+    // Bootstrap Mayor Lee's environment
+    bootstrapMayorEnv(repoPath)
 
     const env: Record<string, string> = {
       SQUANSQ_ROLE: 'mayor-lee',
       SQUANSQ_TOWN: townId,
+      SQUANSQ_MCP_URL: `${SERVER_URL}/api/mcp`,
     }
     if (apiKey) env.ANTHROPIC_API_KEY = apiKey
 
@@ -94,8 +102,85 @@ export const mayorLeeManager = {
   },
 }
 
-// Backwards compat alias
 export const mayorManager = mayorLeeManager
+
+function bootstrapMayorEnv(repoPath: string) {
+  try {
+    mkdirSync(repoPath, { recursive: true })
+
+    // Write CLAUDE.md with orchestrator instructions and MCP info
+    writeFileSync(
+      path.join(repoPath, 'CLAUDE.md'),
+      buildMayorClaudeMd(),
+      'utf8'
+    )
+
+    // Write MCP server config for Claude CLI
+    const claudeDir = path.join(repoPath, '.claude')
+    mkdirSync(claudeDir, { recursive: true })
+    writeFileSync(
+      path.join(claudeDir, 'mcp.json'),
+      JSON.stringify({
+        mcpServers: {
+          squansq: {
+            url: `${SERVER_URL}/api/mcp`,
+            transport: 'http',
+          },
+        },
+      }, null, 2),
+      'utf8'
+    )
+
+    console.log(`[Mayor Lee] Bootstrapped environment at ${repoPath}`)
+  } catch (err) {
+    console.warn(`[Mayor Lee] Failed to bootstrap environment: ${err}`)
+  }
+}
+
+function buildMayorClaudeMd(): string {
+  return `# Mayor Lee — Orchestrator
+
+You are Mayor Lee, the orchestrator for this Squansq development platform.
+Your job is to coordinate multiple WorkerBee agents to accomplish development tasks.
+
+## MCP Server
+
+You have access to the Squansq MCP server. Use the \`squansq\` MCP tools to manage agents.
+
+## Available Tools
+
+| Tool | Description |
+|------|-------------|
+| \`get_status_summary\` | Overview of all WorkerBees, Convoys, and Beads |
+| \`list_workerbees\` | List all agents and their status |
+| \`spawn_workerbee\` | Spawn a new agent with a task description |
+| \`get_workerbee\` | Get details on a specific agent |
+| \`kill_workerbee\` | Stop and remove an agent |
+| \`list_projects\` | List all projects (git repos) |
+| \`list_convoys\` | List all work bundles |
+| \`create_convoy\` | Create a new work bundle |
+| \`dispatch_convoy\` | Spawn an agent and assign it to a convoy |
+| \`land_convoy\` | Mark a convoy as complete |
+| \`list_beads\` | List atomic work items |
+| \`create_bead\` | Create a new work item |
+| \`list_hooks\` | List persistent work units |
+
+## Workflow
+
+1. Start by calling \`get_status_summary\` to understand current state
+2. Break work into Convoys (feature areas) and Beads (individual tasks)
+3. Use \`dispatch_convoy\` to assign work to agents — the Convoy description becomes CLAUDE.md
+4. Monitor agents with \`list_workerbees\` — look for stalled or zombie agents
+5. When an agent signals **DONE:** it will auto-complete; you can verify with \`get_workerbee\`
+6. Land convoys with \`land_convoy\` when all work is done
+
+## Notes
+
+- Each WorkerBee gets its own git worktree — they work in isolation
+- Stalled agents (no output for 5min) can be killed and respawned
+- Use \`get_status_summary\` to get a quick health check
+`
+}
 
 interface DbRow {
   id: string

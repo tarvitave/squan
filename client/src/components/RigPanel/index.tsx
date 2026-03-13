@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../../store/index.js'
+import { TemplatesPanel } from '../TemplatesPanel/index.js'
 import type { Rig } from '../../store/index.js'
-import { apiFetch } from '../../lib/api.js'
 
 export function RigPanel() {
   const rigs = useStore((s) => s.rigs)
@@ -10,56 +10,81 @@ export function RigPanel() {
   const addTab = useStore((s) => s.addTab)
   const activeTabId = useStore((s) => s.activeTabId)
   const tabs = useStore((s) => s.tabs)
+  const activeTownId = useStore((s) => s.activeTownId)
+  const addToast = useStore((s) => s.addToast)
 
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', repoUrl: '', localPath: '' })
-  const [spawningRig, setSpawningRig] = useState<Rig | null>(null)
-  const [task, setTask] = useState('')
-  const [spawning, setSpawning] = useState(false)
+  const [spawning, setSpawning] = useState<string | null>(null)
+  const [spawnTask, setSpawnTask] = useState<{ rigId: string; taskDescription: string } | null>(null)
+  const [expandedRig, setExpandedRig] = useState<string | null>(null)
+  const [runtimeEdit, setRuntimeEdit] = useState<{ rigId: string; command: string; provider: string } | null>(null)
 
   useEffect(() => {
-    apiFetch('/api/projects')
+    const url = activeTownId ? `/api/rigs?townId=${activeTownId}` : '/api/rigs'
+    fetch(url)
       .then((r) => r.json())
       .then(setRigs)
       .catch(() => {})
-  }, [setRigs])
+  }, [setRigs, activeTownId])
 
   const handleAdd = async () => {
     if (!form.name || !form.localPath) return
-    const res = await apiFetch('/api/projects', {
-      method: 'POST',
-      body: JSON.stringify(form),
-    })
-    const rig = await res.json()
-    setRigs([...rigs, rig])
-    setForm({ name: '', repoUrl: '', localPath: '' })
-    setShowForm(false)
+    try {
+      const res = await fetch('/api/rigs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, townId: activeTownId ?? undefined }),
+      })
+      const rig = await res.json()
+      setRigs([...rigs, rig])
+      setForm({ name: '', repoUrl: '', localPath: '' })
+      setShowForm(false)
+    } catch (err) {
+      addToast(`Failed to add project: ${(err as Error).message}`)
+    }
   }
 
-  const handleSpawn = async () => {
-    if (!spawningRig) return
-    setSpawning(true)
+  const handleSpawn = async (rig: Rig, taskDescription?: string) => {
+    setSpawning(rig.id)
     try {
-      const res = await apiFetch(`/api/projects/${spawningRig.id}/workerbees`, {
+      const res = await fetch(`/api/rigs/${rig.id}/polecats`, {
         method: 'POST',
-        body: JSON.stringify({ task: task.trim() || undefined }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskDescription: taskDescription ?? '' }),
       })
       const bee = await res.json()
       if (bee.sessionId) {
         const hasSession = tabs.some((t) => t.panes.includes(bee.sessionId))
         if (!hasSession) {
-          if (activeTabId) {
-            addPaneToTab(activeTabId, bee.sessionId)
-          } else {
-            addTab(spawningRig.name, [bee.sessionId])
-          }
+          if (activeTabId) addPaneToTab(activeTabId, bee.sessionId)
+          else addTab(rig.name, [bee.sessionId])
         }
       }
+    } catch (err) {
+      addToast(`Failed to spawn WorkerBee: ${(err as Error).message}`)
     } finally {
-      setSpawning(false)
-      setSpawningRig(null)
-      setTask('')
+      setSpawning(null)
+      setSpawnTask(null)
     }
+  }
+
+  const handleSaveRuntime = async (rigId: string) => {
+    if (!runtimeEdit) return
+    await fetch(`/api/projects/${rigId}/runtime`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: runtimeEdit.command, provider: runtimeEdit.provider }),
+    })
+    const updated = await fetch('/api/rigs').then((r) => r.json())
+    setRigs(updated)
+    setRuntimeEdit(null)
+  }
+
+  const handleDelete = async (id: string) => {
+    await fetch(`/api/projects/${id}`, { method: 'DELETE' })
+    setRigs(rigs.filter((r) => r.id !== id))
+    if (expandedRig === id) setExpandedRig(null)
   }
 
   return (
@@ -67,46 +92,119 @@ export function RigPanel() {
       {rigs.map((rig) => (
         <div key={rig.id}>
           <div style={styles.rigRow}>
-            <div style={styles.rigInfo}>
+            <div
+              style={styles.rigInfo}
+              onClick={() => setExpandedRig(expandedRig === rig.id ? null : rig.id)}
+            >
               <span style={styles.rigName}>{rig.name}</span>
               <span style={styles.rigPath}>{rig.localPath}</span>
             </div>
             <button
               style={styles.spawnBtn}
-              onClick={() => {
-                setSpawningRig(spawningRig?.id === rig.id ? null : rig)
-                setTask('')
-              }}
-              title="Spawn a WorkerBee"
+              onClick={() => setSpawnTask({ rigId: rig.id, taskDescription: '' })}
+              disabled={spawning === rig.id}
+              title="Spawn a worker agent"
             >
-              {spawningRig?.id === rig.id ? '✕' : '+ Worker'}
+              {spawning === rig.id ? '…' : '+ Worker'}
             </button>
           </div>
 
-          {spawningRig?.id === rig.id && (
-            <div style={styles.spawnForm}>
-              <textarea
-                style={styles.taskInput}
-                placeholder="Task for this WorkerBee (optional)&#10;e.g. Fix the login bug in auth.ts"
-                value={task}
-                rows={3}
-                onChange={(e) => setTask(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSpawn()
-                }}
-                autoFocus
-              />
-              <button
-                style={styles.confirmBtn}
-                onClick={handleSpawn}
-                disabled={spawning}
-              >
-                {spawning ? 'Spawning…' : '▶ Spawn WorkerBee'}
+          {expandedRig === rig.id && (
+            <div style={styles.expanded}>
+              {/* Runtime config */}
+              <div style={styles.expandSection}>
+                <div style={styles.expandTitle}>Runtime</div>
+                {runtimeEdit?.rigId === rig.id ? (
+                  <div style={styles.runtimeForm}>
+                    <div style={styles.runtimeRow}>
+                      <span style={styles.runtimeLabel}>provider</span>
+                      <select
+                        style={styles.runtimeInput}
+                        value={runtimeEdit.provider}
+                        onChange={(e) => setRuntimeEdit((r) => r ? { ...r, provider: e.target.value } : null)}
+                      >
+                        <option value="claude">claude</option>
+                        <option value="codex">codex</option>
+                        <option value="custom">custom</option>
+                      </select>
+                    </div>
+                    <div style={styles.runtimeRow}>
+                      <span style={styles.runtimeLabel}>command</span>
+                      <input
+                        style={styles.runtimeInput}
+                        value={runtimeEdit.command}
+                        onChange={(e) => setRuntimeEdit((r) => r ? { ...r, command: e.target.value } : null)}
+                      />
+                    </div>
+                    <div style={styles.runtimeBtns}>
+                      <button style={styles.saveBtn} onClick={() => handleSaveRuntime(rig.id)}>Save</button>
+                      <button style={styles.cancelSmBtn} onClick={() => setRuntimeEdit(null)}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={styles.runtimeDisplay}>
+                    <span style={styles.runtimeValue}>
+                      {rig.runtime?.provider ?? 'claude'} · {rig.runtime?.command ?? 'claude'}
+                    </span>
+                    <button
+                      style={styles.editBtn}
+                      onClick={() => setRuntimeEdit({
+                        rigId: rig.id,
+                        command: rig.runtime?.command ?? 'claude',
+                        provider: rig.runtime?.provider ?? 'claude',
+                      })}
+                    >
+                      edit
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Templates */}
+              <div style={styles.expandSection}>
+                <div style={styles.expandTitle}>Templates</div>
+                <TemplatesPanel
+                  projectId={rig.id}
+                  onSelect={(content) => setSpawnTask({ rigId: rig.id, taskDescription: content })}
+                />
+              </div>
+
+              {/* Delete */}
+              <button style={styles.deleteBtn} onClick={() => handleDelete(rig.id)}>
+                Delete Project
               </button>
             </div>
           )}
         </div>
       ))}
+
+      {/* Task description prompt before spawning */}
+      {spawnTask && (
+        <div style={styles.form}>
+          <div style={styles.spawnHeader}>
+            Spawn WorkerBee for <strong>{rigs.find((r) => r.id === spawnTask.rigId)?.name}</strong>
+          </div>
+          <textarea
+            style={{ ...styles.input, resize: 'vertical', minHeight: 60 }}
+            placeholder="Task description (optional) — written as CLAUDE.md in worktree"
+            value={spawnTask.taskDescription}
+            onChange={(e) => setSpawnTask((t) => t ? { ...t, taskDescription: e.target.value } : null)}
+            autoFocus
+          />
+          <div style={styles.formBtns}>
+            <button
+              style={styles.addBtn}
+              onClick={() => {
+                const rig = rigs.find((r) => r.id === spawnTask.rigId)
+                if (rig) handleSpawn(rig, spawnTask.taskDescription)
+              }}
+            >
+              Spawn
+            </button>
+            <button style={styles.cancelBtn} onClick={() => setSpawnTask(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
 
       {showForm ? (
         <div style={styles.form}>
@@ -134,141 +232,96 @@ export function RigPanel() {
           </div>
         </div>
       ) : (
-        <button style={styles.newRigBtn} onClick={() => setShowForm(true)}>
-          + Add Project
-        </button>
+        !spawnTask && (
+          <button style={styles.newRigBtn} onClick={() => setShowForm(true)}>
+            + Add Project
+          </button>
+        )
       )}
     </div>
   )
 }
 
 const styles = {
-  panel: {
-    padding: '4px 0',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 2,
-  },
+  panel: { padding: '4px 0', display: 'flex', flexDirection: 'column' as const, gap: 2 },
   rigRow: {
-    display: 'flex',
-    alignItems: 'center',
-    padding: '4px 8px',
-    gap: 6,
+    display: 'flex', alignItems: 'center', padding: '4px 8px', gap: 6,
     borderBottom: '1px solid #1a1a1a',
   },
   rigInfo: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 1,
-    overflow: 'hidden',
+    flex: 1, display: 'flex', flexDirection: 'column' as const, gap: 1,
+    overflow: 'hidden', cursor: 'pointer',
   },
-  rigName: {
-    fontSize: 12,
-    color: '#d4d4d4',
-    fontFamily: 'monospace',
-  },
+  rigName: { fontSize: 12, color: '#d4d4d4', fontFamily: 'monospace' },
   rigPath: {
-    fontSize: 10,
-    color: '#555',
-    fontFamily: 'monospace',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap' as const,
+    fontSize: 10, color: '#555', fontFamily: 'monospace',
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
   },
   spawnBtn: {
-    background: 'none',
-    border: '1px solid #3a3a3a',
-    color: '#4ec9b0',
-    borderRadius: 3,
-    padding: '2px 6px',
-    cursor: 'pointer',
-    fontSize: 10,
-    fontFamily: 'monospace',
-    flexShrink: 0,
+    background: 'none', border: '1px solid #3a3a3a', color: '#4ec9b0',
+    borderRadius: 3, padding: '2px 6px', cursor: 'pointer',
+    fontSize: 10, fontFamily: 'monospace', flexShrink: 0,
   },
-  spawnForm: {
-    padding: '6px 8px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 4,
-    background: '#111',
-    borderBottom: '1px solid #2a2a2a',
+  expanded: {
+    background: '#0f0f0f', borderBottom: '1px solid #1a1a1a',
+    padding: '6px 0', display: 'flex', flexDirection: 'column' as const, gap: 8,
   },
-  taskInput: {
-    background: '#1a1a1a',
-    border: '1px solid #333',
-    color: '#d4d4d4',
-    borderRadius: 3,
-    padding: '4px 6px',
-    fontSize: 11,
-    fontFamily: 'monospace',
-    outline: 'none',
-    resize: 'vertical' as const,
-    lineHeight: 1.4,
+  expandSection: {
+    padding: '0 8px', display: 'flex', flexDirection: 'column' as const, gap: 4,
   },
-  confirmBtn: {
-    background: '#1a3a2a',
-    border: '1px solid #4ec9b0',
-    color: '#4ec9b0',
-    borderRadius: 3,
-    padding: '4px 8px',
-    cursor: 'pointer',
-    fontSize: 11,
-    fontFamily: 'monospace',
+  expandTitle: {
+    fontSize: 9, color: '#444', fontFamily: 'monospace',
+    textTransform: 'uppercase' as const, letterSpacing: '0.1em',
   },
-  form: {
-    padding: '6px 8px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 4,
+  runtimeDisplay: { display: 'flex', alignItems: 'center', gap: 8 },
+  runtimeValue: { fontSize: 10, color: '#888', fontFamily: 'monospace', flex: 1 },
+  editBtn: {
+    background: 'none', border: '1px solid #2a2a2a', color: '#555',
+    borderRadius: 3, padding: '1px 5px', cursor: 'pointer',
+    fontSize: 9, fontFamily: 'monospace',
   },
+  runtimeForm: { display: 'flex', flexDirection: 'column' as const, gap: 4 },
+  runtimeRow: { display: 'flex', alignItems: 'center', gap: 6 },
+  runtimeLabel: { fontSize: 9, color: '#555', fontFamily: 'monospace', width: 50, flexShrink: 0 },
+  runtimeInput: {
+    flex: 1, background: '#1a1a1a', border: '1px solid #333', color: '#d4d4d4',
+    borderRadius: 3, padding: '2px 5px', fontSize: 10, fontFamily: 'monospace', outline: 'none',
+  },
+  runtimeBtns: { display: 'flex', gap: 4 },
+  saveBtn: {
+    background: '#1a3a2a', border: '1px solid #4ec9b0', color: '#4ec9b0',
+    borderRadius: 3, padding: '2px 8px', cursor: 'pointer', fontSize: 9, fontFamily: 'monospace',
+  },
+  cancelSmBtn: {
+    background: 'none', border: '1px solid #2a2a2a', color: '#555',
+    borderRadius: 3, padding: '2px 8px', cursor: 'pointer', fontSize: 9, fontFamily: 'monospace',
+  },
+  deleteBtn: {
+    margin: '0 8px', background: 'none', border: '1px solid #2a2a2a', color: '#444',
+    borderRadius: 3, padding: '3px 8px', cursor: 'pointer', fontSize: 9, fontFamily: 'monospace',
+    textAlign: 'left' as const,
+  },
+  spawnHeader: {
+    fontSize: 10, color: '#888', fontFamily: 'monospace', marginBottom: 2,
+  },
+  form: { padding: '6px 8px', display: 'flex', flexDirection: 'column' as const, gap: 4 },
   input: {
-    background: '#1a1a1a',
-    border: '1px solid #333',
-    color: '#d4d4d4',
-    borderRadius: 3,
-    padding: '4px 6px',
-    fontSize: 11,
-    fontFamily: 'monospace',
-    outline: 'none',
+    background: '#1a1a1a', border: '1px solid #333', color: '#d4d4d4',
+    borderRadius: 3, padding: '4px 6px', fontSize: 11, fontFamily: 'monospace',
+    outline: 'none', width: '100%', boxSizing: 'border-box' as const,
   },
-  formBtns: {
-    display: 'flex',
-    gap: 4,
-  },
+  formBtns: { display: 'flex', gap: 4 },
   addBtn: {
-    flex: 1,
-    background: '#1a3a2a',
-    border: '1px solid #4ec9b0',
-    color: '#4ec9b0',
-    borderRadius: 3,
-    padding: '4px',
-    cursor: 'pointer',
-    fontSize: 11,
-    fontFamily: 'monospace',
+    flex: 1, background: '#1a3a2a', border: '1px solid #4ec9b0', color: '#4ec9b0',
+    borderRadius: 3, padding: '4px', cursor: 'pointer', fontSize: 11, fontFamily: 'monospace',
   },
   cancelBtn: {
-    flex: 1,
-    background: 'none',
-    border: '1px solid #333',
-    color: '#666',
-    borderRadius: 3,
-    padding: '4px',
-    cursor: 'pointer',
-    fontSize: 11,
-    fontFamily: 'monospace',
+    flex: 1, background: 'none', border: '1px solid #333', color: '#666',
+    borderRadius: 3, padding: '4px', cursor: 'pointer', fontSize: 11, fontFamily: 'monospace',
   },
   newRigBtn: {
-    margin: '4px 8px',
-    background: 'none',
-    border: '1px dashed #333',
-    color: '#569cd6',
-    borderRadius: 3,
-    padding: '4px 8px',
-    cursor: 'pointer',
-    fontSize: 11,
-    fontFamily: 'monospace',
+    margin: '4px 8px', background: 'none', border: '1px dashed #333', color: '#569cd6',
+    borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, fontFamily: 'monospace',
     textAlign: 'left' as const,
   },
 }

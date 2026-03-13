@@ -3,6 +3,7 @@ import { Server } from 'http'
 import { v4 as uuidv4 } from 'uuid'
 import type { WsMessage, SquansqEvent } from '../types/index.js'
 import { ptyManager } from '../polecat/pty.js'
+import { getDb } from '../db/index.js'
 
 // Map of clientId → WebSocket
 const clients = new Map<string, WebSocket>()
@@ -82,8 +83,16 @@ function handleMessage(clientId: string, ws: WebSocket, msg: WsMessage) {
   }
 }
 
-// Broadcast a domain event to all connected clients
+// Broadcast a domain event to all connected clients and persist to DB
 export function broadcastEvent(event: SquansqEvent) {
+  // Skip terminal data events — too noisy to persist
+  if (event.type !== 'terminal.data' && event.type !== 'terminal.resize') {
+    getDb().execute({
+      sql: `INSERT INTO events (id, type, payload_json, timestamp) VALUES (?, ?, ?, ?)`,
+      args: [event.id, event.type, JSON.stringify(event.payload), event.timestamp],
+    }).catch(() => { /* non-blocking, ignore errors */ })
+  }
+
   const msg: WsMessage = { type: 'event', payload: event as unknown as Record<string, unknown> }
   for (const ws of clients.values()) {
     if (ws.readyState === WebSocket.OPEN) {
