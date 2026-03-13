@@ -18,6 +18,7 @@ class PtyManager {
   spawn(opts: {
     id?: string
     shell?: string
+    args?: string[]
     cwd?: string
     cols?: number
     rows?: number
@@ -26,7 +27,7 @@ class PtyManager {
     const id = opts.id ?? uuidv4()
     const shell = opts.shell ?? (process.platform === 'win32' ? 'cmd.exe' : 'bash')
 
-    const proc = pty.spawn(shell, [], {
+    const proc = pty.spawn(shell, opts.args ?? [], {
       name: 'xterm-256color',
       cols: opts.cols ?? 120,
       rows: opts.rows ?? 30,

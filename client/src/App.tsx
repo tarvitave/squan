@@ -59,7 +59,7 @@ export default function App() {
           <div style={styles.versionRight}>
             <span style={styles.version}>v{__APP_VERSION__}</span>
             <button style={styles.signOutBtn} onClick={clearAuth} title={`Signed in as ${user?.email}`}>
-              ⎋
+              Sign out
             </button>
           </div>
         </div>
@@ -147,12 +147,14 @@ const styles = {
   },
   signOutBtn: {
     background: 'none',
-    border: 'none',
-    color: '#444',
+    border: '1px solid #333',
+    color: '#666',
     cursor: 'pointer',
-    fontSize: 12,
-    padding: 0,
+    fontSize: 10,
+    padding: '2px 6px',
     lineHeight: 1,
+    borderRadius: 3,
+    fontFamily: 'monospace',
   },
   sidebarSection: {
     display: 'flex',
