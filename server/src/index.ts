@@ -49,12 +49,22 @@ app.get('/api/projects/:projectId/workerbees', async (req, res) => {
 })
 
 app.post('/api/projects/:projectId/workerbees', async (req, res) => {
-  const bee = await workerBeeManager.spawn(req.params.projectId, req.body.beadId)
+  const bee = await workerBeeManager.spawn(req.params.projectId, req.body.beadId, req.body.task)
   res.json(bee)
 })
 app.post('/api/rigs/:rigId/polecats', async (req, res) => {  // backwards compat
-  const bee = await workerBeeManager.spawn(req.params.rigId, req.body.beadId)
+  const bee = await workerBeeManager.spawn(req.params.rigId, req.body.beadId, req.body.task)
   res.json(bee)
+})
+
+app.post('/api/workerbees/:id/message', async (req, res) => {
+  await workerBeeManager.sendMessage(req.params.id, req.body.message)
+  res.json({ ok: true })
+})
+
+app.post('/api/workerbees/:id/done', async (req, res) => {
+  await workerBeeManager.updateStatus(req.params.id, 'done')
+  res.json({ ok: true })
 })
 
 app.delete('/api/workerbees/:id', async (req, res) => {
@@ -76,6 +86,15 @@ app.post('/api/mayor-lee/stop', async (req, res) => {
 })
 app.post('/api/mayor/stop', async (req, res) => {  // backwards compat
   await mayorLeeManager.stop(req.body.townId ?? 'default')
+  res.json({ ok: true })
+})
+
+app.post('/api/mayor-lee/message', async (req, res) => {
+  await mayorLeeManager.sendMessage(req.body.townId ?? 'default', req.body.message)
+  res.json({ ok: true })
+})
+app.post('/api/mayor/message', async (req, res) => {  // backwards compat
+  await mayorLeeManager.sendMessage(req.body.townId ?? 'default', req.body.message)
   res.json({ ok: true })
 })
 

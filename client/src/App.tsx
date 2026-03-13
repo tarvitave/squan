@@ -20,7 +20,7 @@ export default function App() {
 
   // Initial data load
   useEffect(() => {
-    fetch('/api/polecats')
+    fetch('/api/workerbees')
       .then((r) => r.json())
       .then((data) =>
         setAgents(

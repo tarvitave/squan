@@ -14,7 +14,7 @@ const NAME_POOL = [
 
 // workerBeeManager — manages WorkerBee (formerly Polecat) lifecycle
 export const workerBeeManager = {
-  async spawn(projectId: string, _beadId?: string): Promise<WorkerBee> {
+  async spawn(projectId: string, _beadId?: string, task?: string): Promise<WorkerBee> {
     const db = getDb()
     const id = uuidv4()
     const name = await allocateName(projectId)
@@ -30,8 +30,16 @@ export const workerBeeManager = {
       env: {
         SQUANSQ_WORKERBEE: name,
         SQUANSQ_PROJECT: projectId,
+        SQUANSQ_WORKERBEE_ID: id,
       },
     })
+
+    // If a task was provided, send it to the agent after it initialises
+    if (task) {
+      setTimeout(() => {
+        ptyManager.write(sessionId, task + '\r')
+      }, 3000)
+    }
 
     const now = new Date().toISOString()
     await db.execute({
@@ -83,6 +91,13 @@ export const workerBeeManager = {
       payload: { workerBeeId: id, status },
       timestamp: new Date().toISOString(),
     })
+  },
+
+  async sendMessage(id: string, message: string) {
+    const bee = await this.getById(id)
+    if (bee?.sessionId) {
+      ptyManager.write(bee.sessionId, message + '\r')
+    }
   },
 
   async nuke(id: string) {

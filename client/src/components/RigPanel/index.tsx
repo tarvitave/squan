@@ -12,10 +12,12 @@ export function RigPanel() {
 
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', repoUrl: '', localPath: '' })
-  const [spawning, setSpawning] = useState<string | null>(null)
+  const [spawningRig, setSpawningRig] = useState<Rig | null>(null)
+  const [task, setTask] = useState('')
+  const [spawning, setSpawning] = useState(false)
 
   useEffect(() => {
-    fetch('/api/rigs')
+    fetch('/api/projects')
       .then((r) => r.json())
       .then(setRigs)
       .catch(() => {})
@@ -23,7 +25,7 @@ export function RigPanel() {
 
   const handleAdd = async () => {
     if (!form.name || !form.localPath) return
-    const res = await fetch('/api/rigs', {
+    const res = await fetch('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form),
@@ -34,13 +36,14 @@ export function RigPanel() {
     setShowForm(false)
   }
 
-  const handleSpawn = async (rig: Rig) => {
-    setSpawning(rig.id)
+  const handleSpawn = async () => {
+    if (!spawningRig) return
+    setSpawning(true)
     try {
-      const res = await fetch(`/api/rigs/${rig.id}/polecats`, {
+      const res = await fetch(`/api/projects/${spawningRig.id}/workerbees`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ task: task.trim() || undefined }),
       })
       const bee = await res.json()
       if (bee.sessionId) {
@@ -49,31 +52,60 @@ export function RigPanel() {
           if (activeTabId) {
             addPaneToTab(activeTabId, bee.sessionId)
           } else {
-            addTab(rig.name, [bee.sessionId])
+            addTab(spawningRig.name, [bee.sessionId])
           }
         }
       }
     } finally {
-      setSpawning(null)
+      setSpawning(false)
+      setSpawningRig(null)
+      setTask('')
     }
   }
 
   return (
     <div style={styles.panel}>
       {rigs.map((rig) => (
-        <div key={rig.id} style={styles.rigRow}>
-          <div style={styles.rigInfo}>
-            <span style={styles.rigName}>{rig.name}</span>
-            <span style={styles.rigPath}>{rig.localPath}</span>
+        <div key={rig.id}>
+          <div style={styles.rigRow}>
+            <div style={styles.rigInfo}>
+              <span style={styles.rigName}>{rig.name}</span>
+              <span style={styles.rigPath}>{rig.localPath}</span>
+            </div>
+            <button
+              style={styles.spawnBtn}
+              onClick={() => {
+                setSpawningRig(spawningRig?.id === rig.id ? null : rig)
+                setTask('')
+              }}
+              title="Spawn a WorkerBee"
+            >
+              {spawningRig?.id === rig.id ? '✕' : '+ Worker'}
+            </button>
           </div>
-          <button
-            style={styles.spawnBtn}
-            onClick={() => handleSpawn(rig)}
-            disabled={spawning === rig.id}
-            title="Spawn a worker agent"
-          >
-            {spawning === rig.id ? '…' : '+ Worker'}
-          </button>
+
+          {spawningRig?.id === rig.id && (
+            <div style={styles.spawnForm}>
+              <textarea
+                style={styles.taskInput}
+                placeholder="Task for this WorkerBee (optional)&#10;e.g. Fix the login bug in auth.ts"
+                value={task}
+                rows={3}
+                onChange={(e) => setTask(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSpawn()
+                }}
+                autoFocus
+              />
+              <button
+                style={styles.confirmBtn}
+                onClick={handleSpawn}
+                disabled={spawning}
+              >
+                {spawning ? 'Spawning…' : '▶ Spawn WorkerBee'}
+              </button>
+            </div>
+          )}
         </div>
       ))}
 
@@ -155,6 +187,36 @@ const styles = {
     fontSize: 10,
     fontFamily: 'monospace',
     flexShrink: 0,
+  },
+  spawnForm: {
+    padding: '6px 8px',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 4,
+    background: '#111',
+    borderBottom: '1px solid #2a2a2a',
+  },
+  taskInput: {
+    background: '#1a1a1a',
+    border: '1px solid #333',
+    color: '#d4d4d4',
+    borderRadius: 3,
+    padding: '4px 6px',
+    fontSize: 11,
+    fontFamily: 'monospace',
+    outline: 'none',
+    resize: 'vertical' as const,
+    lineHeight: 1.4,
+  },
+  confirmBtn: {
+    background: '#1a3a2a',
+    border: '1px solid #4ec9b0',
+    color: '#4ec9b0',
+    borderRadius: 3,
+    padding: '4px 8px',
+    cursor: 'pointer',
+    fontSize: 11,
+    fontFamily: 'monospace',
   },
   form: {
     padding: '6px 8px',

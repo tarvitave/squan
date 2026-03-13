@@ -10,6 +10,8 @@ interface MayorState {
 export function MayorPanel() {
   const [mayor, setMayor] = useState<MayorState | null>(null)
   const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+  const [sending, setSending] = useState(false)
   const activeTabId = useStore((s) => s.activeTabId)
   const addPaneToTab = useStore((s) => s.addPaneToTab)
   const addTab = useStore((s) => s.addTab)
@@ -29,10 +31,8 @@ export function MayorPanel() {
   }, [fetchMayor])
 
   const openMayorTerminal = useCallback((sessionId: string) => {
-    // Find if any tab already has this session
     const hasSession = tabs.some((t) => t.panes.includes(sessionId))
     if (hasSession) return
-
     if (activeTabId) {
       addPaneToTab(activeTabId, sessionId)
     } else {
@@ -74,6 +74,23 @@ export function MayorPanel() {
     if (mayor?.sessionId) openMayorTerminal(mayor.sessionId)
   }
 
+  const handleSend = async () => {
+    if (!message.trim() || !mayor?.sessionId) return
+    setSending(true)
+    try {
+      await fetch('/api/mayor/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: message.trim() }),
+      })
+      setMessage('')
+      // Open terminal so user can see Mayor Lee respond
+      openMayorTerminal(mayor.sessionId)
+    } finally {
+      setSending(false)
+    }
+  }
+
   const isRunning = !!mayor?.sessionId
 
   return (
@@ -101,6 +118,28 @@ export function MayorPanel() {
           </>
         )}
       </div>
+
+      {isRunning && (
+        <div style={styles.messageBox}>
+          <textarea
+            style={styles.messageInput}
+            placeholder="Give Mayor Lee a task…"
+            value={message}
+            rows={3}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSend()
+            }}
+          />
+          <button
+            style={styles.sendBtn}
+            onClick={handleSend}
+            disabled={sending || !message.trim()}
+          >
+            {sending ? '…' : '↵ Send'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -151,5 +190,32 @@ const styles = {
   btnDanger: {
     color: '#f44747',
     borderColor: '#3a1a1a',
+  },
+  messageBox: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 4,
+  },
+  messageInput: {
+    background: '#1a1a1a',
+    border: '1px solid #333',
+    color: '#d4d4d4',
+    borderRadius: 3,
+    padding: '4px 6px',
+    fontSize: 11,
+    fontFamily: 'monospace',
+    outline: 'none',
+    resize: 'vertical' as const,
+    lineHeight: 1.4,
+  },
+  sendBtn: {
+    background: '#1a2a3a',
+    border: '1px solid #569cd6',
+    color: '#569cd6',
+    borderRadius: 3,
+    padding: '4px 8px',
+    cursor: 'pointer',
+    fontSize: 11,
+    fontFamily: 'monospace',
   },
 }

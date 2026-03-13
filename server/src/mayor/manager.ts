@@ -70,6 +70,13 @@ export const mayorLeeManager = {
     })
   },
 
+  async sendMessage(townId: string, message: string) {
+    const mayor = await this.get(townId)
+    if (mayor?.sessionId) {
+      ptyManager.write(mayor.sessionId, message + '\r')
+    }
+  },
+
   async get(townId: string): Promise<MayorLee | null> {
     const db = getDb()
     const result = await db.execute({ sql: 'SELECT * FROM mayors WHERE town_id = ?', args: [townId] })
