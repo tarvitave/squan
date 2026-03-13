@@ -6,6 +6,7 @@ import { ConvoyPanel } from './components/ConvoyPanel/index.js'
 import { EventStream } from './components/EventStream/index.js'
 import { MayorPanel } from './components/MayorPanel/index.js'
 import { RigPanel } from './components/RigPanel/index.js'
+import { Footer } from './components/Footer/index.js'
 import { useStore } from './store/index.js'
 import { useWebSocket } from './hooks/useWebSocket.js'
 
@@ -47,6 +48,10 @@ export default function App() {
     <div style={styles.root}>
       {/* Left sidebar */}
       <div style={styles.sidebar}>
+        <div style={styles.versionBar}>
+          <span style={styles.appName}>squansq</span>
+          <span style={styles.version}>v{__APP_VERSION__}</span>
+        </div>
         <div style={{ ...styles.sidebarSection, flex: 'none' }}>
           <div style={styles.sectionTitle}>Mayor Lee</div>
           <MayorPanel />
@@ -67,6 +72,7 @@ export default function App() {
           <div style={styles.sectionTitle}>Events</div>
           <EventStream />
         </div>
+        <Footer />
       </div>
 
       {/* Main content area */}
@@ -101,6 +107,27 @@ const styles = {
     display: 'flex',
     flexDirection: 'column' as const,
     overflow: 'hidden',
+  },
+  versionBar: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '6px 8px',
+    background: '#0a0a0a',
+    borderBottom: '1px solid #2d2d2d',
+    flexShrink: 0,
+  },
+  appName: {
+    fontSize: 11,
+    fontFamily: 'monospace',
+    color: '#4ec9b0',
+    fontWeight: 'bold' as const,
+    letterSpacing: '0.05em',
+  },
+  version: {
+    fontSize: 10,
+    fontFamily: 'monospace',
+    color: '#444',
   },
   sidebarSection: {
     display: 'flex',
