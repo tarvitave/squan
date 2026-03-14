@@ -12,7 +12,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 export function AtomicTasksPanel() {
   const atomicTasks = useStore((s) => s.atomicTasks)
-  const convoys = useStore((s) => s.convoys)
+  const releaseTrains = useStore((s) => s.releaseTrains)
   const rigs = useStore((s) => s.rigs)
   const agents = useStore((s) => s.agents)
   const addAtomicTask = useStore((s) => s.addAtomicTask)
@@ -20,14 +20,14 @@ export function AtomicTasksPanel() {
   const addToast = useStore((s) => s.addToast)
 
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ title: '', description: '', projectId: '', convoyId: '' })
+  const [form, setForm] = useState({ title: '', description: '', projectId: '', releaseTrainId: '' })
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [editingDeps, setEditingDeps] = useState<string | null>(null)  // atomicTaskId
   const [depsSelection, setDepsSelection] = useState<string[]>([])
   const [assigningAtomicTaskId, setAssigningAtomicTaskId] = useState<string | null>(null)
 
-  const convoyNameById = Object.fromEntries(convoys.map((c) => [c.id, c.name]))
+  const releaseTrainNameById = Object.fromEntries(releaseTrains.map((c) => [c.id, c.name]))
   const rigNameById = Object.fromEntries(rigs.map((r) => [r.id, r.name]))
   const agentNameById = Object.fromEntries(agents.map((a) => [a.id, a.name]))
   const atomicTaskTitleById = Object.fromEntries(atomicTasks.map((b) => [b.id, b.title]))
@@ -44,7 +44,7 @@ export function AtomicTasksPanel() {
         projectId: form.projectId,
       }
       if (form.description) body.description = form.description
-      if (form.convoyId) body.convoyId = form.convoyId
+      if (form.releaseTrainId) body.releaseTrainId = form.releaseTrainId
 
       const res = await apiFetch('/api/atomictasks', {
         method: 'POST',
@@ -53,7 +53,7 @@ export function AtomicTasksPanel() {
       })
       const atomicTask = await res.json()
       addAtomicTask({ ...atomicTask, dependsOn: atomicTask.dependsOn ?? [] })
-      setForm({ title: '', description: '', projectId: '', convoyId: '' })
+      setForm({ title: '', description: '', projectId: '', releaseTrainId: '' })
       setShowForm(false)
     } catch (err) {
       addToast(`Failed to create atomic task: ${(err as Error).message}`)
@@ -169,8 +169,8 @@ export function AtomicTasksPanel() {
 
           <div style={styles.meta}>
             <span style={styles.project}>{rigNameById[atomicTask.projectId] ?? atomicTask.projectId.slice(0, 8)}</span>
-            {atomicTask.convoyId && (
-              <span style={styles.convoy}>{convoyNameById[atomicTask.convoyId] ?? atomicTask.convoyId.slice(0, 8)}</span>
+            {atomicTask.releaseTrainId && (
+              <span style={styles.convoy}>{releaseTrainNameById[atomicTask.releaseTrainId] ?? atomicTask.releaseTrainId.slice(0, 8)}</span>
             )}
             {atomicTask.assigneeId && (
               <span style={styles.assignee}>→ {agentNameById[atomicTask.assigneeId] ?? atomicTask.assigneeId.slice(0, 8)}</span>
@@ -295,11 +295,11 @@ export function AtomicTasksPanel() {
           </select>
           <select
             style={styles.input}
-            value={form.convoyId}
-            onChange={(e) => setForm((f) => ({ ...f, convoyId: e.target.value }))}
+            value={form.releaseTrainId}
+            onChange={(e) => setForm((f) => ({ ...f, releaseTrainId: e.target.value }))}
           >
-            <option value="">no convoy</option>
-            {convoys
+            <option value="">no release train</option>
+            {releaseTrains
               .filter((c) => !form.projectId || c.projectId === form.projectId)
               .map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>

@@ -8,7 +8,7 @@ export const atomicTaskManager = {
     projectId: string,
     title: string,
     description?: string,
-    convoyId?: string,
+    releaseTrainId?: string,
     dependsOn?: string[]
   ): Promise<AtomicTask> {
     const db = getDb()
@@ -16,15 +16,15 @@ export const atomicTaskManager = {
     const now = new Date().toISOString()
 
     await db.execute({
-      sql: `INSERT INTO atomic_tasks (id, project_id, convoy_id, title, description, status, assignee_id, depends_on, created_at, updated_at)
+      sql: `INSERT INTO atomic_tasks (id, project_id, release_train_id, title, description, status, assignee_id, depends_on, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, 'open', NULL, ?, ?, ?)`,
-      args: [id, projectId, convoyId ?? null, title, description ?? '', JSON.stringify(dependsOn ?? []), now, now],
+      args: [id, projectId, releaseTrainId ?? null, title, description ?? '', JSON.stringify(dependsOn ?? []), now, now],
     })
 
     broadcastEvent({
       id: uuidv4(),
       type: 'atomictask.created',
-      payload: { atomicTaskId: id, projectId, title, convoyId: convoyId ?? null },
+      payload: { atomicTaskId: id, projectId, title, releaseTrainId: releaseTrainId ?? null },
       timestamp: now,
     })
 
@@ -47,11 +47,11 @@ export const atomicTaskManager = {
     return result.rows.map((r) => toModel(r as unknown as DbAtomicTask))
   },
 
-  async listByConvoy(convoyId: string): Promise<AtomicTask[]> {
+  async listByConvoy(releaseTrainId: string): Promise<AtomicTask[]> {
     const db = getDb()
     const result = await db.execute({
-      sql: 'SELECT * FROM atomic_tasks WHERE convoy_id = ? ORDER BY created_at DESC',
-      args: [convoyId],
+      sql: 'SELECT * FROM atomic_tasks WHERE release_train_id = ? ORDER BY created_at DESC',
+      args: [releaseTrainId],
     })
     return result.rows.map((r) => toModel(r as unknown as DbAtomicTask))
   },
@@ -125,7 +125,7 @@ export const beadManager = atomicTaskManager
 interface DbAtomicTask {
   id: string
   project_id: string
-  convoy_id: string | null
+  release_train_id: string | null
   title: string
   description: string
   status: AtomicTask['status']
@@ -139,7 +139,8 @@ function toModel(r: DbAtomicTask): AtomicTask {
   return {
     id: r.id,
     projectId: r.project_id,
-    convoyId: r.convoy_id,
+    releaseTrainId: r.release_train_id,
+    convoyId: r.release_train_id,  // backward-compat alias
     title: r.title,
     description: r.description,
     status: r.status,

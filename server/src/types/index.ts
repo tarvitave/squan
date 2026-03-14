@@ -4,7 +4,10 @@ export type AgentStatus = 'idle' | 'working' | 'stalled' | 'zombie' | 'done'
 
 export type HookStatus = 'created' | 'active' | 'suspended' | 'completed' | 'archived'
 
-export type ConvoyStatus = 'open' | 'in_progress' | 'landed' | 'cancelled'
+export type ReleaseTrainStatus = 'open' | 'in_progress' | 'landed' | 'cancelled'
+
+/** Backward-compat alias */
+export type ConvoyStatus = ReleaseTrainStatus
 
 export type AtomicTaskStatus = 'open' | 'assigned' | 'in_progress' | 'done' | 'blocked'
 
@@ -66,6 +69,8 @@ export interface MayorLee {
 export interface AtomicTask {
   id: string
   projectId: string
+  releaseTrainId: string | null
+  /** @deprecated use releaseTrainId */
   convoyId: string | null
   title: string
   description: string
@@ -118,18 +123,21 @@ export interface Hook {
   updatedAt: string
 }
 
-// --- Convoy (work tracking bundle) ---
-export interface Convoy {
+// --- ReleaseTrain (work tracking bundle, formerly Convoy) ---
+export interface ReleaseTrain {
   id: string
   name: string
   description: string
   projectId: string
   atomicTaskIds: string[]
   assignedWorkerBeeId: string | null
-  status: ConvoyStatus
+  status: ReleaseTrainStatus
   createdAt: string
   updatedAt: string
 }
+
+/** Backward-compat alias */
+export type Convoy = ReleaseTrain
 
 // --- Terminal Session (browser-side pty) ---
 export interface TerminalSession {
@@ -149,10 +157,10 @@ export type EventType =
   | 'workerbee.done'
   | 'workerbee.stalled'
   | 'workerbee.zombie'
-  | 'convoy.created'
-  | 'convoy.landed'
-  | 'convoy.assigned'
-  | 'convoy.cancelled'
+  | 'releasetrain.created'
+  | 'releasetrain.landed'
+  | 'releasetrain.assigned'
+  | 'releasetrain.cancelled'
   | 'hook.created'
   | 'hook.activated'
   | 'hook.completed'

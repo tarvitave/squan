@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react'
 interface Metrics {
   projects: number
   workerbees: { total: number; idle?: number; working?: number; stalled?: number; zombie?: number; done?: number }
-  convoys: { total: number; open?: number; in_progress?: number; landed?: number; cancelled?: number }
+  releaseTrains: { total: number; open?: number; in_progress?: number; landed?: number; cancelled?: number }
+  convoys: { total: number; open?: number; in_progress?: number; landed?: number; cancelled?: number }  // backward compat
   atomictasks: { total: number; open?: number; assigned?: number; in_progress?: number; done?: number; blocked?: number }
   zombieRate: number
 }
@@ -55,15 +56,15 @@ export function MetricsPanel() {
           </div>
         </div>
 
-        {/* Convoys */}
+        {/* Release Trains */}
         <div style={styles.section}>
-          <div style={styles.sectionTitle}>Convoys</div>
+          <div style={styles.sectionTitle}>Release Trains</div>
           <div style={styles.statRow}>
-            <StatCard label="Total" value={metrics.convoys.total} color="#d4d4d4" />
-            <StatCard label="Open" value={metrics.convoys.open ?? 0} color="#569cd6" />
-            <StatCard label="In Progress" value={metrics.convoys.in_progress ?? 0} color="#4ec9b0" />
-            <StatCard label="Landed" value={metrics.convoys.landed ?? 0} color="#608b4e" />
-            <StatCard label="Cancelled" value={metrics.convoys.cancelled ?? 0} color="#555" />
+            <StatCard label="Total" value={(metrics.releaseTrains ?? metrics.convoys).total} color="#d4d4d4" />
+            <StatCard label="Open" value={(metrics.releaseTrains ?? metrics.convoys).open ?? 0} color="#569cd6" />
+            <StatCard label="In Progress" value={(metrics.releaseTrains ?? metrics.convoys).in_progress ?? 0} color="#4ec9b0" />
+            <StatCard label="Landed" value={(metrics.releaseTrains ?? metrics.convoys).landed ?? 0} color="#608b4e" />
+            <StatCard label="Cancelled" value={(metrics.releaseTrains ?? metrics.convoys).cancelled ?? 0} color="#555" />
           </div>
         </div>
 
@@ -105,11 +106,11 @@ export function MetricsPanel() {
             color="#608b4e"
           />
         )}
-        {metrics.convoys.total > 0 && (
+        {(metrics.releaseTrains ?? metrics.convoys).total > 0 && (
           <ProgressBar
-            label="Convoys landed"
-            value={metrics.convoys.landed ?? 0}
-            total={metrics.convoys.total}
+            label="Release trains landed"
+            value={(metrics.releaseTrains ?? metrics.convoys).landed ?? 0}
+            total={(metrics.releaseTrains ?? metrics.convoys).total}
             color="#4ec9b0"
           />
         )}

@@ -8,7 +8,7 @@
 
 import type { Request, Response } from 'express'
 import { workerBeeManager } from '../workerbee/manager.js'
-import { convoyManager } from '../convoy/manager.js'
+import { releaseTrainManager } from '../releasetrain/manager.js'
 import { atomicTaskManager } from '../beads/manager.js'
 import { rigManager } from '../rig/manager.js'
 import { hookManager } from '../hooks/manager.js'
@@ -48,13 +48,13 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {} },
   },
   {
-    name: 'list_convoys',
-    description: 'List all convoys (work bundles)',
+    name: 'list_release_trains',
+    description: 'List all release trains (work bundles)',
     inputSchema: { type: 'object', properties: { status: { type: 'string', description: 'Filter by status: open, in_progress, landed, cancelled' } } },
   },
   {
-    name: 'create_convoy',
-    description: 'Create a new convoy (work bundle) for a project',
+    name: 'create_release_train',
+    description: 'Create a new release train (work bundle) for a project',
     inputSchema: {
       type: 'object',
       required: ['name', 'projectId'],
@@ -66,14 +66,14 @@ const TOOLS = [
     },
   },
   {
-    name: 'dispatch_convoy',
-    description: 'Spawn a WorkerBee and assign it to a convoy. The convoy description becomes the agent\'s task.',
-    inputSchema: { type: 'object', required: ['convoyId'], properties: { convoyId: { type: 'string' } } },
+    name: 'dispatch_release_train',
+    description: 'Spawn a WorkerBee and assign it to a release train. The release train description becomes the agent\'s task.',
+    inputSchema: { type: 'object', required: ['releaseTrainId'], properties: { releaseTrainId: { type: 'string' } } },
   },
   {
-    name: 'land_convoy',
-    description: 'Mark a convoy as landed (completed)',
-    inputSchema: { type: 'object', required: ['convoyId'], properties: { convoyId: { type: 'string' } } },
+    name: 'land_release_train',
+    description: 'Mark a release train as landed (completed)',
+    inputSchema: { type: 'object', required: ['releaseTrainId'], properties: { releaseTrainId: { type: 'string' } } },
   },
   {
     name: 'list_atomic_tasks',
@@ -82,7 +82,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         projectId: { type: 'string' },
-        convoyId: { type: 'string' },
+        releaseTrainId: { type: 'string' },
       },
     },
   },
@@ -96,7 +96,7 @@ const TOOLS = [
         projectId: { type: 'string' },
         title: { type: 'string' },
         description: { type: 'string' },
-        convoyId: { type: 'string' },
+        releaseTrainId: { type: 'string' },
         dependsOn: { type: 'array', items: { type: 'string' }, description: 'AtomicTask IDs this depends on' },
       },
     },
@@ -134,27 +134,28 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
     case 'list_projects': {
       return rigManager.listByTown('default')
     }
-    case 'list_convoys': {
-      const all = await convoyManager.listAll()
+    case 'list_release_trains': {
+      const all = await releaseTrainManager.listAll()
       return args.status ? all.filter((c) => c.status === args.status) : all
     }
-    case 'create_convoy': {
-      return convoyManager.create(args.name as string, args.projectId as string, [], args.description as string | undefined)
+    case 'create_release_train': {
+      return releaseTrainManager.create(args.name as string, args.projectId as string, [], args.description as string | undefined)
     }
-    case 'dispatch_convoy': {
-      const convoy = await convoyManager.getById(args.convoyId as string)
-      if (!convoy) throw new Error(`Convoy ${args.convoyId} not found`)
-      const task = convoy.description || convoy.name
-      const bee = await workerBeeManager.spawn(convoy.projectId, task)
-      await convoyManager.assignWorkerBee(convoy.id, bee.id)
-      return { bee, convoy: await convoyManager.getById(convoy.id) }
+    case 'dispatch_release_train': {
+      const releaseTrain = await releaseTrainManager.getById(args.releaseTrainId as string)
+      if (!releaseTrain) throw new Error(`ReleaseTrain ${args.releaseTrainId} not found`)
+      const task = releaseTrain.description || releaseTrain.name
+      const bee = await workerBeeManager.spawn(releaseTrain.projectId, task)
+      await releaseTrainManager.assignWorkerBee(releaseTrain.id, bee.id)
+      return { bee, releaseTrain: await releaseTrainManager.getById(releaseTrain.id) }
     }
-    case 'land_convoy': {
-      await convoyManager.land(args.convoyId as string)
+    case 'land_release_train': {
+      await releaseTrainManager.land(args.releaseTrainId as string)
       return { ok: true }
     }
     case 'list_atomic_tasks': {
-      if (args.convoyId) return atomicTaskManager.listByConvoy(args.convoyId as string)
+      const rtId = (args.releaseTrainId ?? args.convoyId) as string | undefined
+      if (rtId) return atomicTaskManager.listByConvoy(rtId)
       if (args.projectId) return atomicTaskManager.listByProject(args.projectId as string)
       return atomicTaskManager.listAll()
     }
@@ -163,7 +164,7 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
         args.projectId as string,
         args.title as string,
         args.description as string | undefined,
-        args.convoyId as string | undefined,
+        (args.releaseTrainId ?? args.convoyId) as string | undefined,
         args.dependsOn as string[] | undefined
       )
       return atomicTask
@@ -173,16 +174,16 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
       return hookManager.listAll()
     }
     case 'get_status_summary': {
-      const [bees, convoys, atomicTasks] = await Promise.all([
+      const [bees, releaseTrains, atomicTasks] = await Promise.all([
         workerBeeManager.listAll(),
-        convoyManager.listAll(),
+        releaseTrainManager.listAll(),
         atomicTaskManager.listAll(),
       ])
       const beesByStatus = bees.reduce<Record<string, number>>((acc, b) => {
         acc[b.status] = (acc[b.status] ?? 0) + 1
         return acc
       }, {})
-      const convoysByStatus = convoys.reduce<Record<string, number>>((acc, c) => {
+      const releaseTrainsByStatus = releaseTrains.reduce<Record<string, number>>((acc, c) => {
         acc[c.status] = (acc[c.status] ?? 0) + 1
         return acc
       }, {})
@@ -190,7 +191,7 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
         acc[b.status] = (acc[b.status] ?? 0) + 1
         return acc
       }, {})
-      return { workerbees: beesByStatus, convoys: convoysByStatus, atomictasks: atomicTasksByStatus }
+      return { workerbees: beesByStatus, releaseTrains: releaseTrainsByStatus, atomictasks: atomicTasksByStatus }
     }
     default:
       throw new Error(`Unknown tool: ${name}`)

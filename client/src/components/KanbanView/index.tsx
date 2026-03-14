@@ -1,8 +1,8 @@
 import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
-import type { ConvoyEntry } from '../../store/index.js'
+import type { ReleaseTrainEntry } from '../../store/index.js'
 
-const COLUMNS: Array<{ status: ConvoyEntry['status']; label: string; color: string }> = [
+const COLUMNS: Array<{ status: ReleaseTrainEntry['status']; label: string; color: string }> = [
   { status: 'open', label: 'Open', color: '#569cd6' },
   { status: 'in_progress', label: 'In Progress', color: '#4ec9b0' },
   { status: 'landed', label: 'Landed', color: '#608b4e' },
@@ -10,11 +10,11 @@ const COLUMNS: Array<{ status: ConvoyEntry['status']; label: string; color: stri
 ]
 
 export function KanbanView() {
-  const convoys = useStore((s) => s.convoys)
+  const releaseTrains = useStore((s) => s.releaseTrains)
   const agents = useStore((s) => s.agents)
   const rigs = useStore((s) => s.rigs)
   const atomicTasks = useStore((s) => s.atomicTasks)
-  const updateConvoy = useStore((s) => s.updateConvoy)
+  const updateReleaseTrain = useStore((s) => s.updateReleaseTrain)
   const addAgent = useStore((s) => s.addAgent)
   const addPaneToTab = useStore((s) => s.addPaneToTab)
   const addTab = useStore((s) => s.addTab)
@@ -24,43 +24,45 @@ export function KanbanView() {
   const agentById = Object.fromEntries(agents.map((a) => [a.id, a]))
   const rigNameById = Object.fromEntries(rigs.map((r) => [r.id, r.name]))
 
-  const convoyAtomicTaskCounts = Object.fromEntries(
-    convoys.map((c) => [
+  const releaseTrainAtomicTaskCounts = Object.fromEntries(
+    releaseTrains.map((c) => [
       c.id,
       {
-        total: atomicTasks.filter((b) => c.atomicTaskIds.includes(b.id) || b.convoyId === c.id).length,
-        done: atomicTasks.filter((b) => (c.atomicTaskIds.includes(b.id) || b.convoyId === c.id) && b.status === 'done').length,
+        total: atomicTasks.filter((b) => c.atomicTaskIds.includes(b.id) || b.releaseTrainId === c.id).length,
+        done: atomicTasks.filter((b) => (c.atomicTaskIds.includes(b.id) || b.releaseTrainId === c.id) && b.status === 'done').length,
       },
     ])
   )
 
-  const moveConvoy = async (convoyId: string, status: string) => {
+  const moveReleaseTrain = async (releaseTrainId: string, status: string) => {
     if (status === 'cancelled') {
-      await apiFetch(`/api/convoys/${convoyId}/cancel`, {
+      await apiFetch(`/api/release-trains/${releaseTrainId}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       })
-      updateConvoy(convoyId, { status: 'cancelled' })
+      updateReleaseTrain(releaseTrainId, { status: 'cancelled' })
     } else {
-      await apiFetch(`/api/convoys/${convoyId}/${status === 'landed' ? 'land' : 'assign'}`, {
+      await apiFetch(`/api/release-trains/${releaseTrainId}/${status === 'landed' ? 'land' : 'assign'}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(status === 'landed' ? {} : { workerBeeId: null }),
       })
-      updateConvoy(convoyId, { status: status as ConvoyEntry['status'] })
+      updateReleaseTrain(releaseTrainId, { status: status as ReleaseTrainEntry['status'] })
     }
   }
 
-  const dispatchConvoy = async (convoyId: string) => {
-    const res = await apiFetch(`/api/convoys/${convoyId}/dispatch`, {
+  const dispatchReleaseTrain = async (releaseTrainId: string) => {
+    const res = await apiFetch(`/api/release-trains/${releaseTrainId}/dispatch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
     })
-    const { bee, convoy } = await res.json()
+    const data = await res.json()
+    const bee = data.bee
+    const releaseTrain = data.releaseTrain
     if (bee) addAgent({ ...bee, taskDescription: bee.taskDescription ?? '', worktreePath: bee.worktreePath ?? '', branch: bee.branch ?? '' })
-    if (convoy) updateConvoy(convoyId, { assignedWorkerBeeId: convoy.assignedWorkerBeeId, status: convoy.status })
+    if (releaseTrain) updateReleaseTrain(releaseTrainId, { assignedWorkerBeeId: releaseTrain.assignedWorkerBeeId, status: releaseTrain.status })
     if (bee?.sessionId) {
       const hasSession = tabs.some((t: { panes: string[] }) => t.panes.includes(bee.sessionId))
       if (!hasSession) {
@@ -82,7 +84,7 @@ export function KanbanView() {
   return (
     <div style={styles.board}>
       {COLUMNS.map((col) => {
-        const cards = convoys.filter((c) => c.status === col.status)
+        const cards = releaseTrains.filter((c) => c.status === col.status)
         return (
           <div key={col.status} style={styles.column}>
             <div style={styles.colHeader}>
@@ -90,19 +92,19 @@ export function KanbanView() {
               <span style={styles.colCount}>{cards.length}</span>
             </div>
             <div style={styles.cards}>
-              {cards.map((convoy) => {
-                const assignedBee = convoy.assignedWorkerBeeId ? agentById[convoy.assignedWorkerBeeId] : null
-                const counts = convoyAtomicTaskCounts[convoy.id] ?? { total: 0, done: 0 }
+              {cards.map((releaseTrain) => {
+                const assignedBee = releaseTrain.assignedWorkerBeeId ? agentById[releaseTrain.assignedWorkerBeeId] : null
+                const counts = releaseTrainAtomicTaskCounts[releaseTrain.id] ?? { total: 0, done: 0 }
                 return (
-                  <div key={convoy.id} style={styles.card}>
-                    <div style={styles.cardTitle}>{convoy.name}</div>
+                  <div key={releaseTrain.id} style={styles.card}>
+                    <div style={styles.cardTitle}>{releaseTrain.name}</div>
 
-                    {convoy.description && (
-                      <div style={styles.cardDesc}>{convoy.description}</div>
+                    {releaseTrain.description && (
+                      <div style={styles.cardDesc}>{releaseTrain.description}</div>
                     )}
 
                     <div style={styles.cardMeta}>
-                      <span style={styles.cardRig}>{rigNameById[convoy.projectId] ?? convoy.projectId.slice(0, 8)}</span>
+                      <span style={styles.cardRig}>{rigNameById[releaseTrain.projectId] ?? releaseTrain.projectId.slice(0, 8)}</span>
                       {counts.total > 0 && (
                         <span style={styles.cardBeads}>
                           {counts.done}/{counts.total} tasks
@@ -128,7 +130,7 @@ export function KanbanView() {
                       {col.status === 'open' && (
                         <button
                           style={styles.actionBtn}
-                          onClick={() => dispatchConvoy(convoy.id)}
+                          onClick={() => dispatchReleaseTrain(releaseTrain.id)}
                         >
                           dispatch
                         </button>
@@ -136,7 +138,7 @@ export function KanbanView() {
                       {col.status === 'in_progress' && (
                         <button
                           style={{ ...styles.actionBtn, color: '#608b4e', borderColor: '#608b4e' }}
-                          onClick={() => moveConvoy(convoy.id, 'landed')}
+                          onClick={() => moveReleaseTrain(releaseTrain.id, 'landed')}
                         >
                           land
                         </button>
@@ -144,7 +146,7 @@ export function KanbanView() {
                       {col.status !== 'open' && col.status !== 'cancelled' && (
                         <button
                           style={{ ...styles.actionBtn, color: '#555' }}
-                          onClick={() => moveConvoy(convoy.id, 'cancelled')}
+                          onClick={() => moveReleaseTrain(releaseTrain.id, 'cancelled')}
                         >
                           cancel
                         </button>
@@ -154,7 +156,7 @@ export function KanbanView() {
                 )
               })}
               {cards.length === 0 && (
-                <div style={styles.emptyCol}>no {col.label.toLowerCase()} convoys</div>
+                <div style={styles.emptyCol}>no {col.label.toLowerCase()} release trains</div>
               )}
             </div>
           </div>

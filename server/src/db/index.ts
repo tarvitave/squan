@@ -68,7 +68,7 @@ export async function migrate() {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    CREATE TABLE IF NOT EXISTS convoys (
+    CREATE TABLE IF NOT EXISTS release_trains (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       rig_id TEXT NOT NULL,
@@ -81,7 +81,7 @@ export async function migrate() {
     CREATE TABLE IF NOT EXISTS atomic_tasks (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,
-      convoy_id TEXT,
+      release_train_id TEXT,
       title TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'open',
@@ -141,6 +141,12 @@ export async function migrate() {
     `ALTER TABLE convoys ADD COLUMN assigned_workerbee_id TEXT`,
     `ALTER TABLE atomic_tasks ADD COLUMN depends_on TEXT NOT NULL DEFAULT '[]'`,
     `ALTER TABLE workerbees ADD COLUMN completion_note TEXT NOT NULL DEFAULT ''`,
+    // convoy → release_train migrations
+    `ALTER TABLE convoys RENAME TO release_trains`,
+    `ALTER TABLE atomic_tasks RENAME COLUMN convoy_id TO release_train_id`,
+    `ALTER TABLE release_trains RENAME COLUMN bead_ids_json TO atomic_task_ids_json`,
+    `ALTER TABLE release_trains ADD COLUMN description TEXT NOT NULL DEFAULT ''`,
+    `ALTER TABLE release_trains ADD COLUMN assigned_workerbee_id TEXT`,
   ]
   for (const sql of alterStatements) {
     try {

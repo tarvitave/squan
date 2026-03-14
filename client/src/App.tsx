@@ -3,7 +3,7 @@ import { apiFetch } from './lib/api.js'
 import { TabBar } from './components/TabBar/index.js'
 import { PaneGrid } from './components/PaneGrid/index.js'
 import { AgentTree } from './components/AgentTree/index.js'
-import { ConvoyPanel } from './components/ConvoyPanel/index.js'
+import { ReleaseTrainPanel } from './components/ReleaseTrainPanel/index.js'
 import { EventStream } from './components/EventStream/index.js'
 import { MayorPanel } from './components/MayorPanel/index.js'
 import { RigPanel } from './components/RigPanel/index.js'
@@ -25,7 +25,7 @@ export default function App() {
   const mainView = useStore((s) => s.mainView)
   const setMainView = useStore((s) => s.setMainView)
   const setAgents = useStore((s) => s.setAgents)
-  const setConvoys = useStore((s) => s.setConvoys)
+  const setReleaseTrains = useStore((s) => s.setReleaseTrains)
   const setAtomicTasks = useStore((s) => s.setAtomicTasks)
   const setTemplates = useStore((s) => s.setTemplates)
   const addToast = useStore((s) => s.addToast)
@@ -55,10 +55,10 @@ export default function App() {
       )
       .catch(() => addToast('Failed to load WorkerBees'))
 
-    apiFetch('/api/convoys')
+    apiFetch('/api/release-trains')
       .then((r) => r.json())
-      .then(setConvoys)
-      .catch(() => addToast('Failed to load Convoys'))
+      .then(setReleaseTrains)
+      .catch(() => addToast('Failed to load Release Trains'))
 
     apiFetch('/api/atomictasks')
       .then((r) => r.json())
@@ -69,7 +69,7 @@ export default function App() {
       .then((r) => r.json())
       .then(setTemplates)
       .catch(() => addToast('Failed to load Templates'))
-  }, [token, setAgents, setConvoys, setAtomicTasks, setTemplates, addToast])
+  }, [token, setAgents, setReleaseTrains, setAtomicTasks, setTemplates, addToast])
 
   if (!token) return <AuthPage />
 
@@ -95,8 +95,8 @@ export default function App() {
           <AgentTree />
         </div>
         <div style={styles.sidebarSection}>
-          <div style={styles.sectionTitle}>Convoys</div>
-          <ConvoyPanel />
+          <div style={styles.sectionTitle}>Release Trains</div>
+          <ReleaseTrainPanel />
         </div>
         <div style={styles.sidebarSection}>
           <div style={styles.sectionTitle}>Atomic Tasks</div>

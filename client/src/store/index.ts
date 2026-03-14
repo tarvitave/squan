@@ -39,7 +39,7 @@ export interface Rig {
   }
 }
 
-export interface ConvoyEntry {
+export interface ReleaseTrainEntry {
   id: string
   name: string
   description: string
@@ -49,9 +49,14 @@ export interface ConvoyEntry {
   assignedWorkerBeeId: string | null
 }
 
+/** Backward-compat alias */
+export type ConvoyEntry = ReleaseTrainEntry
+
 export interface AtomicTaskEntry {
   id: string
   projectId: string
+  releaseTrainId: string | null
+  /** @deprecated use releaseTrainId */
   convoyId: string | null
   title: string
   description: string
@@ -125,11 +130,19 @@ interface SquansqState {
   selectedAgentId: string | null
   setSelectedAgent: (id: string | null) => void
 
-  // Convoys
-  convoys: ConvoyEntry[]
-  setConvoys: (convoys: ConvoyEntry[]) => void
-  addConvoy: (convoy: ConvoyEntry) => void
-  updateConvoy: (id: string, patch: Partial<ConvoyEntry>) => void
+  // Release Trains (formerly Convoys)
+  releaseTrains: ReleaseTrainEntry[]
+  setReleaseTrains: (releaseTrains: ReleaseTrainEntry[]) => void
+  addReleaseTrain: (releaseTrain: ReleaseTrainEntry) => void
+  updateReleaseTrain: (id: string, patch: Partial<ReleaseTrainEntry>) => void
+  /** @deprecated use releaseTrains */
+  convoys: ReleaseTrainEntry[]
+  /** @deprecated use setReleaseTrains */
+  setConvoys: (convoys: ReleaseTrainEntry[]) => void
+  /** @deprecated use addReleaseTrain */
+  addConvoy: (convoy: ReleaseTrainEntry) => void
+  /** @deprecated use updateReleaseTrain */
+  updateConvoy: (id: string, patch: Partial<ReleaseTrainEntry>) => void
 
   // AtomicTasks (formerly Beads)
   atomicTasks: AtomicTaskEntry[]
@@ -225,11 +238,29 @@ export const useStore = create<SquansqState>()(
       selectedAgentId: null,
       setSelectedAgent: (selectedAgentId) => set({ selectedAgentId }),
 
+      releaseTrains: [],
+      setReleaseTrains: (releaseTrains) => set({ releaseTrains, convoys: releaseTrains }),
+      addReleaseTrain: (releaseTrain) => set((s) => {
+        const updated = [releaseTrain, ...s.releaseTrains.filter((c) => c.id !== releaseTrain.id)]
+        return { releaseTrains: updated, convoys: updated }
+      }),
+      updateReleaseTrain: (id, patch) =>
+        set((s) => {
+          const updated = s.releaseTrains.map((c) => (c.id === id ? { ...c, ...patch } : c))
+          return { releaseTrains: updated, convoys: updated }
+        }),
+      // backward-compat aliases
       convoys: [],
-      setConvoys: (convoys) => set({ convoys }),
-      addConvoy: (convoy) => set((s) => ({ convoys: [convoy, ...s.convoys.filter((c) => c.id !== convoy.id)] })),
+      setConvoys: (convoys) => set({ convoys, releaseTrains: convoys }),
+      addConvoy: (convoy) => set((s) => {
+        const updated = [convoy, ...s.releaseTrains.filter((c) => c.id !== convoy.id)]
+        return { releaseTrains: updated, convoys: updated }
+      }),
       updateConvoy: (id, patch) =>
-        set((s) => ({ convoys: s.convoys.map((c) => (c.id === id ? { ...c, ...patch } : c)) })),
+        set((s) => {
+          const updated = s.releaseTrains.map((c) => (c.id === id ? { ...c, ...patch } : c))
+          return { releaseTrains: updated, convoys: updated }
+        }),
 
       atomicTasks: [],
       setAtomicTasks: (atomicTasks) => set({ atomicTasks, beads: atomicTasks }),

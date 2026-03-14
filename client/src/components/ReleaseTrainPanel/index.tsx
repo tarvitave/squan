@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
-import type { ConvoyEntry } from '../../store/index.js'
+import type { ReleaseTrainEntry } from '../../store/index.js'
 
 const ATOMIC_TASK_STATUS_COLOR: Record<string, string> = {
   open: '#569cd6',
@@ -17,9 +17,9 @@ const STATUS_COLOR: Record<string, string> = {
   cancelled: '#555',
 }
 
-export function ConvoyPanel() {
-  const convoys = useStore((s) => s.convoys)
-  const setConvoys = useStore((s) => s.setConvoys)
+export function ReleaseTrainPanel() {
+  const releaseTrains = useStore((s) => s.releaseTrains)
+  const setReleaseTrains = useStore((s) => s.setReleaseTrains)
   const agents = useStore((s) => s.agents)
   const rigs = useStore((s) => s.rigs)
   const atomicTasks = useStore((s) => s.atomicTasks)
@@ -28,8 +28,8 @@ export function ConvoyPanel() {
   const addTab = useStore((s) => s.addTab)
   const activeTabId = useStore((s) => s.activeTabId)
   const tabs = useStore((s) => s.tabs)
-  const updateConvoy = useStore((s) => s.updateConvoy)
-  const addConvoy = useStore((s) => s.addConvoy)
+  const updateReleaseTrain = useStore((s) => s.updateReleaseTrain)
+  const addReleaseTrain = useStore((s) => s.addReleaseTrain)
   const addToast = useStore((s) => s.addToast)
 
   const [showForm, setShowForm] = useState(false)
@@ -44,84 +44,87 @@ export function ConvoyPanel() {
   const [dispatchingWithTemplate, setDispatchingWithTemplate] = useState<string | null>(null)
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
 
+  // suppress unused warning — used indirectly via setReleaseTrains
+  void setReleaseTrains
+
   const handleCreate = async () => {
     if (!form.name || !form.projectId) return
     try {
-      const res = await apiFetch('/api/convoys', {
+      const res = await apiFetch('/api/release-trains', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       })
       if (!res.ok) throw new Error(await res.text())
-      const convoy = await res.json()
-      addConvoy(convoy)
+      const releaseTrain = await res.json()
+      addReleaseTrain(releaseTrain)
       setForm({ name: '', description: '', projectId: '' })
       setShowForm(false)
     } catch (err) {
-      addToast(`Failed to create convoy: ${(err as Error).message}`)
+      addToast(`Failed to create release train: ${(err as Error).message}`)
     }
   }
 
-  const handleAssign = async (convoyId: string, workerBeeId: string | null) => {
-    const res = await apiFetch(`/api/convoys/${convoyId}/assign`, {
+  const handleAssign = async (releaseTrainId: string, workerBeeId: string | null) => {
+    const res = await apiFetch(`/api/release-trains/${releaseTrainId}/assign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ workerBeeId }),
     })
     const updated = await res.json()
-    updateConvoy(convoyId, {
+    updateReleaseTrain(releaseTrainId, {
       assignedWorkerBeeId: updated.assignedWorkerBeeId,
       status: updated.status,
     })
     setAssigning(null)
   }
 
-  const handleSaveDesc = async (convoyId: string) => {
-    await apiFetch(`/api/convoys/${convoyId}/description`, {
+  const handleSaveDesc = async (releaseTrainId: string) => {
+    await apiFetch(`/api/release-trains/${releaseTrainId}/description`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ description: editDescText }),
     })
-    updateConvoy(convoyId, { description: editDescText })
+    updateReleaseTrain(releaseTrainId, { description: editDescText })
     setEditingDesc(null)
   }
 
-  const handleAddAtomicTasks = async (convoyId: string) => {
+  const handleAddAtomicTasks = async (releaseTrainId: string) => {
     if (atomicTaskSelection.length === 0) { setAddingAtomicTasks(null); return }
-    const res = await apiFetch(`/api/convoys/${convoyId}/atomictasks`, {
+    const res = await apiFetch(`/api/release-trains/${releaseTrainId}/atomictasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ atomicTaskIds: atomicTaskSelection }),
     })
     const updated = await res.json()
-    updateConvoy(convoyId, { atomicTaskIds: updated.atomicTaskIds })
+    updateReleaseTrain(releaseTrainId, { atomicTaskIds: updated.atomicTaskIds })
     setAddingAtomicTasks(null)
     setAtomicTaskSelection([])
   }
 
-  const handleRemoveAtomicTask = async (convoy: ConvoyEntry, atomicTaskId: string) => {
-    const res = await apiFetch(`/api/convoys/${convoy.id}/atomictasks`, {
+  const handleRemoveAtomicTask = async (releaseTrain: ReleaseTrainEntry, atomicTaskId: string) => {
+    const res = await apiFetch(`/api/release-trains/${releaseTrain.id}/atomictasks`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ atomicTaskIds: [atomicTaskId] }),
     })
     const updated = await res.json()
-    updateConvoy(convoy.id, { atomicTaskIds: updated.atomicTaskIds })
+    updateReleaseTrain(releaseTrain.id, { atomicTaskIds: updated.atomicTaskIds })
   }
 
-  const handleDispatch = async (convoyId: string) => {
-    setDispatching(convoyId)
+  const handleDispatch = async (releaseTrainId: string) => {
+    setDispatching(releaseTrainId)
     try {
-      const res = await apiFetch(`/api/convoys/${convoyId}/dispatch`, {
+      const res = await apiFetch(`/api/release-trains/${releaseTrainId}/dispatch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       })
       if (!res.ok) throw new Error(await res.text())
-      const { bee, convoy } = await res.json()
-      updateConvoy(convoyId, {
-        assignedWorkerBeeId: convoy.assignedWorkerBeeId,
-        status: convoy.status,
+      const { bee, releaseTrain } = await res.json()
+      updateReleaseTrain(releaseTrainId, {
+        assignedWorkerBeeId: releaseTrain.assignedWorkerBeeId,
+        status: releaseTrain.status,
       })
       if (bee?.sessionId) {
         const hasSession = tabs.some((t) => t.panes.includes(bee.sessionId))
@@ -137,6 +140,9 @@ export function ConvoyPanel() {
     }
   }
 
+  // suppress unused warning
+  void handleDispatch
+
   const idleAgents = agents.filter((a) => a.status === 'idle' || a.status === 'working')
   const rigNameById = Object.fromEntries(rigs.map((r) => [r.id, r.name]))
   const agentNameById = Object.fromEntries(agents.map((a) => [a.id, a.name]))
@@ -144,16 +150,16 @@ export function ConvoyPanel() {
 
   return (
     <div style={styles.panel}>
-      {convoys.map((convoy) => (
-        <div key={convoy.id} style={styles.row}>
+      {releaseTrains.map((releaseTrain) => (
+        <div key={releaseTrain.id} style={styles.row}>
           <div style={styles.rowTop}>
-            <span style={styles.name}>{convoy.name}</span>
-            <span style={{ ...styles.status, color: STATUS_COLOR[convoy.status] ?? '#888' }}>
-              {convoy.status}
+            <span style={styles.name}>{releaseTrain.name}</span>
+            <span style={{ ...styles.status, color: STATUS_COLOR[releaseTrain.status] ?? '#888' }}>
+              {releaseTrain.status}
             </span>
           </div>
 
-          {editingDesc === convoy.id ? (
+          {editingDesc === releaseTrain.id ? (
             <div style={styles.descEdit}>
               <textarea
                 style={styles.descInput}
@@ -163,37 +169,37 @@ export function ConvoyPanel() {
                 rows={3}
               />
               <div style={styles.descEditBtns}>
-                <button style={styles.descSaveBtn} onClick={() => handleSaveDesc(convoy.id)}>save</button>
+                <button style={styles.descSaveBtn} onClick={() => handleSaveDesc(releaseTrain.id)}>save</button>
                 <button style={styles.descCancelBtn} onClick={() => setEditingDesc(null)}>cancel</button>
               </div>
             </div>
           ) : (
             <div
               style={styles.description}
-              onClick={() => { setEditingDesc(convoy.id); setEditDescText(convoy.description) }}
+              onClick={() => { setEditingDesc(releaseTrain.id); setEditDescText(releaseTrain.description) }}
               title="Click to edit description"
             >
-              {convoy.description || <span style={{ color: '#333' }}>add description…</span>}
+              {releaseTrain.description || <span style={{ color: '#333' }}>add description…</span>}
             </div>
           )}
 
           <div style={styles.meta}>
-            <span style={styles.rig}>{rigNameById[convoy.projectId] ?? convoy.projectId.slice(0, 8)}</span>
+            <span style={styles.rig}>{rigNameById[releaseTrain.projectId] ?? releaseTrain.projectId.slice(0, 8)}</span>
             <span
               style={{ ...styles.beadCount, cursor: 'pointer', textDecoration: 'underline' }}
-              onClick={() => setExpandedId(expandedId === convoy.id ? null : convoy.id)}
+              onClick={() => setExpandedId(expandedId === releaseTrain.id ? null : releaseTrain.id)}
               title="Show atomic tasks"
             >
-              {convoy.atomicTaskIds.length} atomic tasks
+              {releaseTrain.atomicTaskIds.length} atomic tasks
             </span>
           </div>
 
-          {expandedId === convoy.id && (
+          {expandedId === releaseTrain.id && (
             <div style={styles.beadSection}>
-              {convoy.atomicTaskIds.length === 0 && (
+              {releaseTrain.atomicTaskIds.length === 0 && (
                 <span style={styles.noBeads}>no atomic tasks</span>
               )}
-              {convoy.atomicTaskIds.map((atid) => {
+              {releaseTrain.atomicTaskIds.map((atid) => {
                 const atomicTask = atomicTaskById[atid]
                 return (
                   <div key={atid} style={styles.beadItem}>
@@ -205,18 +211,18 @@ export function ConvoyPanel() {
                     )}
                     <button
                       style={styles.removeBeadBtn}
-                      onClick={() => handleRemoveAtomicTask(convoy, atid)}
-                      title="Remove from convoy"
+                      onClick={() => handleRemoveAtomicTask(releaseTrain, atid)}
+                      title="Remove from release train"
                     >✕</button>
                   </div>
                 )
               })}
 
-              {addingAtomicTasks === convoy.id ? (
+              {addingAtomicTasks === releaseTrain.id ? (
                 <div style={styles.addBeadForm}>
                   <div style={styles.beadCheckList}>
                     {atomicTasks
-                      .filter((b) => b.projectId === convoy.projectId && !convoy.atomicTaskIds.includes(b.id))
+                      .filter((b) => b.projectId === releaseTrain.projectId && !releaseTrain.atomicTaskIds.includes(b.id))
                       .map((b) => (
                         <label key={b.id} style={styles.beadCheck}>
                           <input
@@ -234,14 +240,14 @@ export function ConvoyPanel() {
                       ))}
                   </div>
                   <div style={styles.addBeadBtns}>
-                    <button style={styles.addBeadSaveBtn} onClick={() => handleAddAtomicTasks(convoy.id)}>add</button>
+                    <button style={styles.addBeadSaveBtn} onClick={() => handleAddAtomicTasks(releaseTrain.id)}>add</button>
                     <button style={styles.cancelBtn} onClick={() => { setAddingAtomicTasks(null); setAtomicTaskSelection([]) }}>cancel</button>
                   </div>
                 </div>
               ) : (
                 <button
                   style={styles.addBeadBtn}
-                  onClick={() => { setAddingAtomicTasks(convoy.id); setAtomicTaskSelection([]) }}
+                  onClick={() => { setAddingAtomicTasks(releaseTrain.id); setAtomicTaskSelection([]) }}
                 >
                   + add atomic task
                 </button>
@@ -249,20 +255,20 @@ export function ConvoyPanel() {
             </div>
           )}
 
-          {convoy.assignedWorkerBeeId ? (
+          {releaseTrain.assignedWorkerBeeId ? (
             <div style={styles.assignedRow}>
               <span style={styles.assignedLabel}>→</span>
-              <span style={styles.assignedBee}>{agentNameById[convoy.assignedWorkerBeeId] ?? convoy.assignedWorkerBeeId.slice(0, 8)}</span>
-              <button style={styles.unassignBtn} onClick={() => handleAssign(convoy.id, null)} title="Unassign">✕</button>
+              <span style={styles.assignedBee}>{agentNameById[releaseTrain.assignedWorkerBeeId] ?? releaseTrain.assignedWorkerBeeId.slice(0, 8)}</span>
+              <button style={styles.unassignBtn} onClick={() => handleAssign(releaseTrain.id, null)} title="Unassign">✕</button>
             </div>
           ) : (
             <div style={styles.actionRow}>
-              {assigning === convoy.id ? (
+              {assigning === releaseTrain.id ? (
                 <div style={styles.assignPicker}>
                   <select
                     style={styles.select}
                     defaultValue=""
-                    onChange={(e) => { if (e.target.value) handleAssign(convoy.id, e.target.value) }}
+                    onChange={(e) => { if (e.target.value) handleAssign(releaseTrain.id, e.target.value) }}
                   >
                     <option value="" disabled>assign bee…</option>
                     {idleAgents.map((a) => (
@@ -275,12 +281,12 @@ export function ConvoyPanel() {
                 <>
                   <button
                     style={styles.actionBtn}
-                    onClick={() => setAssigning(convoy.id)}
+                    onClick={() => setAssigning(releaseTrain.id)}
                     title="Assign existing WorkerBee"
                   >
                     assign
                   </button>
-                  {dispatchingWithTemplate === convoy.id ? (
+                  {dispatchingWithTemplate === releaseTrain.id ? (
                     <div style={styles.templatePicker}>
                       <select
                         style={styles.select}
@@ -289,7 +295,7 @@ export function ConvoyPanel() {
                       >
                         <option value="">no template</option>
                         {templates
-                          .filter((t) => t.projectId === convoy.projectId)
+                          .filter((t) => t.projectId === releaseTrain.projectId)
                           .map((t) => (
                             <option key={t.id} value={t.id}>{t.name}</option>
                           ))}
@@ -299,30 +305,33 @@ export function ConvoyPanel() {
                         onClick={async () => {
                           const tmpl = templates.find((t) => t.id === selectedTemplateId)
                           setDispatchingWithTemplate(null)
-                          setDispatching(convoy.id)
+                          setDispatching(releaseTrain.id)
                           try {
-                            const res = await apiFetch(`/api/convoys/${convoy.id}/dispatch`, {
+                            const res = await apiFetch(`/api/release-trains/${releaseTrain.id}/dispatch`, {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify(tmpl ? { taskDescription: tmpl.content } : {}),
                             })
-                            const { bee, convoy: updatedConvoy } = await res.json()
-                            updateConvoy(convoy.id, {
-                              assignedWorkerBeeId: updatedConvoy.assignedWorkerBeeId,
-                              status: updatedConvoy.status,
-                            })
-                            if (bee?.sessionId) {
-                              const hasSession = tabs.some((t) => t.panes.includes(bee.sessionId))
+                            const data = await res.json()
+                            const updatedReleaseTrain = data.releaseTrain
+                            if (updatedReleaseTrain) {
+                              updateReleaseTrain(releaseTrain.id, {
+                                assignedWorkerBeeId: updatedReleaseTrain.assignedWorkerBeeId,
+                                status: updatedReleaseTrain.status,
+                              })
+                            }
+                            if (data.bee?.sessionId) {
+                              const hasSession = tabs.some((t) => t.panes.includes(data.bee.sessionId))
                               if (!hasSession) {
-                                if (activeTabId) addPaneToTab(activeTabId, bee.sessionId)
-                                else addTab(bee.name, [bee.sessionId])
+                                if (activeTabId) addPaneToTab(activeTabId, data.bee.sessionId)
+                                else addTab(data.bee.name, [data.bee.sessionId])
                               }
                             }
                           } finally {
                             setDispatching(null)
                           }
                         }}
-                        disabled={dispatching === convoy.id}
+                        disabled={dispatching === releaseTrain.id}
                       >
                         go
                       </button>
@@ -331,11 +340,11 @@ export function ConvoyPanel() {
                   ) : (
                     <button
                       style={{ ...styles.actionBtn, color: '#4ec9b0', borderColor: '#4ec9b0' }}
-                      onClick={() => { setDispatchingWithTemplate(convoy.id); setSelectedTemplateId('') }}
-                      disabled={dispatching === convoy.id}
+                      onClick={() => { setDispatchingWithTemplate(releaseTrain.id); setSelectedTemplateId('') }}
+                      disabled={dispatching === releaseTrain.id}
                       title="Spawn a new WorkerBee and assign"
                     >
-                      {dispatching === convoy.id ? '…' : 'dispatch'}
+                      {dispatching === releaseTrain.id ? '…' : 'dispatch'}
                     </button>
                   )}
                 </>
@@ -349,7 +358,7 @@ export function ConvoyPanel() {
         <div style={styles.form}>
           <input
             style={styles.input}
-            placeholder="Convoy name"
+            placeholder="Release train name"
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
           />
@@ -376,7 +385,7 @@ export function ConvoyPanel() {
         </div>
       ) : (
         <button style={styles.newBtn} onClick={() => setShowForm(true)}>
-          + New Convoy
+          + New Release Train
         </button>
       )}
     </div>

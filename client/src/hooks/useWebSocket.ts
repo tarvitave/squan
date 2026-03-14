@@ -16,8 +16,8 @@ export function useWebSocket() {
   const pushEvent = useStore((s) => s.pushEvent)
   const addAgent = useStore((s) => s.addAgent)
   const updateAgent = useStore((s) => s.updateAgent)
-  const addConvoy = useStore((s) => s.addConvoy)
-  const updateConvoy = useStore((s) => s.updateConvoy)
+  const addReleaseTrain = useStore((s) => s.addReleaseTrain)
+  const updateReleaseTrain = useStore((s) => s.updateReleaseTrain)
   const addAtomicTask = useStore((s) => s.addAtomicTask)
   const updateAtomicTask = useStore((s) => s.updateAtomicTask)
 
@@ -98,11 +98,11 @@ export function useWebSocket() {
             if (payload?.type === 'workerbee.zombie')
               updateAgent(payload.workerBeeId as string, { status: 'zombie' })
 
-            // Convoy events
-            if (payload?.type === 'convoy.created') {
+            // ReleaseTrain events
+            if (payload?.type === 'releasetrain.created') {
               const p = payload as Record<string, unknown>
-              addConvoy({
-                id: p.convoyId as string,
+              addReleaseTrain({
+                id: p.releaseTrainId as string,
                 name: p.name as string,
                 description: (p.description as string) ?? '',
                 projectId: (p.rigId as string) ?? '',
@@ -111,18 +111,18 @@ export function useWebSocket() {
                 assignedWorkerBeeId: null,
               })
             }
-            if (payload?.type === 'convoy.assigned') {
+            if (payload?.type === 'releasetrain.assigned') {
               const p = payload as Record<string, unknown>
-              updateConvoy(p.convoyId as string, {
+              updateReleaseTrain(p.releaseTrainId as string, {
                 assignedWorkerBeeId: (p.workerBeeId as string | null) ?? null,
                 status: p.workerBeeId ? 'in_progress' : 'open',
               })
             }
-            if (payload?.type === 'convoy.landed') {
-              updateConvoy(payload.convoyId as string, { status: 'landed' })
+            if (payload?.type === 'releasetrain.landed') {
+              updateReleaseTrain(payload.releaseTrainId as string, { status: 'landed' })
             }
-            if (payload?.type === 'convoy.cancelled') {
-              updateConvoy(payload.convoyId as string, { status: 'cancelled' })
+            if (payload?.type === 'releasetrain.cancelled') {
+              updateReleaseTrain(payload.releaseTrainId as string, { status: 'cancelled' })
             }
 
             // AtomicTask events
@@ -131,7 +131,8 @@ export function useWebSocket() {
               addAtomicTask({
                 id: p.atomicTaskId as string,
                 projectId: p.projectId as string,
-                convoyId: (p.convoyId as string | null) ?? null,
+                releaseTrainId: (p.releaseTrainId as string | null) ?? null,
+                convoyId: (p.releaseTrainId as string | null) ?? null,  // backward compat
                 title: p.title as string,
                 description: '',
                 status: 'open',
@@ -167,7 +168,7 @@ export function useWebSocket() {
       socket.onclose = null   // prevent reconnect on intentional unmount
       socket.close()
     }
-  }, [pushEvent, addAgent, updateAgent, addConvoy, updateConvoy, addAtomicTask, updateAtomicTask])
+  }, [pushEvent, addAgent, updateAgent, addReleaseTrain, updateReleaseTrain, addAtomicTask, updateAtomicTask])
 
   // Safe send: queues if socket not yet open
   const safeSend = useCallback((msg: object) => {

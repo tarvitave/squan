@@ -8,7 +8,7 @@ import { ptyManager } from './workerbee/pty.js'
 import { workerBeeManager } from './workerbee/manager.js'
 import { mayorLeeManager } from './mayor/manager.js'
 import { rigManager } from './rig/manager.js'
-import { convoyManager } from './convoy/manager.js'
+import { releaseTrainManager } from './releasetrain/manager.js'
 import { townManager } from './town/manager.js'
 import { hookManager } from './hooks/manager.js'
 import { atomicTaskManager, beadManager } from './beads/manager.js'
@@ -244,8 +244,8 @@ app.get('/api/mayor', async (_req, res) => {  // backwards compat
   res.json(await mayorLeeManager.get('default'))
 })
 
-// --- Convoys ---
-const ConvoySchema = z.object({
+// --- Release Trains (formerly Convoys) ---
+const ReleaseTrainSchema = z.object({
   name: z.string().min(1),
   projectId: z.string().optional(),
   rigId: z.string().optional(),
@@ -254,57 +254,101 @@ const ConvoySchema = z.object({
   description: z.string().optional(),
 }).refine((d) => d.projectId || d.rigId, { message: 'projectId or rigId required' })
 
-app.get('/api/convoys', async (_req, res) => {
-  res.json(await convoyManager.listAll())
+app.get('/api/release-trains', async (_req, res) => {
+  res.json(await releaseTrainManager.listAll())
+})
+app.get('/api/convoys', async (_req, res) => {  // backward compat
+  res.json(await releaseTrainManager.listAll())
 })
 
-app.post('/api/convoys', async (req, res) => {
+app.post('/api/release-trains', async (req, res) => {
   try {
-    const { name, projectId, rigId, atomicTaskIds, beadIds, description } = validate(ConvoySchema, req.body)
-    res.json(await convoyManager.create(name, (projectId ?? rigId)!, atomicTaskIds ?? beadIds, description))
+    const { name, projectId, rigId, atomicTaskIds, beadIds, description } = validate(ReleaseTrainSchema, req.body)
+    res.json(await releaseTrainManager.create(name, (projectId ?? rigId)!, atomicTaskIds ?? beadIds, description))
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
+})
+app.post('/api/convoys', async (req, res) => {  // backward compat
+  try {
+    const { name, projectId, rigId, atomicTaskIds, beadIds, description } = validate(ReleaseTrainSchema, req.body)
+    res.json(await releaseTrainManager.create(name, (projectId ?? rigId)!, atomicTaskIds ?? beadIds, description))
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
-app.post('/api/convoys/:id/atomictasks', async (req, res) => {
-  res.json(await convoyManager.addAtomicTasks(req.params.id, req.body.atomicTaskIds))
+app.post('/api/release-trains/:id/atomictasks', async (req, res) => {
+  res.json(await releaseTrainManager.addAtomicTasks(req.params.id, req.body.atomicTaskIds))
+})
+app.post('/api/convoys/:id/atomictasks', async (req, res) => {  // backward compat
+  res.json(await releaseTrainManager.addAtomicTasks(req.params.id, req.body.atomicTaskIds))
+})
+app.post('/api/release-trains/:id/beads', async (req, res) => {
+  res.json(await releaseTrainManager.addAtomicTasks(req.params.id, req.body.beadIds ?? req.body.atomicTaskIds))
 })
 app.post('/api/convoys/:id/beads', async (req, res) => {  // backward compat
-  res.json(await convoyManager.addAtomicTasks(req.params.id, req.body.beadIds ?? req.body.atomicTaskIds))
+  res.json(await releaseTrainManager.addAtomicTasks(req.params.id, req.body.beadIds ?? req.body.atomicTaskIds))
 })
 
-app.delete('/api/convoys/:id/atomictasks', async (req, res) => {
-  res.json(await convoyManager.removeAtomicTasks(req.params.id, req.body.atomicTaskIds))
+app.delete('/api/release-trains/:id/atomictasks', async (req, res) => {
+  res.json(await releaseTrainManager.removeAtomicTasks(req.params.id, req.body.atomicTaskIds))
+})
+app.delete('/api/convoys/:id/atomictasks', async (req, res) => {  // backward compat
+  res.json(await releaseTrainManager.removeAtomicTasks(req.params.id, req.body.atomicTaskIds))
+})
+app.delete('/api/release-trains/:id/beads', async (req, res) => {
+  res.json(await releaseTrainManager.removeAtomicTasks(req.params.id, req.body.beadIds ?? req.body.atomicTaskIds))
 })
 app.delete('/api/convoys/:id/beads', async (req, res) => {  // backward compat
-  res.json(await convoyManager.removeAtomicTasks(req.params.id, req.body.beadIds ?? req.body.atomicTaskIds))
+  res.json(await releaseTrainManager.removeAtomicTasks(req.params.id, req.body.beadIds ?? req.body.atomicTaskIds))
 })
 
-app.post('/api/convoys/:id/land', async (req, res) => {
-  await convoyManager.land(req.params.id)
+app.post('/api/release-trains/:id/land', async (req, res) => {
+  await releaseTrainManager.land(req.params.id)
+  res.json({ ok: true })
+})
+app.post('/api/convoys/:id/land', async (req, res) => {  // backward compat
+  await releaseTrainManager.land(req.params.id)
   res.json({ ok: true })
 })
 
-app.post('/api/convoys/:id/cancel', async (req, res) => {
-  await convoyManager.cancel(req.params.id)
+app.post('/api/release-trains/:id/cancel', async (req, res) => {
+  await releaseTrainManager.cancel(req.params.id)
+  res.json({ ok: true })
+})
+app.post('/api/convoys/:id/cancel', async (req, res) => {  // backward compat
+  await releaseTrainManager.cancel(req.params.id)
   res.json({ ok: true })
 })
 
-app.post('/api/convoys/:id/assign', async (req, res) => {
-  const convoy = await convoyManager.assignWorkerBee(req.params.id, req.body.workerBeeId ?? null)
-  res.json(convoy)
+app.post('/api/release-trains/:id/assign', async (req, res) => {
+  const releaseTrain = await releaseTrainManager.assignWorkerBee(req.params.id, req.body.workerBeeId ?? null)
+  res.json(releaseTrain)
+})
+app.post('/api/convoys/:id/assign', async (req, res) => {  // backward compat
+  const releaseTrain = await releaseTrainManager.assignWorkerBee(req.params.id, req.body.workerBeeId ?? null)
+  res.json(releaseTrain)
 })
 
-app.post('/api/convoys/:id/dispatch', async (req, res) => {
-  const convoy = await convoyManager.getById(req.params.id)
-  if (!convoy) return res.status(404).json({ error: 'Convoy not found' })
-  const taskDescription = convoy.description || convoy.name
-  const bee = await workerBeeManager.spawn(convoy.projectId, taskDescription)
-  await convoyManager.assignWorkerBee(convoy.id, bee.id)
-  res.json({ bee, convoy: await convoyManager.getById(convoy.id) })
+app.post('/api/release-trains/:id/dispatch', async (req, res) => {
+  const releaseTrain = await releaseTrainManager.getById(req.params.id)
+  if (!releaseTrain) return res.status(404).json({ error: 'ReleaseTrain not found' })
+  const taskDescription = releaseTrain.description || releaseTrain.name
+  const bee = await workerBeeManager.spawn(releaseTrain.projectId, taskDescription)
+  await releaseTrainManager.assignWorkerBee(releaseTrain.id, bee.id)
+  res.json({ bee, releaseTrain: await releaseTrainManager.getById(releaseTrain.id) })
+})
+app.post('/api/convoys/:id/dispatch', async (req, res) => {  // backward compat
+  const releaseTrain = await releaseTrainManager.getById(req.params.id)
+  if (!releaseTrain) return res.status(404).json({ error: 'ReleaseTrain not found' })
+  const taskDescription = releaseTrain.description || releaseTrain.name
+  const bee = await workerBeeManager.spawn(releaseTrain.projectId, taskDescription)
+  await releaseTrainManager.assignWorkerBee(releaseTrain.id, bee.id)
+  res.json({ bee, convoy: await releaseTrainManager.getById(releaseTrain.id) })
 })
 
-app.patch('/api/convoys/:id/description', async (req, res) => {
-  res.json(await convoyManager.updateDescription(req.params.id, req.body.description))
+app.patch('/api/release-trains/:id/description', async (req, res) => {
+  res.json(await releaseTrainManager.updateDescription(req.params.id, req.body.description))
+})
+app.patch('/api/convoys/:id/description', async (req, res) => {  // backward compat
+  res.json(await releaseTrainManager.updateDescription(req.params.id, req.body.description))
 })
 
 // --- Hooks ---
@@ -355,33 +399,36 @@ const AtomicTaskSchema = z.object({
   projectId: z.string().min(1),
   title: z.string().min(1),
   description: z.string().optional(),
-  convoyId: z.string().optional(),
+  releaseTrainId: z.string().optional(),
+  convoyId: z.string().optional(),  // backward compat
   dependsOn: z.array(z.string()).optional(),
 })
 
 app.get('/api/atomictasks', async (req, res) => {
-  const { projectId, convoyId } = req.query
-  if (convoyId) return res.json(await atomicTaskManager.listByConvoy(convoyId as string))
+  const { projectId, releaseTrainId, convoyId } = req.query
+  const rtId = (releaseTrainId ?? convoyId) as string | undefined
+  if (rtId) return res.json(await atomicTaskManager.listByConvoy(rtId))
   if (projectId) return res.json(await atomicTaskManager.listByProject(projectId as string))
   res.json(await atomicTaskManager.listAll())
 })
 app.get('/api/beads', async (req, res) => {  // backward compat
-  const { projectId, convoyId } = req.query
-  if (convoyId) return res.json(await atomicTaskManager.listByConvoy(convoyId as string))
+  const { projectId, releaseTrainId, convoyId } = req.query
+  const rtId = (releaseTrainId ?? convoyId) as string | undefined
+  if (rtId) return res.json(await atomicTaskManager.listByConvoy(rtId))
   if (projectId) return res.json(await atomicTaskManager.listByProject(projectId as string))
   res.json(await atomicTaskManager.listAll())
 })
 
 app.post('/api/atomictasks', async (req, res) => {
   try {
-    const { projectId, title, description, convoyId, dependsOn } = validate(AtomicTaskSchema, req.body)
-    res.json(await atomicTaskManager.create(projectId, title, description, convoyId, dependsOn))
+    const { projectId, title, description, releaseTrainId, convoyId, dependsOn } = validate(AtomicTaskSchema, req.body)
+    res.json(await atomicTaskManager.create(projectId, title, description, releaseTrainId ?? convoyId, dependsOn))
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 app.post('/api/beads', async (req, res) => {  // backward compat
   try {
-    const { projectId, title, description, convoyId, dependsOn } = validate(AtomicTaskSchema, req.body)
-    res.json(await atomicTaskManager.create(projectId, title, description, convoyId, dependsOn))
+    const { projectId, title, description, releaseTrainId, convoyId, dependsOn } = validate(AtomicTaskSchema, req.body)
+    res.json(await atomicTaskManager.create(projectId, title, description, releaseTrainId ?? convoyId, dependsOn))
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
@@ -538,14 +585,14 @@ app.post('/api/webhooks/github', express.raw({ type: 'application/json' }), asyn
       const projects = await rigManager.listByTown('default')
       const project = projects.find((p) => p.repoUrl?.includes(repo.name) || p.name === repo.name)
       if (project) {
-        const convoy = await convoyManager.create(
+        const releaseTrain = await releaseTrainManager.create(
           `Issue #${issue.number}: ${issue.title}`,
           project.id,
           [],
           issue.body ?? issue.title
         )
-        await atomicTaskManager.create(project.id, issue.title, issue.body ?? '', convoy.id)
-        return res.json({ ok: true, convoyId: convoy.id })
+        await atomicTaskManager.create(project.id, issue.title, issue.body ?? '', releaseTrain.id)
+        return res.json({ ok: true, releaseTrainId: releaseTrain.id })
       }
     }
 
@@ -555,14 +602,14 @@ app.post('/api/webhooks/github', express.raw({ type: 'application/json' }), asyn
       const projects = await rigManager.listByTown('default')
       const project = projects.find((p) => p.repoUrl?.includes(repo.name) || p.name === repo.name)
       if (project) {
-        const convoy = await convoyManager.create(
+        const releaseTrain = await releaseTrainManager.create(
           `PR #${pr.number}: ${pr.title}`,
           project.id,
           [],
           pr.body ?? pr.title
         )
-        await atomicTaskManager.create(project.id, pr.title, pr.body ?? '', convoy.id)
-        return res.json({ ok: true, convoyId: convoy.id })
+        await atomicTaskManager.create(project.id, pr.title, pr.body ?? '', releaseTrain.id)
+        return res.json({ ok: true, releaseTrainId: releaseTrain.id })
       }
     }
 
@@ -574,9 +621,9 @@ app.post('/api/webhooks/github', express.raw({ type: 'application/json' }), asyn
 
 // --- Metrics ---
 app.get('/api/metrics', async (_req, res) => {
-  const [bees, convoys, atomicTasks, projects] = await Promise.all([
+  const [bees, releaseTrains, atomicTasks, projects] = await Promise.all([
     workerBeeManager.listAll(),
-    convoyManager.listAll(),
+    releaseTrainManager.listAll(),
     atomicTaskManager.listAll(),
     rigManager.listByTown('default'),
   ])
@@ -584,7 +631,7 @@ app.get('/api/metrics', async (_req, res) => {
   const beesByStatus = bees.reduce<Record<string, number>>((acc, b) => {
     acc[b.status] = (acc[b.status] ?? 0) + 1; return acc
   }, {})
-  const convoysByStatus = convoys.reduce<Record<string, number>>((acc, c) => {
+  const releaseTrainsByStatus = releaseTrains.reduce<Record<string, number>>((acc, c) => {
     acc[c.status] = (acc[c.status] ?? 0) + 1; return acc
   }, {})
   const atomicTasksByStatus = atomicTasks.reduce<Record<string, number>>((acc, b) => {
@@ -596,7 +643,8 @@ app.get('/api/metrics', async (_req, res) => {
   res.json({
     projects: projects.length,
     workerbees: { total: bees.length, ...beesByStatus },
-    convoys: { total: convoys.length, ...convoysByStatus },
+    releaseTrains: { total: releaseTrains.length, ...releaseTrainsByStatus },
+    convoys: { total: releaseTrains.length, ...releaseTrainsByStatus },  // backward compat
     atomictasks: { total: atomicTasks.length, ...atomicTasksByStatus },
     zombieRate: Math.round(zombieRate * 100),
   })
