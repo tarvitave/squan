@@ -253,10 +253,19 @@ export const useStore = create<SquansqState>()(
     }),
     {
       name: 'squansq-ui',
-      version: 1,
-      migrate: (persisted: unknown) => {
-        const p = persisted as Record<string, unknown>
-        return { token: p?.token ?? null, user: p?.user ?? null }
+      version: 2,
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Record<string, unknown>
+        return {
+          ...current,
+          token: (p.token ?? null) as string | null,
+          user: (p.user ?? null) as typeof current.user,
+          tabs: Array.isArray(p.tabs) ? p.tabs as typeof current.tabs : current.tabs,
+          activeTabId: typeof p.activeTabId === 'string' ? p.activeTabId : current.activeTabId,
+          mainView: p.mainView ? p.mainView as typeof current.mainView : current.mainView,
+          towns: Array.isArray(p.towns) ? p.towns as typeof current.towns : current.towns,
+          activeTownId: typeof p.activeTownId === 'string' ? p.activeTownId : current.activeTownId,
+        }
       },
       partialize: (s) => ({ tabs: s.tabs, activeTabId: s.activeTabId, mainView: s.mainView, towns: s.towns, activeTownId: s.activeTownId, token: s.token, user: s.user }),
     }
