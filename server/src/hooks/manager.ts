@@ -9,16 +9,16 @@ export const hookManager = {
     branch: string,
     notes?: string,
     workerBeeId?: string,
-    beadId?: string
+    atomicTaskId?: string
   ): Promise<Hook> {
     const db = getDb()
     const id = uuidv4()
     const now = new Date().toISOString()
 
     await db.execute({
-      sql: `INSERT INTO hooks (id, rig_id, polecat_id, bead_id, status, branch, notes, created_at, updated_at)
+      sql: `INSERT INTO hooks (id, rig_id, workerbee_id, atomic_task_id, status, branch, notes, created_at, updated_at)
             VALUES (?, ?, ?, ?, 'created', ?, ?, ?, ?)`,
-      args: [id, projectId, workerBeeId ?? null, beadId ?? null, branch, notes ?? '', now, now],
+      args: [id, projectId, workerBeeId ?? null, atomicTaskId ?? null, branch, notes ?? '', now, now],
     })
 
     broadcastEvent({
@@ -106,8 +106,8 @@ export const hookManager = {
 interface DbHook {
   id: string
   rig_id: string
-  polecat_id: string | null
-  bead_id: string | null
+  workerbee_id: string | null
+  atomic_task_id: string | null
   status: Hook['status']
   branch: string
   notes: string
@@ -119,8 +119,8 @@ function toModel(r: DbHook): Hook {
   return {
     id: r.id,
     projectId: r.rig_id,
-    workerBeeId: r.polecat_id,
-    beadId: r.bead_id,
+    workerBeeId: r.workerbee_id,
+    atomicTaskId: r.atomic_task_id,
     status: r.status,
     branch: r.branch,
     notes: r.notes,

@@ -1,5 +1,5 @@
-import { workerBeeManager } from '../polecat/manager.js'
-import { ptyManager } from '../polecat/pty.js'
+import { workerBeeManager } from '../workerbee/manager.js'
+import { ptyManager } from '../workerbee/pty.js'
 
 // Sandy - Watch Agent: monitors WorkerBee health, detects zombies and stalled agents
 

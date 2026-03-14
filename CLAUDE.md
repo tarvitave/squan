@@ -13,10 +13,10 @@ Browser-based multi-agent orchestration system. Reimplements Gas Town (https://g
 |---------|------|-------------|
 | Mayor Lee | server/src/mayor/manager.ts | Orchestrator agent (runs `claude`) |
 | Project | server/src/rig/manager.ts | Project container pointing at a git repo |
-| WorkerBee | server/src/polecat/manager.ts | Worker agent (runs `claude` in project's repo) |
+| WorkerBee | server/src/workerbee/manager.ts | Worker agent (runs `claude` in project's repo) |
 | Convoy | server/src/convoy/manager.ts | Work tracking bundle |
 | Sandy (Watch Agent) | server/src/witness/index.ts | Health monitor — detects zombie WorkerBees |
-| PtyManager | server/src/polecat/pty.ts | Spawns + streams pseudo-terminals |
+| PtyManager | server/src/workerbee/pty.ts | Spawns + streams pseudo-terminals |
 | WsServer | server/src/ws/server.ts | Streams pty output to browser via WebSocket |
 
 ## Dev commands

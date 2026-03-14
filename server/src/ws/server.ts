@@ -2,7 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { Server } from 'http'
 import { v4 as uuidv4 } from 'uuid'
 import type { WsMessage, SquansqEvent } from '../types/index.js'
-import { ptyManager } from '../polecat/pty.js'
+import { ptyManager } from '../workerbee/pty.js'
 import { getDb } from '../db/index.js'
 
 // Map of clientId → WebSocket

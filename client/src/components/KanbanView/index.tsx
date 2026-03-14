@@ -13,7 +13,7 @@ export function KanbanView() {
   const convoys = useStore((s) => s.convoys)
   const agents = useStore((s) => s.agents)
   const rigs = useStore((s) => s.rigs)
-  const beads = useStore((s) => s.beads)
+  const atomicTasks = useStore((s) => s.atomicTasks)
   const updateConvoy = useStore((s) => s.updateConvoy)
   const addAgent = useStore((s) => s.addAgent)
   const addPaneToTab = useStore((s) => s.addPaneToTab)
@@ -24,12 +24,12 @@ export function KanbanView() {
   const agentById = Object.fromEntries(agents.map((a) => [a.id, a]))
   const rigNameById = Object.fromEntries(rigs.map((r) => [r.id, r.name]))
 
-  const convoyBeadCounts = Object.fromEntries(
+  const convoyAtomicTaskCounts = Object.fromEntries(
     convoys.map((c) => [
       c.id,
       {
-        total: beads.filter((b) => c.beadIds.includes(b.id) || b.convoyId === c.id).length,
-        done: beads.filter((b) => (c.beadIds.includes(b.id) || b.convoyId === c.id) && b.status === 'done').length,
+        total: atomicTasks.filter((b) => c.atomicTaskIds.includes(b.id) || b.convoyId === c.id).length,
+        done: atomicTasks.filter((b) => (c.atomicTaskIds.includes(b.id) || b.convoyId === c.id) && b.status === 'done').length,
       },
     ])
   )
@@ -92,7 +92,7 @@ export function KanbanView() {
             <div style={styles.cards}>
               {cards.map((convoy) => {
                 const assignedBee = convoy.assignedWorkerBeeId ? agentById[convoy.assignedWorkerBeeId] : null
-                const counts = convoyBeadCounts[convoy.id] ?? { total: 0, done: 0 }
+                const counts = convoyAtomicTaskCounts[convoy.id] ?? { total: 0, done: 0 }
                 return (
                   <div key={convoy.id} style={styles.card}>
                     <div style={styles.cardTitle}>{convoy.name}</div>
@@ -105,7 +105,7 @@ export function KanbanView() {
                       <span style={styles.cardRig}>{rigNameById[convoy.projectId] ?? convoy.projectId.slice(0, 8)}</span>
                       {counts.total > 0 && (
                         <span style={styles.cardBeads}>
-                          {counts.done}/{counts.total} beads
+                          {counts.done}/{counts.total} tasks
                         </span>
                       )}
                     </div>

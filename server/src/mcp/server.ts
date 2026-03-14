@@ -7,9 +7,9 @@
  */
 
 import type { Request, Response } from 'express'
-import { workerBeeManager } from '../polecat/manager.js'
+import { workerBeeManager } from '../workerbee/manager.js'
 import { convoyManager } from '../convoy/manager.js'
-import { beadManager } from '../beads/manager.js'
+import { atomicTaskManager } from '../beads/manager.js'
 import { rigManager } from '../rig/manager.js'
 import { hookManager } from '../hooks/manager.js'
 
@@ -76,8 +76,8 @@ const TOOLS = [
     inputSchema: { type: 'object', required: ['convoyId'], properties: { convoyId: { type: 'string' } } },
   },
   {
-    name: 'list_beads',
-    description: 'List beads (atomic work items)',
+    name: 'list_atomic_tasks',
+    description: 'List atomic tasks (atomic work items)',
     inputSchema: {
       type: 'object',
       properties: {
@@ -87,8 +87,8 @@ const TOOLS = [
     },
   },
   {
-    name: 'create_bead',
-    description: 'Create a new bead (atomic work item)',
+    name: 'create_atomic_task',
+    description: 'Create a new atomic task (atomic work item)',
     inputSchema: {
       type: 'object',
       required: ['projectId', 'title'],
@@ -97,7 +97,7 @@ const TOOLS = [
         title: { type: 'string' },
         description: { type: 'string' },
         convoyId: { type: 'string' },
-        dependsOn: { type: 'array', items: { type: 'string' }, description: 'Bead IDs this depends on' },
+        dependsOn: { type: 'array', items: { type: 'string' }, description: 'AtomicTask IDs this depends on' },
       },
     },
   },
@@ -153,30 +153,30 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
       await convoyManager.land(args.convoyId as string)
       return { ok: true }
     }
-    case 'list_beads': {
-      if (args.convoyId) return beadManager.listByConvoy(args.convoyId as string)
-      if (args.projectId) return beadManager.listByProject(args.projectId as string)
-      return beadManager.listAll()
+    case 'list_atomic_tasks': {
+      if (args.convoyId) return atomicTaskManager.listByConvoy(args.convoyId as string)
+      if (args.projectId) return atomicTaskManager.listByProject(args.projectId as string)
+      return atomicTaskManager.listAll()
     }
-    case 'create_bead': {
-      const bead = await beadManager.create(
+    case 'create_atomic_task': {
+      const atomicTask = await atomicTaskManager.create(
         args.projectId as string,
         args.title as string,
         args.description as string | undefined,
         args.convoyId as string | undefined,
         args.dependsOn as string[] | undefined
       )
-      return bead
+      return atomicTask
     }
     case 'list_hooks': {
       if (args.projectId) return hookManager.listByProject(args.projectId as string)
       return hookManager.listAll()
     }
     case 'get_status_summary': {
-      const [bees, convoys, beads] = await Promise.all([
+      const [bees, convoys, atomicTasks] = await Promise.all([
         workerBeeManager.listAll(),
         convoyManager.listAll(),
-        beadManager.listAll(),
+        atomicTaskManager.listAll(),
       ])
       const beesByStatus = bees.reduce<Record<string, number>>((acc, b) => {
         acc[b.status] = (acc[b.status] ?? 0) + 1
@@ -186,11 +186,11 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
         acc[c.status] = (acc[c.status] ?? 0) + 1
         return acc
       }, {})
-      const beadsByStatus = beads.reduce<Record<string, number>>((acc, b) => {
+      const atomicTasksByStatus = atomicTasks.reduce<Record<string, number>>((acc, b) => {
         acc[b.status] = (acc[b.status] ?? 0) + 1
         return acc
       }, {})
-      return { workerbees: beesByStatus, convoys: convoysByStatus, beads: beadsByStatus }
+      return { workerbees: beesByStatus, convoys: convoysByStatus, atomictasks: atomicTasksByStatus }
     }
     default:
       throw new Error(`Unknown tool: ${name}`)

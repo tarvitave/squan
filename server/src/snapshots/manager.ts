@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 import { getDb } from '../db/index.js'
-import { ptyManager } from '../polecat/pty.js'
+import { ptyManager } from '../workerbee/pty.js'
 import type { Snapshot, ReplayFrame } from '../types/index.js'
 
 const MAX_SNAPSHOT_LINES = 500

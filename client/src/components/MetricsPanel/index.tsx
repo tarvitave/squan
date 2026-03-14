@@ -4,7 +4,7 @@ interface Metrics {
   projects: number
   workerbees: { total: number; idle?: number; working?: number; stalled?: number; zombie?: number; done?: number }
   convoys: { total: number; open?: number; in_progress?: number; landed?: number; cancelled?: number }
-  beads: { total: number; open?: number; assigned?: number; in_progress?: number; done?: number; blocked?: number }
+  atomictasks: { total: number; open?: number; assigned?: number; in_progress?: number; done?: number; blocked?: number }
   zombieRate: number
 }
 
@@ -67,15 +67,15 @@ export function MetricsPanel() {
           </div>
         </div>
 
-        {/* Beads */}
+        {/* Atomic Tasks */}
         <div style={styles.section}>
-          <div style={styles.sectionTitle}>Beads</div>
+          <div style={styles.sectionTitle}>Atomic Tasks</div>
           <div style={styles.statRow}>
-            <StatCard label="Total" value={metrics.beads.total} color="#d4d4d4" />
-            <StatCard label="Open" value={metrics.beads.open ?? 0} color="#569cd6" />
-            <StatCard label="Assigned" value={metrics.beads.assigned ?? 0} color="#4ec9b0" />
-            <StatCard label="Done" value={metrics.beads.done ?? 0} color="#608b4e" />
-            <StatCard label="Blocked" value={metrics.beads.blocked ?? 0} color="#f44747" />
+            <StatCard label="Total" value={metrics.atomictasks.total} color="#d4d4d4" />
+            <StatCard label="Open" value={metrics.atomictasks.open ?? 0} color="#569cd6" />
+            <StatCard label="Assigned" value={metrics.atomictasks.assigned ?? 0} color="#4ec9b0" />
+            <StatCard label="Done" value={metrics.atomictasks.done ?? 0} color="#608b4e" />
+            <StatCard label="Blocked" value={metrics.atomictasks.blocked ?? 0} color="#f44747" />
           </div>
         </div>
 
@@ -97,11 +97,11 @@ export function MetricsPanel() {
       <div style={styles.section}>
         <div style={styles.sectionTitle}>Progress</div>
 
-        {metrics.beads.total > 0 && (
+        {metrics.atomictasks.total > 0 && (
           <ProgressBar
-            label="Beads done"
-            value={metrics.beads.done ?? 0}
-            total={metrics.beads.total}
+            label="Tasks done"
+            value={metrics.atomictasks.done ?? 0}
+            total={metrics.atomictasks.total}
             color="#608b4e"
           />
         )}

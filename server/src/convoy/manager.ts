@@ -4,20 +4,20 @@ import { broadcastEvent } from '../ws/server.js'
 import type { Convoy } from '../types/index.js'
 
 export const convoyManager = {
-  async create(name: string, rigId: string, beadIds: string[] = [], description?: string): Promise<Convoy> {
+  async create(name: string, rigId: string, atomicTaskIds: string[] = [], description?: string): Promise<Convoy> {
     const db = getDb()
     const id = uuidv4()
     const now = new Date().toISOString()
 
     await db.execute({
-      sql: `INSERT INTO convoys (id, name, rig_id, bead_ids_json, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'open', ?, ?)`,
-      args: [id, name, rigId, JSON.stringify(beadIds), description ?? '', now, now],
+      sql: `INSERT INTO convoys (id, name, rig_id, atomic_task_ids_json, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'open', ?, ?)`,
+      args: [id, name, rigId, JSON.stringify(atomicTaskIds), description ?? '', now, now],
     })
 
     broadcastEvent({
       id: uuidv4(),
       type: 'convoy.created',
-      payload: { convoyId: id, name, rigId, beadIds, description: description ?? '' },
+      payload: { convoyId: id, name, rigId, atomicTaskIds, description: description ?? '' },
       timestamp: now,
     })
 
@@ -46,28 +46,38 @@ export const convoyManager = {
     return result.rows.map((r) => toModel(r as unknown as DbConvoy))
   },
 
-  async addBeads(convoyId: string, beadIds: string[]): Promise<Convoy> {
+  async addAtomicTasks(convoyId: string, atomicTaskIds: string[]): Promise<Convoy> {
     const db = getDb()
     const convoy = await this.getById(convoyId)
     if (!convoy) throw new Error(`Convoy ${convoyId} not found`)
-    const merged = [...new Set([...convoy.beadIds, ...beadIds])]
+    const merged = [...new Set([...convoy.atomicTaskIds, ...atomicTaskIds])]
     await db.execute({
-      sql: `UPDATE convoys SET bead_ids_json = ?, updated_at = datetime('now') WHERE id = ?`,
+      sql: `UPDATE convoys SET atomic_task_ids_json = ?, updated_at = datetime('now') WHERE id = ?`,
       args: [JSON.stringify(merged), convoyId],
     })
     return (await this.getById(convoyId))!
   },
 
-  async removeBeads(convoyId: string, beadIds: string[]): Promise<Convoy> {
+  /** Backward-compat alias */
+  async addBeads(convoyId: string, beadIds: string[]): Promise<Convoy> {
+    return this.addAtomicTasks(convoyId, beadIds)
+  },
+
+  async removeAtomicTasks(convoyId: string, atomicTaskIds: string[]): Promise<Convoy> {
     const db = getDb()
     const convoy = await this.getById(convoyId)
     if (!convoy) throw new Error(`Convoy ${convoyId} not found`)
-    const filtered = convoy.beadIds.filter((id) => !beadIds.includes(id))
+    const filtered = convoy.atomicTaskIds.filter((id) => !atomicTaskIds.includes(id))
     await db.execute({
-      sql: `UPDATE convoys SET bead_ids_json = ?, updated_at = datetime('now') WHERE id = ?`,
+      sql: `UPDATE convoys SET atomic_task_ids_json = ?, updated_at = datetime('now') WHERE id = ?`,
       args: [JSON.stringify(filtered), convoyId],
     })
     return (await this.getById(convoyId))!
+  },
+
+  /** Backward-compat alias */
+  async removeBeads(convoyId: string, beadIds: string[]): Promise<Convoy> {
+    return this.removeAtomicTasks(convoyId, beadIds)
   },
 
   async assignWorkerBee(convoyId: string, workerBeeId: string | null): Promise<Convoy> {
@@ -127,7 +137,7 @@ interface DbConvoy {
   id: string
   name: string
   rig_id: string
-  bead_ids_json: string
+  atomic_task_ids_json: string
   description: string
   assigned_workerbee_id: string | null
   status: Convoy['status']
@@ -141,7 +151,7 @@ function toModel(r: DbConvoy): Convoy {
     name: r.name,
     description: r.description ?? '',
     projectId: r.rig_id,
-    beadIds: JSON.parse(r.bead_ids_json),
+    atomicTaskIds: JSON.parse(r.atomic_task_ids_json ?? '[]'),
     assignedWorkerBeeId: r.assigned_workerbee_id ?? null,
     status: r.status,
     createdAt: r.created_at,

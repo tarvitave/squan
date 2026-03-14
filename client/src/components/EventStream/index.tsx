@@ -14,9 +14,9 @@ const EVENT_COLOR: Record<string, string> = {
   'hook.created': '#888',
   'hook.activated': '#dcdcaa',
   'hook.completed': '#4ec9b0',
-  'bead.created': '#569cd6',
-  'bead.assigned': '#4ec9b0',
-  'bead.done': '#608b4e',
+  'atomictask.created': '#569cd6',
+  'atomictask.assigned': '#4ec9b0',
+  'atomictask.done': '#608b4e',
   'mayorlee.started': '#dcdcaa',
   'mayorlee.stopped': '#888',
 }

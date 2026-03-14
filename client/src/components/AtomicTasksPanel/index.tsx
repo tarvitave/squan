@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
-import type { BeadEntry } from '../../store/index.js'
+import type { AtomicTaskEntry } from '../../store/index.js'
 
 const STATUS_COLOR: Record<string, string> = {
   open: '#569cd6',
@@ -10,31 +10,31 @@ const STATUS_COLOR: Record<string, string> = {
   cancelled: '#555',
 }
 
-export function BeadsPanel() {
-  const beads = useStore((s) => s.beads)
+export function AtomicTasksPanel() {
+  const atomicTasks = useStore((s) => s.atomicTasks)
   const convoys = useStore((s) => s.convoys)
   const rigs = useStore((s) => s.rigs)
   const agents = useStore((s) => s.agents)
-  const addBead = useStore((s) => s.addBead)
-  const updateBead = useStore((s) => s.updateBead)
+  const addAtomicTask = useStore((s) => s.addAtomicTask)
+  const updateAtomicTask = useStore((s) => s.updateAtomicTask)
   const addToast = useStore((s) => s.addToast)
 
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ title: '', description: '', projectId: '', convoyId: '' })
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [filterStatus, setFilterStatus] = useState<string>('all')
-  const [editingDeps, setEditingDeps] = useState<string | null>(null)  // beadId
+  const [editingDeps, setEditingDeps] = useState<string | null>(null)  // atomicTaskId
   const [depsSelection, setDepsSelection] = useState<string[]>([])
-  const [assigningBeadId, setAssigningBeadId] = useState<string | null>(null)
+  const [assigningAtomicTaskId, setAssigningAtomicTaskId] = useState<string | null>(null)
 
   const convoyNameById = Object.fromEntries(convoys.map((c) => [c.id, c.name]))
   const rigNameById = Object.fromEntries(rigs.map((r) => [r.id, r.name]))
   const agentNameById = Object.fromEntries(agents.map((a) => [a.id, a.name]))
-  const beadTitleById = Object.fromEntries(beads.map((b) => [b.id, b.title]))
+  const atomicTaskTitleById = Object.fromEntries(atomicTasks.map((b) => [b.id, b.title]))
 
-  const filteredBeads = filterStatus === 'all'
-    ? beads
-    : beads.filter((b) => b.status === filterStatus)
+  const filteredAtomicTasks = filterStatus === 'all'
+    ? atomicTasks
+    : atomicTasks.filter((b) => b.status === filterStatus)
 
   const handleCreate = async () => {
     if (!form.title || !form.projectId) return
@@ -46,83 +46,82 @@ export function BeadsPanel() {
       if (form.description) body.description = form.description
       if (form.convoyId) body.convoyId = form.convoyId
 
-      const res = await apiFetch('/api/beads', {
+      const res = await apiFetch('/api/atomictasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      const bead = await res.json()
-      addBead({ ...bead, dependsOn: bead.dependsOn ?? [] })
+      const atomicTask = await res.json()
+      addAtomicTask({ ...atomicTask, dependsOn: atomicTask.dependsOn ?? [] })
       setForm({ title: '', description: '', projectId: '', convoyId: '' })
       setShowForm(false)
     } catch (err) {
-      addToast(`Failed to create bead: ${(err as Error).message}`)
+      addToast(`Failed to create atomic task: ${(err as Error).message}`)
     }
   }
 
-  const handleMarkDone = async (bead: BeadEntry) => {
+  const handleMarkDone = async (atomicTask: AtomicTaskEntry) => {
     try {
-      await apiFetch(`/api/beads/${bead.id}/status`, {
+      await apiFetch(`/api/atomictasks/${atomicTask.id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'done' }),
       })
-      updateBead(bead.id, { status: 'done' })
+      updateAtomicTask(atomicTask.id, { status: 'done' })
     } catch (err) {
-      addToast(`Failed to mark bead done: ${(err as Error).message}`)
+      addToast(`Failed to mark atomic task done: ${(err as Error).message}`)
     }
   }
 
-  const handleCancel = async (bead: BeadEntry) => {
+  const handleCancel = async (atomicTask: AtomicTaskEntry) => {
     try {
-      await apiFetch(`/api/beads/${bead.id}/status`, {
+      await apiFetch(`/api/atomictasks/${atomicTask.id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'cancelled' }),
       })
-      updateBead(bead.id, { status: 'cancelled' })
+      updateAtomicTask(atomicTask.id, { status: 'cancelled' })
     } catch (err) {
-      addToast(`Failed to cancel bead: ${(err as Error).message}`)
+      addToast(`Failed to cancel atomic task: ${(err as Error).message}`)
     }
   }
 
   const handleDelete = async (id: string) => {
     try {
-      await apiFetch(`/api/beads/${id}`, { method: 'DELETE' })
-      // Remove from local store by marking cancelled then filtering — store has no removeBead,
-      // so update status to a sentinel and rely on filter; simplest is to reload beads.
-      const fresh = await apiFetch('/api/beads').then((r) => r.json())
-      useStore.getState().setBeads(fresh)
+      await apiFetch(`/api/atomictasks/${id}`, { method: 'DELETE' })
+      // Remove from local store — simplest is to reload atomic tasks.
+      const fresh = await apiFetch('/api/atomictasks').then((r) => r.json())
+      useStore.getState().setAtomicTasks(fresh)
     } catch (err) {
-      addToast(`Failed to delete bead: ${(err as Error).message}`)
+      addToast(`Failed to delete atomic task: ${(err as Error).message}`)
     }
   }
 
-  const handleSaveDeps = async (beadId: string) => {
+  const handleSaveDeps = async (atomicTaskId: string) => {
     try {
-      await apiFetch(`/api/beads/${beadId}/dependencies`, {
+      await apiFetch(`/api/atomictasks/${atomicTaskId}/dependencies`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dependsOn: depsSelection }),
       })
-      updateBead(beadId, { dependsOn: depsSelection })
+      updateAtomicTask(atomicTaskId, { dependsOn: depsSelection })
       setEditingDeps(null)
     } catch (err) {
       addToast(`Failed to save dependencies: ${(err as Error).message}`)
     }
   }
 
-  const handleAssignBead = async (beadId: string, workerBeeId: string) => {
+  const handleAssignAtomicTask = async (atomicTaskId: string, workerBeeId: string) => {
     try {
-      await apiFetch(`/api/beads/${beadId}/assign`, {
+      await apiFetch(`/api/atomictasks/${atomicTaskId}/assign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ workerBeeId }),
       })
-      updateBead(beadId, { assigneeId: workerBeeId, status: 'assigned' })
-      setAssigningBeadId(null)
+      updateAtomicTask(atomicTaskId, { assigneeId: workerBeeId, status: 'assigned' })
+      setAssigningAtomicTaskId(null)
     } catch (err) {
-      addToast(`Failed to assign bead: ${(err as Error).message}`)
+      addToast(`Failed to assign atomic task: ${(err as Error).message}`)
     }
   }
 
@@ -150,58 +149,58 @@ export function BeadsPanel() {
         ))}
       </div>
 
-      {filteredBeads.length === 0 && (
-        <div style={styles.empty}>no beads</div>
+      {filteredAtomicTasks.length === 0 && (
+        <div style={styles.empty}>no atomic tasks</div>
       )}
 
-      {filteredBeads.map((bead) => (
-        <div key={bead.id} style={styles.row}>
+      {filteredAtomicTasks.map((atomicTask) => (
+        <div key={atomicTask.id} style={styles.row}>
           <div style={styles.rowTop}>
             <span
               style={styles.title}
-              onClick={() => setExpandedId(expandedId === bead.id ? null : bead.id)}
+              onClick={() => setExpandedId(expandedId === atomicTask.id ? null : atomicTask.id)}
             >
-              {bead.title}
+              {atomicTask.title}
             </span>
-            <span style={{ ...styles.status, color: STATUS_COLOR[bead.status] ?? '#888' }}>
-              {bead.status}
+            <span style={{ ...styles.status, color: STATUS_COLOR[atomicTask.status] ?? '#888' }}>
+              {atomicTask.status}
             </span>
           </div>
 
           <div style={styles.meta}>
-            <span style={styles.project}>{rigNameById[bead.projectId] ?? bead.projectId.slice(0, 8)}</span>
-            {bead.convoyId && (
-              <span style={styles.convoy}>{convoyNameById[bead.convoyId] ?? bead.convoyId.slice(0, 8)}</span>
+            <span style={styles.project}>{rigNameById[atomicTask.projectId] ?? atomicTask.projectId.slice(0, 8)}</span>
+            {atomicTask.convoyId && (
+              <span style={styles.convoy}>{convoyNameById[atomicTask.convoyId] ?? atomicTask.convoyId.slice(0, 8)}</span>
             )}
-            {bead.assigneeId && (
-              <span style={styles.assignee}>→ {agentNameById[bead.assigneeId] ?? bead.assigneeId.slice(0, 8)}</span>
+            {atomicTask.assigneeId && (
+              <span style={styles.assignee}>→ {agentNameById[atomicTask.assigneeId] ?? atomicTask.assigneeId.slice(0, 8)}</span>
             )}
           </div>
 
-          {expandedId === bead.id && (
+          {expandedId === atomicTask.id && (
             <div style={styles.detail}>
-              {bead.description && (
-                <div style={styles.desc}>{bead.description}</div>
+              {atomicTask.description && (
+                <div style={styles.desc}>{atomicTask.description}</div>
               )}
 
               {/* Dependencies */}
               <div style={styles.deps}>
                 <div style={styles.depsHeader}>
                   <span style={styles.depsLabel}>depends on</span>
-                  {editingDeps !== bead.id && (
+                  {editingDeps !== atomicTask.id && (
                     <button
                       style={styles.editDepsBtn}
-                      onClick={() => { setEditingDeps(bead.id); setDepsSelection(bead.dependsOn) }}
+                      onClick={() => { setEditingDeps(atomicTask.id); setDepsSelection(atomicTask.dependsOn) }}
                     >
                       edit
                     </button>
                   )}
                 </div>
-                {editingDeps === bead.id ? (
+                {editingDeps === atomicTask.id ? (
                   <div style={styles.depsEditor}>
                     <div style={styles.depCheckList}>
-                      {beads
-                        .filter((b) => b.id !== bead.id)
+                      {atomicTasks
+                        .filter((b) => b.id !== atomicTask.id)
                         .map((b) => (
                           <label key={b.id} style={styles.depCheck}>
                             <input
@@ -217,15 +216,15 @@ export function BeadsPanel() {
                         ))}
                     </div>
                     <div style={styles.depsBtns}>
-                      <button style={styles.descSaveBtn} onClick={() => handleSaveDeps(bead.id)}>save</button>
+                      <button style={styles.descSaveBtn} onClick={() => handleSaveDeps(atomicTask.id)}>save</button>
                       <button style={styles.cancelBtn} onClick={() => setEditingDeps(null)}>cancel</button>
                     </div>
                   </div>
-                ) : bead.dependsOn.length > 0 ? (
+                ) : atomicTask.dependsOn.length > 0 ? (
                   <div style={styles.depList}>
-                    {bead.dependsOn.map((depId) => (
+                    {atomicTask.dependsOn.map((depId) => (
                       <span key={depId} style={styles.dep}>
-                        {beadTitleById[depId] ?? depId.slice(0, 8)}
+                        {atomicTaskTitleById[depId] ?? depId.slice(0, 8)}
                       </span>
                     ))}
                   </div>
@@ -234,36 +233,36 @@ export function BeadsPanel() {
                 )}
               </div>
 
-              {!bead.assigneeId && bead.status === 'open' && (
+              {!atomicTask.assigneeId && atomicTask.status === 'open' && (
                 <div style={styles.assignRow}>
-                  {assigningBeadId === bead.id ? (
+                  {assigningAtomicTaskId === atomicTask.id ? (
                     <div style={styles.assignPicker}>
                       <select
                         style={styles.assignSelect}
                         defaultValue=""
-                        onChange={(e) => { if (e.target.value) handleAssignBead(bead.id, e.target.value) }}
+                        onChange={(e) => { if (e.target.value) handleAssignAtomicTask(atomicTask.id, e.target.value) }}
                       >
                         <option value="" disabled>assign to bee…</option>
                         {agents.filter((a) => a.status === 'idle' || a.status === 'working').map((a) => (
                           <option key={a.id} value={a.id}>{a.name} ({a.status})</option>
                         ))}
                       </select>
-                      <button style={styles.cancelBtn} onClick={() => setAssigningBeadId(null)}>&#x2715;</button>
+                      <button style={styles.cancelBtn} onClick={() => setAssigningAtomicTaskId(null)}>&#x2715;</button>
                     </div>
                   ) : (
-                    <button style={styles.assignBtn} onClick={() => setAssigningBeadId(bead.id)}>assign bee</button>
+                    <button style={styles.assignBtn} onClick={() => setAssigningAtomicTaskId(atomicTask.id)}>assign bee</button>
                   )}
                 </div>
               )}
 
               <div style={styles.actions}>
-                {bead.status !== 'done' && bead.status !== 'cancelled' && (
+                {atomicTask.status !== 'done' && atomicTask.status !== 'cancelled' && (
                   <>
-                    <button style={styles.doneBtn} onClick={() => handleMarkDone(bead)}>done</button>
-                    <button style={styles.cancelBtn} onClick={() => handleCancel(bead)}>cancel</button>
+                    <button style={styles.doneBtn} onClick={() => handleMarkDone(atomicTask)}>done</button>
+                    <button style={styles.cancelBtn} onClick={() => handleCancel(atomicTask)}>cancel</button>
                   </>
                 )}
-                <button style={styles.deleteBtn} onClick={() => handleDelete(bead.id)}>delete</button>
+                <button style={styles.deleteBtn} onClick={() => handleDelete(atomicTask.id)}>delete</button>
               </div>
             </div>
           )}
@@ -274,7 +273,7 @@ export function BeadsPanel() {
         <div style={styles.form}>
           <input
             style={styles.input}
-            placeholder="Bead title"
+            placeholder="Atomic task title"
             value={form.title}
             onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
           />
@@ -313,7 +312,7 @@ export function BeadsPanel() {
         </div>
       ) : (
         <button style={styles.newBtn} onClick={() => setShowForm(true)}>
-          + New Bead
+          + New Atomic Task
         </button>
       )}
     </div>

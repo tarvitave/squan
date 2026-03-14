@@ -35,7 +35,7 @@ export async function migrate() {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    CREATE TABLE IF NOT EXISTS polecats (
+    CREATE TABLE IF NOT EXISTS workerbees (
       id TEXT PRIMARY KEY,
       rig_id TEXT NOT NULL,
       name TEXT NOT NULL,
@@ -59,8 +59,8 @@ export async function migrate() {
     CREATE TABLE IF NOT EXISTS hooks (
       id TEXT PRIMARY KEY,
       rig_id TEXT NOT NULL,
-      polecat_id TEXT,
-      bead_id TEXT,
+      workerbee_id TEXT,
+      atomic_task_id TEXT,
       status TEXT NOT NULL DEFAULT 'created',
       branch TEXT NOT NULL,
       notes TEXT NOT NULL DEFAULT '',
@@ -72,13 +72,13 @@ export async function migrate() {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       rig_id TEXT NOT NULL,
-      bead_ids_json TEXT NOT NULL DEFAULT '[]',
+      atomic_task_ids_json TEXT NOT NULL DEFAULT '[]',
       status TEXT NOT NULL DEFAULT 'open',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    CREATE TABLE IF NOT EXISTS beads (
+    CREATE TABLE IF NOT EXISTS atomic_tasks (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,
       convoy_id TEXT,
@@ -132,17 +132,21 @@ export async function migrate() {
 
   // Additive column migrations — safe to run repeatedly (errors mean column already exists)
   const alterStatements = [
-    `ALTER TABLE polecats ADD COLUMN task_description TEXT NOT NULL DEFAULT ''`,
+    `ALTER TABLE polecats RENAME TO workerbees`,
+    `ALTER TABLE beads RENAME TO atomic_tasks`,
+    `ALTER TABLE hooks RENAME COLUMN polecat_id TO workerbee_id`,
+    `ALTER TABLE convoys RENAME COLUMN bead_ids_json TO atomic_task_ids_json`,
+    `ALTER TABLE workerbees ADD COLUMN task_description TEXT NOT NULL DEFAULT ''`,
     `ALTER TABLE convoys ADD COLUMN description TEXT NOT NULL DEFAULT ''`,
     `ALTER TABLE convoys ADD COLUMN assigned_workerbee_id TEXT`,
-    `ALTER TABLE beads ADD COLUMN depends_on TEXT NOT NULL DEFAULT '[]'`,
-    `ALTER TABLE polecats ADD COLUMN completion_note TEXT NOT NULL DEFAULT ''`,
+    `ALTER TABLE atomic_tasks ADD COLUMN depends_on TEXT NOT NULL DEFAULT '[]'`,
+    `ALTER TABLE workerbees ADD COLUMN completion_note TEXT NOT NULL DEFAULT ''`,
   ]
   for (const sql of alterStatements) {
     try {
       await db.execute({ sql, args: [] })
     } catch {
-      // Column already exists — ignore
+      // Column already exists or table already renamed — ignore
     }
   }
 }

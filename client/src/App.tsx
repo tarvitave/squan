@@ -12,7 +12,7 @@ import { AuthPage } from './components/AuthPage/index.js'
 import { AccountPanel } from './components/AccountPanel/index.js'
 import { KanbanView } from './components/KanbanView/index.js'
 import { MetricsPanel } from './components/MetricsPanel/index.js'
-import { BeadsPanel } from './components/BeadsPanel/index.js'
+import { AtomicTasksPanel } from './components/AtomicTasksPanel/index.js'
 import { ToastContainer } from './components/Toast/index.js'
 import { TownSelector } from './components/TownSelector/index.js'
 import { useStore } from './store/index.js'
@@ -26,7 +26,7 @@ export default function App() {
   const setMainView = useStore((s) => s.setMainView)
   const setAgents = useStore((s) => s.setAgents)
   const setConvoys = useStore((s) => s.setConvoys)
-  const setBeads = useStore((s) => s.setBeads)
+  const setAtomicTasks = useStore((s) => s.setAtomicTasks)
   const setTemplates = useStore((s) => s.setTemplates)
   const addToast = useStore((s) => s.addToast)
 
@@ -60,16 +60,16 @@ export default function App() {
       .then(setConvoys)
       .catch(() => addToast('Failed to load Convoys'))
 
-    apiFetch('/api/beads')
+    apiFetch('/api/atomictasks')
       .then((r) => r.json())
-      .then(setBeads)
-      .catch(() => addToast('Failed to load Beads'))
+      .then(setAtomicTasks)
+      .catch(() => addToast('Failed to load AtomicTasks'))
 
     apiFetch('/api/templates')
       .then((r) => r.json())
       .then(setTemplates)
       .catch(() => addToast('Failed to load Templates'))
-  }, [token, setAgents, setConvoys, setBeads, setTemplates, addToast])
+  }, [token, setAgents, setConvoys, setAtomicTasks, setTemplates, addToast])
 
   if (!token) return <AuthPage />
 
@@ -99,8 +99,8 @@ export default function App() {
           <ConvoyPanel />
         </div>
         <div style={styles.sidebarSection}>
-          <div style={styles.sectionTitle}>Beads</div>
-          <BeadsPanel />
+          <div style={styles.sectionTitle}>Atomic Tasks</div>
+          <AtomicTasksPanel />
         </div>
         <div style={styles.sidebarSection}>
           <div style={styles.sectionTitle}>Events</div>

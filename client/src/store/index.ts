@@ -45,11 +45,11 @@ export interface ConvoyEntry {
   description: string
   projectId: string
   status: string
-  beadIds: string[]
+  atomicTaskIds: string[]
   assignedWorkerBeeId: string | null
 }
 
-export interface BeadEntry {
+export interface AtomicTaskEntry {
   id: string
   projectId: string
   convoyId: string | null
@@ -59,6 +59,9 @@ export interface BeadEntry {
   assigneeId: string | null
   dependsOn: string[]
 }
+
+/** Backward-compat alias */
+export type BeadEntry = AtomicTaskEntry
 
 export interface TemplateEntry {
   id: string
@@ -128,11 +131,16 @@ interface SquansqState {
   addConvoy: (convoy: ConvoyEntry) => void
   updateConvoy: (id: string, patch: Partial<ConvoyEntry>) => void
 
-  // Beads
-  beads: BeadEntry[]
-  setBeads: (beads: BeadEntry[]) => void
-  addBead: (bead: BeadEntry) => void
-  updateBead: (id: string, patch: Partial<BeadEntry>) => void
+  // AtomicTasks (formerly Beads)
+  atomicTasks: AtomicTaskEntry[]
+  setAtomicTasks: (atomicTasks: AtomicTaskEntry[]) => void
+  addAtomicTask: (atomicTask: AtomicTaskEntry) => void
+  updateAtomicTask: (id: string, patch: Partial<AtomicTaskEntry>) => void
+  /** @deprecated use atomicTasks */
+  beads: AtomicTaskEntry[]
+  setBeads: (beads: AtomicTaskEntry[]) => void
+  addBead: (bead: AtomicTaskEntry) => void
+  updateBead: (id: string, patch: Partial<AtomicTaskEntry>) => void
 
   // Templates
   templates: TemplateEntry[]
@@ -223,11 +231,29 @@ export const useStore = create<SquansqState>()(
       updateConvoy: (id, patch) =>
         set((s) => ({ convoys: s.convoys.map((c) => (c.id === id ? { ...c, ...patch } : c)) })),
 
+      atomicTasks: [],
+      setAtomicTasks: (atomicTasks) => set({ atomicTasks, beads: atomicTasks }),
+      addAtomicTask: (atomicTask) => set((s) => {
+        const updated = [atomicTask, ...s.atomicTasks.filter((b) => b.id !== atomicTask.id)]
+        return { atomicTasks: updated, beads: updated }
+      }),
+      updateAtomicTask: (id, patch) =>
+        set((s) => {
+          const updated = s.atomicTasks.map((b) => (b.id === id ? { ...b, ...patch } : b))
+          return { atomicTasks: updated, beads: updated }
+        }),
+      // backward-compat aliases
       beads: [],
-      setBeads: (beads) => set({ beads }),
-      addBead: (bead) => set((s) => ({ beads: [bead, ...s.beads.filter((b) => b.id !== bead.id)] })),
+      setBeads: (beads) => set({ beads, atomicTasks: beads }),
+      addBead: (bead) => set((s) => {
+        const updated = [bead, ...s.atomicTasks.filter((b) => b.id !== bead.id)]
+        return { atomicTasks: updated, beads: updated }
+      }),
       updateBead: (id, patch) =>
-        set((s) => ({ beads: s.beads.map((b) => (b.id === id ? { ...b, ...patch } : b)) })),
+        set((s) => {
+          const updated = s.atomicTasks.map((b) => (b.id === id ? { ...b, ...patch } : b))
+          return { atomicTasks: updated, beads: updated }
+        }),
 
       templates: [],
       setTemplates: (templates) => set({ templates }),

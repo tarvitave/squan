@@ -49,7 +49,7 @@ export function RigPanel() {
   const handleSpawn = async (rig: Rig, taskDescription?: string) => {
     setSpawning(rig.id)
     try {
-      const res = await apiFetch(`/api/rigs/${rig.id}/polecats`, {
+      const res = await apiFetch(`/api/projects/${rig.id}/workerbees`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ taskDescription: taskDescription ?? '' }),

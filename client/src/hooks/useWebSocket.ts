@@ -18,8 +18,8 @@ export function useWebSocket() {
   const updateAgent = useStore((s) => s.updateAgent)
   const addConvoy = useStore((s) => s.addConvoy)
   const updateConvoy = useStore((s) => s.updateConvoy)
-  const addBead = useStore((s) => s.addBead)
-  const updateBead = useStore((s) => s.updateBead)
+  const addAtomicTask = useStore((s) => s.addAtomicTask)
+  const updateAtomicTask = useStore((s) => s.updateAtomicTask)
 
   useEffect(() => {
     let socket: WebSocket
@@ -107,7 +107,7 @@ export function useWebSocket() {
                 description: (p.description as string) ?? '',
                 projectId: (p.rigId as string) ?? '',
                 status: 'open',
-                beadIds: (p.beadIds as string[]) ?? [],
+                atomicTaskIds: (p.atomicTaskIds as string[]) ?? [],
                 assignedWorkerBeeId: null,
               })
             }
@@ -125,11 +125,11 @@ export function useWebSocket() {
               updateConvoy(payload.convoyId as string, { status: 'cancelled' })
             }
 
-            // Bead events
-            if (payload?.type === 'bead.created') {
+            // AtomicTask events
+            if (payload?.type === 'atomictask.created') {
               const p = payload as Record<string, unknown>
-              addBead({
-                id: p.beadId as string,
+              addAtomicTask({
+                id: p.atomicTaskId as string,
                 projectId: p.projectId as string,
                 convoyId: (p.convoyId as string | null) ?? null,
                 title: p.title as string,
@@ -139,12 +139,12 @@ export function useWebSocket() {
                 dependsOn: [],
               })
             }
-            if (payload?.type === 'bead.assigned') {
+            if (payload?.type === 'atomictask.assigned') {
               const p = payload as Record<string, unknown>
-              updateBead(p.beadId as string, { assigneeId: p.workerBeeId as string, status: 'assigned' })
+              updateAtomicTask(p.atomicTaskId as string, { assigneeId: p.workerBeeId as string, status: 'assigned' })
             }
-            if (payload?.type === 'bead.done') {
-              updateBead(payload.beadId as string, { status: 'done' })
+            if (payload?.type === 'atomictask.done') {
+              updateAtomicTask(payload.atomicTaskId as string, { status: 'done' })
             }
           }
         } catch {
@@ -167,7 +167,7 @@ export function useWebSocket() {
       socket.onclose = null   // prevent reconnect on intentional unmount
       socket.close()
     }
-  }, [pushEvent, addAgent, updateAgent, addConvoy, updateConvoy, addBead, updateBead])
+  }, [pushEvent, addAgent, updateAgent, addConvoy, updateConvoy, addAtomicTask, updateAtomicTask])
 
   // Safe send: queues if socket not yet open
   const safeSend = useCallback((msg: object) => {

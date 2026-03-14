@@ -4,14 +4,14 @@ import { createHmac, timingSafeEqual } from 'crypto'
 import { z } from 'zod'
 import { setupWsServer } from './ws/server.js'
 import { startWitness } from './witness/index.js'
-import { ptyManager } from './polecat/pty.js'
-import { workerBeeManager } from './polecat/manager.js'
+import { ptyManager } from './workerbee/pty.js'
+import { workerBeeManager } from './workerbee/manager.js'
 import { mayorLeeManager } from './mayor/manager.js'
 import { rigManager } from './rig/manager.js'
 import { convoyManager } from './convoy/manager.js'
 import { townManager } from './town/manager.js'
 import { hookManager } from './hooks/manager.js'
-import { beadManager } from './beads/manager.js'
+import { atomicTaskManager, beadManager } from './beads/manager.js'
 import { templateManager } from './templates/manager.js'
 import { snapshotManager, replayManager, startSnapshotScheduler } from './snapshots/manager.js'
 import { handleMcpCall, handleMcpToolsList } from './mcp/server.js'
@@ -249,7 +249,8 @@ const ConvoySchema = z.object({
   name: z.string().min(1),
   projectId: z.string().optional(),
   rigId: z.string().optional(),
-  beadIds: z.array(z.string()).optional(),
+  atomicTaskIds: z.array(z.string()).optional(),
+  beadIds: z.array(z.string()).optional(),  // backward compat
   description: z.string().optional(),
 }).refine((d) => d.projectId || d.rigId, { message: 'projectId or rigId required' })
 
@@ -259,17 +260,23 @@ app.get('/api/convoys', async (_req, res) => {
 
 app.post('/api/convoys', async (req, res) => {
   try {
-    const { name, projectId, rigId, beadIds, description } = validate(ConvoySchema, req.body)
-    res.json(await convoyManager.create(name, (projectId ?? rigId)!, beadIds, description))
+    const { name, projectId, rigId, atomicTaskIds, beadIds, description } = validate(ConvoySchema, req.body)
+    res.json(await convoyManager.create(name, (projectId ?? rigId)!, atomicTaskIds ?? beadIds, description))
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
-app.post('/api/convoys/:id/beads', async (req, res) => {
-  res.json(await convoyManager.addBeads(req.params.id, req.body.beadIds))
+app.post('/api/convoys/:id/atomictasks', async (req, res) => {
+  res.json(await convoyManager.addAtomicTasks(req.params.id, req.body.atomicTaskIds))
+})
+app.post('/api/convoys/:id/beads', async (req, res) => {  // backward compat
+  res.json(await convoyManager.addAtomicTasks(req.params.id, req.body.beadIds ?? req.body.atomicTaskIds))
 })
 
-app.delete('/api/convoys/:id/beads', async (req, res) => {
-  res.json(await convoyManager.removeBeads(req.params.id, req.body.beadIds))
+app.delete('/api/convoys/:id/atomictasks', async (req, res) => {
+  res.json(await convoyManager.removeAtomicTasks(req.params.id, req.body.atomicTaskIds))
+})
+app.delete('/api/convoys/:id/beads', async (req, res) => {  // backward compat
+  res.json(await convoyManager.removeAtomicTasks(req.params.id, req.body.beadIds ?? req.body.atomicTaskIds))
 })
 
 app.post('/api/convoys/:id/land', async (req, res) => {
@@ -306,7 +313,8 @@ const HookSchema = z.object({
   branch: z.string().min(1),
   notes: z.string().optional(),
   workerBeeId: z.string().optional(),
-  beadId: z.string().optional(),
+  atomicTaskId: z.string().optional(),
+  beadId: z.string().optional(),  // backward compat
 })
 
 app.get('/api/hooks', async (req, res) => {
@@ -316,8 +324,8 @@ app.get('/api/hooks', async (req, res) => {
 
 app.post('/api/hooks', async (req, res) => {
   try {
-    const { projectId, branch, notes, workerBeeId, beadId } = validate(HookSchema, req.body)
-    res.json(await hookManager.create(projectId, branch, notes, workerBeeId, beadId))
+    const { projectId, branch, notes, workerBeeId, atomicTaskId, beadId } = validate(HookSchema, req.body)
+    res.json(await hookManager.create(projectId, branch, notes, workerBeeId, atomicTaskId ?? beadId))
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
@@ -342,8 +350,8 @@ app.delete('/api/hooks/:id', async (req, res) => {
   res.json({ ok: true })
 })
 
-// --- Beads ---
-const BeadSchema = z.object({
+// --- AtomicTasks (formerly Beads) ---
+const AtomicTaskSchema = z.object({
   projectId: z.string().min(1),
   title: z.string().min(1),
   description: z.string().optional(),
@@ -351,38 +359,72 @@ const BeadSchema = z.object({
   dependsOn: z.array(z.string()).optional(),
 })
 
-app.get('/api/beads', async (req, res) => {
+app.get('/api/atomictasks', async (req, res) => {
   const { projectId, convoyId } = req.query
-  if (convoyId) return res.json(await beadManager.listByConvoy(convoyId as string))
-  if (projectId) return res.json(await beadManager.listByProject(projectId as string))
-  res.json(await beadManager.listAll())
+  if (convoyId) return res.json(await atomicTaskManager.listByConvoy(convoyId as string))
+  if (projectId) return res.json(await atomicTaskManager.listByProject(projectId as string))
+  res.json(await atomicTaskManager.listAll())
+})
+app.get('/api/beads', async (req, res) => {  // backward compat
+  const { projectId, convoyId } = req.query
+  if (convoyId) return res.json(await atomicTaskManager.listByConvoy(convoyId as string))
+  if (projectId) return res.json(await atomicTaskManager.listByProject(projectId as string))
+  res.json(await atomicTaskManager.listAll())
 })
 
-app.post('/api/beads', async (req, res) => {
+app.post('/api/atomictasks', async (req, res) => {
   try {
-    const { projectId, title, description, convoyId, dependsOn } = validate(BeadSchema, req.body)
-    res.json(await beadManager.create(projectId, title, description, convoyId, dependsOn))
+    const { projectId, title, description, convoyId, dependsOn } = validate(AtomicTaskSchema, req.body)
+    res.json(await atomicTaskManager.create(projectId, title, description, convoyId, dependsOn))
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
+})
+app.post('/api/beads', async (req, res) => {  // backward compat
+  try {
+    const { projectId, title, description, convoyId, dependsOn } = validate(AtomicTaskSchema, req.body)
+    res.json(await atomicTaskManager.create(projectId, title, description, convoyId, dependsOn))
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
-app.get('/api/beads/:id/dependencies', async (req, res) => {
-  res.json(await beadManager.areDependenciesMet(req.params.id))
+app.get('/api/atomictasks/:id/dependencies', async (req, res) => {
+  res.json(await atomicTaskManager.areDependenciesMet(req.params.id))
+})
+app.get('/api/beads/:id/dependencies', async (req, res) => {  // backward compat
+  res.json(await atomicTaskManager.areDependenciesMet(req.params.id))
 })
 
-app.post('/api/beads/:id/dependencies', async (req, res) => {
-  res.json(await beadManager.setDependencies(req.params.id, req.body.dependsOn))
+app.post('/api/atomictasks/:id/dependencies', async (req, res) => {
+  res.json(await atomicTaskManager.setDependencies(req.params.id, req.body.dependsOn))
+})
+app.post('/api/beads/:id/dependencies', async (req, res) => {  // backward compat
+  res.json(await atomicTaskManager.setDependencies(req.params.id, req.body.dependsOn))
 })
 
-app.post('/api/beads/:id/assign', async (req, res) => {
-  res.json(await beadManager.assign(req.params.id, req.body.workerBeeId))
+app.post('/api/atomictasks/:id/assign', async (req, res) => {
+  res.json(await atomicTaskManager.assign(req.params.id, req.body.workerBeeId))
+})
+app.post('/api/beads/:id/assign', async (req, res) => {  // backward compat
+  res.json(await atomicTaskManager.assign(req.params.id, req.body.workerBeeId))
 })
 
-app.post('/api/beads/:id/status', async (req, res) => {
-  res.json(await beadManager.setStatus(req.params.id, req.body.status))
+app.post('/api/atomictasks/:id/status', async (req, res) => {
+  res.json(await atomicTaskManager.setStatus(req.params.id, req.body.status))
+})
+app.post('/api/beads/:id/status', async (req, res) => {  // backward compat
+  res.json(await atomicTaskManager.setStatus(req.params.id, req.body.status))
+})
+app.patch('/api/atomictasks/:id/status', async (req, res) => {
+  res.json(await atomicTaskManager.setStatus(req.params.id, req.body.status))
+})
+app.patch('/api/beads/:id/status', async (req, res) => {  // backward compat
+  res.json(await atomicTaskManager.setStatus(req.params.id, req.body.status))
 })
 
-app.delete('/api/beads/:id', async (req, res) => {
-  await beadManager.remove(req.params.id)
+app.delete('/api/atomictasks/:id', async (req, res) => {
+  await atomicTaskManager.remove(req.params.id)
+  res.json({ ok: true })
+})
+app.delete('/api/beads/:id', async (req, res) => {  // backward compat
+  await atomicTaskManager.remove(req.params.id)
   res.json({ ok: true })
 })
 
@@ -502,7 +544,7 @@ app.post('/api/webhooks/github', express.raw({ type: 'application/json' }), asyn
           [],
           issue.body ?? issue.title
         )
-        await beadManager.create(project.id, issue.title, issue.body ?? '', convoy.id)
+        await atomicTaskManager.create(project.id, issue.title, issue.body ?? '', convoy.id)
         return res.json({ ok: true, convoyId: convoy.id })
       }
     }
@@ -519,7 +561,7 @@ app.post('/api/webhooks/github', express.raw({ type: 'application/json' }), asyn
           [],
           pr.body ?? pr.title
         )
-        await beadManager.create(project.id, pr.title, pr.body ?? '', convoy.id)
+        await atomicTaskManager.create(project.id, pr.title, pr.body ?? '', convoy.id)
         return res.json({ ok: true, convoyId: convoy.id })
       }
     }
@@ -532,10 +574,10 @@ app.post('/api/webhooks/github', express.raw({ type: 'application/json' }), asyn
 
 // --- Metrics ---
 app.get('/api/metrics', async (_req, res) => {
-  const [bees, convoys, beads, projects] = await Promise.all([
+  const [bees, convoys, atomicTasks, projects] = await Promise.all([
     workerBeeManager.listAll(),
     convoyManager.listAll(),
-    beadManager.listAll(),
+    atomicTaskManager.listAll(),
     rigManager.listByTown('default'),
   ])
 
@@ -545,7 +587,7 @@ app.get('/api/metrics', async (_req, res) => {
   const convoysByStatus = convoys.reduce<Record<string, number>>((acc, c) => {
     acc[c.status] = (acc[c.status] ?? 0) + 1; return acc
   }, {})
-  const beadsByStatus = beads.reduce<Record<string, number>>((acc, b) => {
+  const atomicTasksByStatus = atomicTasks.reduce<Record<string, number>>((acc, b) => {
     acc[b.status] = (acc[b.status] ?? 0) + 1; return acc
   }, {})
 
@@ -555,7 +597,7 @@ app.get('/api/metrics', async (_req, res) => {
     projects: projects.length,
     workerbees: { total: bees.length, ...beesByStatus },
     convoys: { total: convoys.length, ...convoysByStatus },
-    beads: { total: beads.length, ...beadsByStatus },
+    atomictasks: { total: atomicTasks.length, ...atomicTasksByStatus },
     zombieRate: Math.round(zombieRate * 100),
   })
 })

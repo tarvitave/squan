@@ -75,7 +75,7 @@ export const workerBeeManager = {
 
     const now = new Date().toISOString()
     await db.execute({
-      sql: `INSERT INTO polecats (id, rig_id, name, branch, worktree_path, task_description, completion_note, status, hook_id, session_id, created_at, updated_at)
+      sql: `INSERT INTO workerbees (id, rig_id, name, branch, worktree_path, task_description, completion_note, status, hook_id, session_id, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, '', 'idle', NULL, ?, ?, ?)`,
       args: [id, projectId, name, branch, worktreePath, taskDescription ?? '', sessionId, now, now],
     })
@@ -107,20 +107,20 @@ export const workerBeeManager = {
 
   async getById(id: string): Promise<WorkerBee | null> {
     const db = getDb()
-    const result = await db.execute({ sql: 'SELECT * FROM polecats WHERE id = ?', args: [id] })
+    const result = await db.execute({ sql: 'SELECT * FROM workerbees WHERE id = ?', args: [id] })
     const row = result.rows[0]
     return row ? toModel(row as unknown as DbRow) : null
   },
 
   async listByProject(projectId: string): Promise<WorkerBee[]> {
     const db = getDb()
-    const result = await db.execute({ sql: 'SELECT * FROM polecats WHERE rig_id = ?', args: [projectId] })
+    const result = await db.execute({ sql: 'SELECT * FROM workerbees WHERE rig_id = ?', args: [projectId] })
     return result.rows.map((r) => toModel(r as unknown as DbRow))
   },
 
   async listAll(): Promise<WorkerBee[]> {
     const db = getDb()
-    const result = await db.execute({ sql: 'SELECT * FROM polecats', args: [] })
+    const result = await db.execute({ sql: 'SELECT * FROM workerbees', args: [] })
     return result.rows.map((r) => toModel(r as unknown as DbRow))
   },
 
@@ -128,12 +128,12 @@ export const workerBeeManager = {
     const db = getDb()
     if (note !== undefined) {
       await db.execute({
-        sql: `UPDATE polecats SET status = ?, completion_note = ?, updated_at = datetime('now') WHERE id = ?`,
+        sql: `UPDATE workerbees SET status = ?, completion_note = ?, updated_at = datetime('now') WHERE id = ?`,
         args: [status, note, id],
       })
     } else {
       await db.execute({
-        sql: `UPDATE polecats SET status = ?, updated_at = datetime('now') WHERE id = ?`,
+        sql: `UPDATE workerbees SET status = ?, updated_at = datetime('now') WHERE id = ?`,
         args: [status, id],
       })
     }
@@ -170,15 +170,13 @@ export const workerBeeManager = {
         console.warn(`[WorkerBee] Failed to remove worktree: ${err}`)
       }
     }
-    await db.execute({ sql: 'DELETE FROM polecats WHERE id = ?', args: [id] })
+    await db.execute({ sql: 'DELETE FROM workerbees WHERE id = ?', args: [id] })
   },
 }
 
-export const polecatManager = workerBeeManager
-
 // --- Completion signal monitor ---
-function attachSignalMonitor(beeId: string, sessionId: string) {
-  const monitorId = `monitor-${beeId}`
+function attachSignalMonitor(workerBeeId: string, sessionId: string) {
+  const monitorId = `monitor-${workerBeeId}`
   let tail = ''
   let fired = false
   let markedWorking = false
@@ -190,16 +188,16 @@ function attachSignalMonitor(beeId: string, sessionId: string) {
     // First real output → transition idle → working
     if (!markedWorking && data.trim().length > 0) {
       markedWorking = true
-      workerBeeManager.getById(beeId).then((bee) => {
+      workerBeeManager.getById(workerBeeId).then((bee) => {
         if (bee?.status === 'idle') {
           getDb().execute({
-            sql: `UPDATE polecats SET status = 'working', updated_at = datetime('now') WHERE id = ?`,
-            args: [beeId],
+            sql: `UPDATE workerbees SET status = 'working', updated_at = datetime('now') WHERE id = ?`,
+            args: [workerBeeId],
           }).then(() => {
             broadcastEvent({
               id: uuidv4(),
               type: 'workerbee.working',
-              payload: { workerBeeId: beeId },
+              payload: { workerBeeId },
               timestamp: new Date().toISOString(),
             })
           }).catch(() => {})
@@ -212,8 +210,8 @@ function attachSignalMonitor(beeId: string, sessionId: string) {
       fired = true
       const note = doneMatch[1].trim().replace(/\n.*/s, '').slice(0, 200)
       ptyManager.unsubscribe(sessionId, monitorId)
-      console.log(`[WorkerBee] ${beeId} signalled DONE: ${note}`)
-      workerBeeManager.updateStatus(beeId, 'done', note).catch(() => {})
+      console.log(`[WorkerBee] ${workerBeeId} signalled DONE: ${note}`)
+      workerBeeManager.updateStatus(workerBeeId, 'done', note).catch(() => {})
       return
     }
 
@@ -222,15 +220,15 @@ function attachSignalMonitor(beeId: string, sessionId: string) {
       fired = true
       const note = blockedMatch[1].trim().replace(/\n.*/s, '').slice(0, 200)
       ptyManager.unsubscribe(sessionId, monitorId)
-      console.log(`[WorkerBee] ${beeId} signalled BLOCKED: ${note}`)
-      workerBeeManager.updateStatus(beeId, 'stalled', note).catch(() => {})
+      console.log(`[WorkerBee] ${workerBeeId} signalled BLOCKED: ${note}`)
+      workerBeeManager.updateStatus(workerBeeId, 'stalled', note).catch(() => {})
     }
   })
 }
 
 async function allocateName(projectId: string): Promise<string> {
   const db = getDb()
-  const result = await db.execute({ sql: 'SELECT name FROM polecats WHERE rig_id = ?', args: [projectId] })
+  const result = await db.execute({ sql: 'SELECT name FROM workerbees WHERE rig_id = ?', args: [projectId] })
   const used = new Set(result.rows.map((r) => r.name as string))
   return NAME_POOL.find((n) => !used.has(n)) ?? `bee-${Date.now()}`
 }

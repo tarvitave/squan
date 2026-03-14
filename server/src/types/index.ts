@@ -6,7 +6,10 @@ export type HookStatus = 'created' | 'active' | 'suspended' | 'completed' | 'arc
 
 export type ConvoyStatus = 'open' | 'in_progress' | 'landed' | 'cancelled'
 
-export type BeadStatus = 'open' | 'assigned' | 'in_progress' | 'done' | 'blocked'
+export type AtomicTaskStatus = 'open' | 'assigned' | 'in_progress' | 'done' | 'blocked'
+
+/** Backward-compat alias */
+export type BeadStatus = AtomicTaskStatus
 
 // --- AllProjects (workspace) ---
 export interface AllProjects {
@@ -59,19 +62,22 @@ export interface MayorLee {
   createdAt: string
 }
 
-// --- Bead (atomic unit of work) ---
-export interface Bead {
+// --- AtomicTask (atomic unit of work, formerly Bead) ---
+export interface AtomicTask {
   id: string
   projectId: string
   convoyId: string | null
   title: string
   description: string
-  status: BeadStatus
+  status: AtomicTaskStatus
   assigneeId: string | null
   dependsOn: string[]
   createdAt: string
   updatedAt: string
 }
+
+/** Backward-compat alias */
+export type Bead = AtomicTask
 
 // --- Template (reusable CLAUDE.md content) ---
 export interface Template {
@@ -104,7 +110,7 @@ export interface Hook {
   id: string
   projectId: string
   workerBeeId: string | null
-  beadId: string | null
+  atomicTaskId: string | null
   status: HookStatus
   branch: string
   notes: string
@@ -118,7 +124,7 @@ export interface Convoy {
   name: string
   description: string
   projectId: string
-  beadIds: string[]
+  atomicTaskIds: string[]
   assignedWorkerBeeId: string | null
   status: ConvoyStatus
   createdAt: string
@@ -150,9 +156,9 @@ export type EventType =
   | 'hook.created'
   | 'hook.activated'
   | 'hook.completed'
-  | 'bead.created'
-  | 'bead.assigned'
-  | 'bead.done'
+  | 'atomictask.created'
+  | 'atomictask.assigned'
+  | 'atomictask.done'
   | 'mayorlee.started'
   | 'mayorlee.stopped'
   | 'terminal.data'

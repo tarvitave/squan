@@ -3,7 +3,7 @@ import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
 import type { ConvoyEntry } from '../../store/index.js'
 
-const BEAD_STATUS_COLOR: Record<string, string> = {
+const ATOMIC_TASK_STATUS_COLOR: Record<string, string> = {
   open: '#569cd6',
   assigned: '#4ec9b0',
   done: '#608b4e',
@@ -22,7 +22,7 @@ export function ConvoyPanel() {
   const setConvoys = useStore((s) => s.setConvoys)
   const agents = useStore((s) => s.agents)
   const rigs = useStore((s) => s.rigs)
-  const beads = useStore((s) => s.beads)
+  const atomicTasks = useStore((s) => s.atomicTasks)
   const templates = useStore((s) => s.templates)
   const addPaneToTab = useStore((s) => s.addPaneToTab)
   const addTab = useStore((s) => s.addTab)
@@ -39,8 +39,8 @@ export function ConvoyPanel() {
   const [editingDesc, setEditingDesc] = useState<string | null>(null)
   const [editDescText, setEditDescText] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [addingBeads, setAddingBeads] = useState<string | null>(null)
-  const [beadSelection, setBeadSelection] = useState<string[]>([])
+  const [addingAtomicTasks, setAddingAtomicTasks] = useState<string | null>(null)
+  const [atomicTaskSelection, setAtomicTaskSelection] = useState<string[]>([])
   const [dispatchingWithTemplate, setDispatchingWithTemplate] = useState<string | null>(null)
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
 
@@ -86,27 +86,27 @@ export function ConvoyPanel() {
     setEditingDesc(null)
   }
 
-  const handleAddBeads = async (convoyId: string) => {
-    if (beadSelection.length === 0) { setAddingBeads(null); return }
-    const res = await apiFetch(`/api/convoys/${convoyId}/beads`, {
+  const handleAddAtomicTasks = async (convoyId: string) => {
+    if (atomicTaskSelection.length === 0) { setAddingAtomicTasks(null); return }
+    const res = await apiFetch(`/api/convoys/${convoyId}/atomictasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ beadIds: beadSelection }),
+      body: JSON.stringify({ atomicTaskIds: atomicTaskSelection }),
     })
     const updated = await res.json()
-    updateConvoy(convoyId, { beadIds: updated.beadIds })
-    setAddingBeads(null)
-    setBeadSelection([])
+    updateConvoy(convoyId, { atomicTaskIds: updated.atomicTaskIds })
+    setAddingAtomicTasks(null)
+    setAtomicTaskSelection([])
   }
 
-  const handleRemoveBead = async (convoy: ConvoyEntry, beadId: string) => {
-    const res = await apiFetch(`/api/convoys/${convoy.id}/beads`, {
+  const handleRemoveAtomicTask = async (convoy: ConvoyEntry, atomicTaskId: string) => {
+    const res = await apiFetch(`/api/convoys/${convoy.id}/atomictasks`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ beadIds: [beadId] }),
+      body: JSON.stringify({ atomicTaskIds: [atomicTaskId] }),
     })
     const updated = await res.json()
-    updateConvoy(convoy.id, { beadIds: updated.beadIds })
+    updateConvoy(convoy.id, { atomicTaskIds: updated.atomicTaskIds })
   }
 
   const handleDispatch = async (convoyId: string) => {
@@ -140,7 +140,7 @@ export function ConvoyPanel() {
   const idleAgents = agents.filter((a) => a.status === 'idle' || a.status === 'working')
   const rigNameById = Object.fromEntries(rigs.map((r) => [r.id, r.name]))
   const agentNameById = Object.fromEntries(agents.map((a) => [a.id, a.name]))
-  const beadById = Object.fromEntries(beads.map((b) => [b.id, b]))
+  const atomicTaskById = Object.fromEntries(atomicTasks.map((b) => [b.id, b]))
 
   return (
     <div style={styles.panel}>
@@ -182,68 +182,68 @@ export function ConvoyPanel() {
             <span
               style={{ ...styles.beadCount, cursor: 'pointer', textDecoration: 'underline' }}
               onClick={() => setExpandedId(expandedId === convoy.id ? null : convoy.id)}
-              title="Show beads"
+              title="Show atomic tasks"
             >
-              {convoy.beadIds.length} beads
+              {convoy.atomicTaskIds.length} atomic tasks
             </span>
           </div>
 
           {expandedId === convoy.id && (
             <div style={styles.beadSection}>
-              {convoy.beadIds.length === 0 && (
-                <span style={styles.noBeads}>no beads</span>
+              {convoy.atomicTaskIds.length === 0 && (
+                <span style={styles.noBeads}>no atomic tasks</span>
               )}
-              {convoy.beadIds.map((bid) => {
-                const bead = beadById[bid]
+              {convoy.atomicTaskIds.map((atid) => {
+                const atomicTask = atomicTaskById[atid]
                 return (
-                  <div key={bid} style={styles.beadItem}>
-                    <span style={styles.beadTitle}>{bead?.title ?? bid.slice(0, 8)}</span>
-                    {bead && (
-                      <span style={{ ...styles.beadStatus, color: BEAD_STATUS_COLOR[bead.status] ?? '#555' }}>
-                        {bead.status}
+                  <div key={atid} style={styles.beadItem}>
+                    <span style={styles.beadTitle}>{atomicTask?.title ?? atid.slice(0, 8)}</span>
+                    {atomicTask && (
+                      <span style={{ ...styles.beadStatus, color: ATOMIC_TASK_STATUS_COLOR[atomicTask.status] ?? '#555' }}>
+                        {atomicTask.status}
                       </span>
                     )}
                     <button
                       style={styles.removeBeadBtn}
-                      onClick={() => handleRemoveBead(convoy, bid)}
+                      onClick={() => handleRemoveAtomicTask(convoy, atid)}
                       title="Remove from convoy"
                     >✕</button>
                   </div>
                 )
               })}
 
-              {addingBeads === convoy.id ? (
+              {addingAtomicTasks === convoy.id ? (
                 <div style={styles.addBeadForm}>
                   <div style={styles.beadCheckList}>
-                    {beads
-                      .filter((b) => b.projectId === convoy.projectId && !convoy.beadIds.includes(b.id))
+                    {atomicTasks
+                      .filter((b) => b.projectId === convoy.projectId && !convoy.atomicTaskIds.includes(b.id))
                       .map((b) => (
                         <label key={b.id} style={styles.beadCheck}>
                           <input
                             type="checkbox"
-                            checked={beadSelection.includes(b.id)}
-                            onChange={() => setBeadSelection((prev) =>
+                            checked={atomicTaskSelection.includes(b.id)}
+                            onChange={() => setAtomicTaskSelection((prev) =>
                               prev.includes(b.id) ? prev.filter((x) => x !== b.id) : [...prev, b.id]
                             )}
                             style={{ marginRight: 4 }}
                           />
-                          <span style={{ color: beadSelection.includes(b.id) ? '#d4d4d4' : '#555', fontSize: 9 }}>
+                          <span style={{ color: atomicTaskSelection.includes(b.id) ? '#d4d4d4' : '#555', fontSize: 9 }}>
                             {b.title}
                           </span>
                         </label>
                       ))}
                   </div>
                   <div style={styles.addBeadBtns}>
-                    <button style={styles.addBeadSaveBtn} onClick={() => handleAddBeads(convoy.id)}>add</button>
-                    <button style={styles.cancelBtn} onClick={() => { setAddingBeads(null); setBeadSelection([]) }}>cancel</button>
+                    <button style={styles.addBeadSaveBtn} onClick={() => handleAddAtomicTasks(convoy.id)}>add</button>
+                    <button style={styles.cancelBtn} onClick={() => { setAddingAtomicTasks(null); setAtomicTaskSelection([]) }}>cancel</button>
                   </div>
                 </div>
               ) : (
                 <button
                   style={styles.addBeadBtn}
-                  onClick={() => { setAddingBeads(convoy.id); setBeadSelection([]) }}
+                  onClick={() => { setAddingAtomicTasks(convoy.id); setAtomicTaskSelection([]) }}
                 >
-                  + add bead
+                  + add atomic task
                 </button>
               )}
             </div>
