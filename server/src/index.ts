@@ -447,7 +447,7 @@ app.post('/api/terminals', async (req, res) => {
     env.ANTHROPIC_API_KEY = user.anthropicApiKey
   }
   const id = ptyManager.spawn({
-    shell: req.body.shell,
+    shell: req.body.shell ?? (process.env.TERMINAL_COMMAND ?? 'claude'),
     cwd: req.body.cwd,
     cols: req.body.cols ?? 120,
     rows: req.body.rows ?? 30,
