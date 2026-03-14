@@ -30,7 +30,7 @@ export default function App() {
   const setTemplates = useStore((s) => s.setTemplates)
   const addToast = useStore((s) => s.addToast)
 
-  useWebSocket()
+  const { connected } = useWebSocket()
 
   useEffect(() => {
     if (!token) return
@@ -78,6 +78,9 @@ export default function App() {
   return (
     <div style={styles.root}>
       <ToastContainer />
+      {!connected && (
+        <div style={styles.offlineBanner}>⚠ reconnecting…</div>
+      )}
       {/* Left sidebar */}
       <div style={styles.sidebar}>
         <AccountPanel />
@@ -231,6 +234,19 @@ const styles = {
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column' as const,
+  },
+  offlineBanner: {
+    position: 'fixed' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 9999,
+    background: '#5c3a1e',
+    color: '#ce9178',
+    fontSize: 11,
+    fontFamily: 'monospace',
+    textAlign: 'center' as const,
+    padding: '3px 8px',
   },
   noTab: {
     flex: 1,

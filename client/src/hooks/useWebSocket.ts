@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { useStore } from '../store/index.js'
 
 const WS_URL = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`
@@ -13,6 +13,8 @@ export function useWebSocket() {
   const queue = useRef<string[]>([])          // messages buffered before connection opens
   const subscribers = useRef<Map<string, DataCallback>>(new Map())
   const pingTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+  const retryDelay = useRef(1000)             // exponential backoff, starts at 1s, caps at 30s
+  const [connected, setConnected] = useState(false)
   const pushEvent = useStore((s) => s.pushEvent)
   const addAgent = useStore((s) => s.addAgent)
   const updateAgent = useStore((s) => s.updateAgent)
@@ -30,6 +32,8 @@ export function useWebSocket() {
       ws.current = socket
 
       socket.onopen = () => {
+        retryDelay.current = 1000  // reset backoff on successful connect
+        setConnected(true)
         // Re-subscribe to all active terminal sessions after reconnect
         for (const sessionId of subscribers.current.keys()) {
           socket.send(JSON.stringify({ type: 'subscribe', payload: { sessionId } }))
@@ -155,8 +159,10 @@ export function useWebSocket() {
 
       socket.onclose = () => {
         if (pingTimer.current) { clearInterval(pingTimer.current); pingTimer.current = null }
-        // Reconnect after 3s on unexpected close
-        reconnectTimer = setTimeout(connect, 3000)
+        setConnected(false)
+        // Reconnect with exponential backoff (1s → 2s → 4s → … → 30s max)
+        reconnectTimer = setTimeout(connect, retryDelay.current)
+        retryDelay.current = Math.min(retryDelay.current * 2, 30_000)
       }
     }
 
@@ -199,5 +205,5 @@ export function useWebSocket() {
     safeSend({ type: 'terminal.resize', payload: { sessionId, cols, rows } })
   }, [safeSend])
 
-  return { subscribe, unsubscribe, sendInput, sendResize }
+  return { subscribe, unsubscribe, sendInput, sendResize, connected }
 }
