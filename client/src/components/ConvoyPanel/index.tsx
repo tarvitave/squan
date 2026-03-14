@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
 import type { ConvoyEntry } from '../../store/index.js'
 
@@ -46,7 +47,7 @@ export function ConvoyPanel() {
   const handleCreate = async () => {
     if (!form.name || !form.projectId) return
     try {
-      const res = await fetch('/api/convoys', {
+      const res = await apiFetch('/api/convoys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
@@ -62,7 +63,7 @@ export function ConvoyPanel() {
   }
 
   const handleAssign = async (convoyId: string, workerBeeId: string | null) => {
-    const res = await fetch(`/api/convoys/${convoyId}/assign`, {
+    const res = await apiFetch(`/api/convoys/${convoyId}/assign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ workerBeeId }),
@@ -76,7 +77,7 @@ export function ConvoyPanel() {
   }
 
   const handleSaveDesc = async (convoyId: string) => {
-    await fetch(`/api/convoys/${convoyId}/description`, {
+    await apiFetch(`/api/convoys/${convoyId}/description`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ description: editDescText }),
@@ -87,7 +88,7 @@ export function ConvoyPanel() {
 
   const handleAddBeads = async (convoyId: string) => {
     if (beadSelection.length === 0) { setAddingBeads(null); return }
-    const res = await fetch(`/api/convoys/${convoyId}/beads`, {
+    const res = await apiFetch(`/api/convoys/${convoyId}/beads`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ beadIds: beadSelection }),
@@ -99,7 +100,7 @@ export function ConvoyPanel() {
   }
 
   const handleRemoveBead = async (convoy: ConvoyEntry, beadId: string) => {
-    const res = await fetch(`/api/convoys/${convoy.id}/beads`, {
+    const res = await apiFetch(`/api/convoys/${convoy.id}/beads`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ beadIds: [beadId] }),
@@ -111,7 +112,7 @@ export function ConvoyPanel() {
   const handleDispatch = async (convoyId: string) => {
     setDispatching(convoyId)
     try {
-      const res = await fetch(`/api/convoys/${convoyId}/dispatch`, {
+      const res = await apiFetch(`/api/convoys/${convoyId}/dispatch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -300,7 +301,7 @@ export function ConvoyPanel() {
                           setDispatchingWithTemplate(null)
                           setDispatching(convoy.id)
                           try {
-                            const res = await fetch(`/api/convoys/${convoy.id}/dispatch`, {
+                            const res = await apiFetch(`/api/convoys/${convoy.id}/dispatch`, {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify(tmpl ? { taskDescription: tmpl.content } : {}),

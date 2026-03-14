@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
 import type { TemplateEntry } from '../../store/index.js'
 
@@ -19,7 +20,7 @@ export function TemplatesPanel({ projectId, onSelect }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch(`/api/templates?projectId=${projectId}`)
+    apiFetch(`/api/templates?projectId=${projectId}`)
       .then((r) => r.json())
       .then((data: TemplateEntry[]) => {
         const others = allTemplates.filter((t) => t.projectId !== projectId)
@@ -30,7 +31,7 @@ export function TemplatesPanel({ projectId, onSelect }: Props) {
 
   const handleCreate = async () => {
     if (!form.name || !form.content) return
-    const res = await fetch('/api/templates', {
+    const res = await apiFetch('/api/templates', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId, ...form }),
@@ -42,7 +43,7 @@ export function TemplatesPanel({ projectId, onSelect }: Props) {
   }
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/templates/${id}`, { method: 'DELETE' })
+    await apiFetch(`/api/templates/${id}`, { method: 'DELETE' })
     removeTemplate(id)
   }
 

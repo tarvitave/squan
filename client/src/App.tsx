@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { apiFetch } from './lib/api.js'
 import { TabBar } from './components/TabBar/index.js'
 import { PaneGrid } from './components/PaneGrid/index.js'
 import { AgentTree } from './components/AgentTree/index.js'
@@ -33,7 +34,7 @@ export default function App() {
 
   useEffect(() => {
     if (!token) return
-    fetch('/api/workerbees')
+    apiFetch('/api/workerbees')
       .then((r) => r.json())
       .then((data: Array<{
         id: string; name: string; projectId: string; status: string;
@@ -54,17 +55,17 @@ export default function App() {
       )
       .catch(() => addToast('Failed to load WorkerBees'))
 
-    fetch('/api/convoys')
+    apiFetch('/api/convoys')
       .then((r) => r.json())
       .then(setConvoys)
       .catch(() => addToast('Failed to load Convoys'))
 
-    fetch('/api/beads')
+    apiFetch('/api/beads')
       .then((r) => r.json())
       .then(setBeads)
       .catch(() => addToast('Failed to load Beads'))
 
-    fetch('/api/templates')
+    apiFetch('/api/templates')
       .then((r) => r.json())
       .then(setTemplates)
       .catch(() => addToast('Failed to load Templates'))

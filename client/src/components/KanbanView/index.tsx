@@ -1,3 +1,4 @@
+import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
 import type { ConvoyEntry } from '../../store/index.js'
 
@@ -35,14 +36,14 @@ export function KanbanView() {
 
   const moveConvoy = async (convoyId: string, status: string) => {
     if (status === 'cancelled') {
-      await fetch(`/api/convoys/${convoyId}/cancel`, {
+      await apiFetch(`/api/convoys/${convoyId}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       })
       updateConvoy(convoyId, { status: 'cancelled' })
     } else {
-      await fetch(`/api/convoys/${convoyId}/${status === 'landed' ? 'land' : 'assign'}`, {
+      await apiFetch(`/api/convoys/${convoyId}/${status === 'landed' ? 'land' : 'assign'}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(status === 'landed' ? {} : { workerBeeId: null }),
@@ -52,7 +53,7 @@ export function KanbanView() {
   }
 
   const dispatchConvoy = async (convoyId: string) => {
-    const res = await fetch(`/api/convoys/${convoyId}/dispatch`, {
+    const res = await apiFetch(`/api/convoys/${convoyId}/dispatch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),

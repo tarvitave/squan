@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
 import type { TownEntry } from '../../store/index.js'
 
@@ -13,7 +14,7 @@ export function TownSelector() {
   const [form, setForm] = useState({ name: '', path: '' })
 
   useEffect(() => {
-    fetch('/api/towns')
+    apiFetch('/api/towns')
       .then((r) => r.json())
       .then((data: TownEntry[]) => {
         setTowns(data)
@@ -26,7 +27,7 @@ export function TownSelector() {
 
   const handleSwitch = (id: string) => {
     setActiveTownId(id)
-    fetch(`/api/rigs?townId=${id}`)
+    apiFetch(`/api/rigs?townId=${id}`)
       .then((r) => r.json())
       .then(setRigs)
       .catch(() => addToast('Failed to load projects for town'))
@@ -35,7 +36,7 @@ export function TownSelector() {
   const handleCreate = async () => {
     if (!form.name || !form.path) return
     try {
-      const res = await fetch('/api/towns', {
+      const res = await apiFetch('/api/towns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),

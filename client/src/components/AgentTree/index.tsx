@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
 import type { Agent } from '../../store/index.js'
 
@@ -50,7 +51,7 @@ export function AgentTree() {
 
   const handleKill = async (id: string) => {
     try {
-      await fetch(`/api/workerbees/${id}`, { method: 'DELETE' })
+      await apiFetch(`/api/workerbees/${id}`, { method: 'DELETE' })
       updateAgent(id, { status: 'zombie', sessionId: null })
       if (selectedAgentId === id) setSelectedAgent(null)
     } catch (err) {
@@ -103,17 +104,17 @@ function AgentRow({
 
   useEffect(() => {
     if (!expanded) return
-    fetch(`/api/workerbees/${agent.id}/snapshots`).then((r) => r.json()).then(setSnapshots).catch(() => {})
-    fetch(`/api/workerbees/${agent.id}/replay`).then((r) => r.json()).then((f) => { setFrames(f); setReplayIdx(f.length - 1) }).catch(() => {})
+    apiFetch(`/api/workerbees/${agent.id}/snapshots`).then((r) => r.json()).then(setSnapshots).catch(() => {})
+    apiFetch(`/api/workerbees/${agent.id}/replay`).then((r) => r.json()).then((f) => { setFrames(f); setReplayIdx(f.length - 1) }).catch(() => {})
   }, [expanded, agent.id])
 
   const viewSnapshot = async (id: string, label: string) => {
-    const { content } = await fetch(`/api/snapshots/${id}/content`).then((r) => r.json())
+    const { content } = await apiFetch(`/api/snapshots/${id}/content`).then((r) => r.json())
     setViewContent({ title: label, text: content })
   }
 
   const viewFrame = async (id: string, label: string) => {
-    const { content } = await fetch(`/api/replay/${id}/content`).then((r) => r.json())
+    const { content } = await apiFetch(`/api/replay/${id}/content`).then((r) => r.json())
     setViewContent({ title: label, text: content })
   }
 

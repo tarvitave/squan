@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
 
 const EVENT_COLOR: Record<string, string> = {
@@ -28,7 +29,7 @@ export function EventStream() {
   const [hasMore, setHasMore] = useState(true)
 
   useEffect(() => {
-    fetch('/api/events?limit=100')
+    apiFetch('/api/events?limit=100')
       .then((r) => r.json())
       .then((data: Array<{ id: string; type: string; payload: Record<string, unknown>; timestamp: string }>) => {
         setHasMore(data.length === 100)
@@ -41,7 +42,7 @@ export function EventStream() {
   }, [pushEvent])
 
   const handleLoadMore = () => {
-    fetch(`/api/events?limit=50&offset=${offset}`)
+    apiFetch(`/api/events?limit=50&offset=${offset}`)
       .then((r) => r.json())
       .then((data: Array<{ id: string; type: string; payload: Record<string, unknown>; timestamp: string }>) => {
         setHasMore(data.length === 50)

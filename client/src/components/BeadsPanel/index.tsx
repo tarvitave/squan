@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
 import type { BeadEntry } from '../../store/index.js'
 
@@ -45,7 +46,7 @@ export function BeadsPanel() {
       if (form.description) body.description = form.description
       if (form.convoyId) body.convoyId = form.convoyId
 
-      const res = await fetch('/api/beads', {
+      const res = await apiFetch('/api/beads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -61,7 +62,7 @@ export function BeadsPanel() {
 
   const handleMarkDone = async (bead: BeadEntry) => {
     try {
-      await fetch(`/api/beads/${bead.id}/status`, {
+      await apiFetch(`/api/beads/${bead.id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'done' }),
@@ -74,7 +75,7 @@ export function BeadsPanel() {
 
   const handleCancel = async (bead: BeadEntry) => {
     try {
-      await fetch(`/api/beads/${bead.id}/status`, {
+      await apiFetch(`/api/beads/${bead.id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'cancelled' }),
@@ -87,10 +88,10 @@ export function BeadsPanel() {
 
   const handleDelete = async (id: string) => {
     try {
-      await fetch(`/api/beads/${id}`, { method: 'DELETE' })
+      await apiFetch(`/api/beads/${id}`, { method: 'DELETE' })
       // Remove from local store by marking cancelled then filtering — store has no removeBead,
       // so update status to a sentinel and rely on filter; simplest is to reload beads.
-      const fresh = await fetch('/api/beads').then((r) => r.json())
+      const fresh = await apiFetch('/api/beads').then((r) => r.json())
       useStore.getState().setBeads(fresh)
     } catch (err) {
       addToast(`Failed to delete bead: ${(err as Error).message}`)
@@ -99,7 +100,7 @@ export function BeadsPanel() {
 
   const handleSaveDeps = async (beadId: string) => {
     try {
-      await fetch(`/api/beads/${beadId}/dependencies`, {
+      await apiFetch(`/api/beads/${beadId}/dependencies`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dependsOn: depsSelection }),
@@ -113,7 +114,7 @@ export function BeadsPanel() {
 
   const handleAssignBead = async (beadId: string, workerBeeId: string) => {
     try {
-      await fetch(`/api/beads/${beadId}/assign`, {
+      await apiFetch(`/api/beads/${beadId}/assign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ workerBeeId }),

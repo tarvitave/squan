@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
 import { TemplatesPanel } from '../TemplatesPanel/index.js'
 import type { Rig } from '../../store/index.js'
@@ -22,7 +23,7 @@ export function RigPanel() {
 
   useEffect(() => {
     const url = activeTownId ? `/api/rigs?townId=${activeTownId}` : '/api/rigs'
-    fetch(url)
+    apiFetch(url)
       .then((r) => r.json())
       .then(setRigs)
       .catch(() => {})
@@ -31,7 +32,7 @@ export function RigPanel() {
   const handleAdd = async () => {
     if (!form.name || !form.localPath) return
     try {
-      const res = await fetch('/api/rigs', {
+      const res = await apiFetch('/api/rigs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, townId: activeTownId ?? undefined }),
@@ -48,7 +49,7 @@ export function RigPanel() {
   const handleSpawn = async (rig: Rig, taskDescription?: string) => {
     setSpawning(rig.id)
     try {
-      const res = await fetch(`/api/rigs/${rig.id}/polecats`, {
+      const res = await apiFetch(`/api/rigs/${rig.id}/polecats`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ taskDescription: taskDescription ?? '' }),
@@ -71,18 +72,18 @@ export function RigPanel() {
 
   const handleSaveRuntime = async (rigId: string) => {
     if (!runtimeEdit) return
-    await fetch(`/api/projects/${rigId}/runtime`, {
+    await apiFetch(`/api/projects/${rigId}/runtime`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ command: runtimeEdit.command, provider: runtimeEdit.provider }),
     })
-    const updated = await fetch('/api/rigs').then((r) => r.json())
+    const updated = await apiFetch('/api/rigs').then((r) => r.json())
     setRigs(updated)
     setRuntimeEdit(null)
   }
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/projects/${id}`, { method: 'DELETE' })
+    await apiFetch(`/api/projects/${id}`, { method: 'DELETE' })
     setRigs(rigs.filter((r) => r.id !== id))
     if (expandedRig === id) setExpandedRig(null)
   }
