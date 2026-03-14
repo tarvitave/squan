@@ -1,25 +1,59 @@
-import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'fs'
+import { mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync, copyFileSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 
 /**
- * Pre-writes ~/.claude/settings.json with the API key so claude starts
- * without showing the interactive login method selection prompt.
- * Safe to call multiple times — merges with existing settings.
+ * Pre-writes Claude Code auth config so claude starts without showing the
+ * interactive login prompt. Handles two config locations:
+ *   ~/.claude/settings.json  — older Claude Code versions
+ *   ~/.claude.json           — newer Claude Code versions
+ *
+ * Also restores ~/.claude.json from backup if it's missing (e.g. after a
+ * Docker container restart wipes files outside the mounted ~/.claude/ volume).
+ *
+ * Safe to call multiple times — merges with existing config.
  */
 export function preconfigureClaudeAuth(apiKey: string): void {
   try {
-    const dir = join(homedir(), '.claude')
-    mkdirSync(dir, { recursive: true })
+    const home = homedir()
+    const claudeDir = join(home, '.claude')
+    mkdirSync(claudeDir, { recursive: true })
 
-    const settingsPath = join(dir, 'settings.json')
-    let existing: Record<string, unknown> = {}
+    // Write ~/.claude/settings.json (older Claude Code)
+    const settingsPath = join(claudeDir, 'settings.json')
+    let existingSettings: Record<string, unknown> = {}
     if (existsSync(settingsPath)) {
-      try { existing = JSON.parse(readFileSync(settingsPath, 'utf8')) } catch { /* ignore */ }
+      try { existingSettings = JSON.parse(readFileSync(settingsPath, 'utf8')) } catch { /* ignore */ }
     }
+    writeFileSync(settingsPath, JSON.stringify({ ...existingSettings, primaryApiKey: apiKey }, null, 2))
 
-    writeFileSync(settingsPath, JSON.stringify({ ...existing, primaryApiKey: apiKey }, null, 2))
+    // Write ~/.claude.json (newer Claude Code)
+    const claudeJsonPath = join(home, '.claude.json')
+    let existingJson: Record<string, unknown> = {}
+    if (existsSync(claudeJsonPath)) {
+      try { existingJson = JSON.parse(readFileSync(claudeJsonPath, 'utf8')) } catch { /* ignore */ }
+    } else {
+      // ~/.claude.json is outside the Docker volume — restore from backup if available
+      existingJson = restoreFromBackup(claudeDir) ?? {}
+    }
+    writeFileSync(claudeJsonPath, JSON.stringify({ ...existingJson, primaryApiKey: apiKey }, null, 2))
   } catch {
     // Non-fatal — claude will still work via ANTHROPIC_API_KEY env var
+  }
+}
+
+function restoreFromBackup(claudeDir: string): Record<string, unknown> | null {
+  try {
+    const backupsDir = join(claudeDir, 'backups')
+    if (!existsSync(backupsDir)) return null
+    const backups = readdirSync(backupsDir)
+      .filter((f) => f.startsWith('.claude.json.backup'))
+      .sort()
+    if (backups.length === 0) return null
+    // Use most recent backup
+    const latest = join(backupsDir, backups[backups.length - 1])
+    return JSON.parse(readFileSync(latest, 'utf8'))
+  } catch {
+    return null
   }
 }
