@@ -3,12 +3,16 @@ import { useStore } from '../store/index.js'
 
 const WS_URL = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`
 
+// Sentinel value written to a terminal subscriber when its PTY session no longer exists
+export const SESSION_DEAD = '\x1b[31m\r\n[session ended — close this pane or create a new terminal]\x1b[0m\r\n'
+
 type DataCallback = (data: string) => void
 
 export function useWebSocket() {
   const ws = useRef<WebSocket | null>(null)
   const queue = useRef<string[]>([])          // messages buffered before connection opens
   const subscribers = useRef<Map<string, DataCallback>>(new Map())
+  const pingTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const pushEvent = useStore((s) => s.pushEvent)
   const addAgent = useStore((s) => s.addAgent)
   const updateAgent = useStore((s) => s.updateAgent)
@@ -33,11 +37,27 @@ export function useWebSocket() {
         // Flush any messages queued while disconnected
         queue.current.forEach((msg) => socket.send(msg))
         queue.current = []
+
+        // Keepalive ping every 30s to prevent NAT/proxy from dropping idle connections
+        if (pingTimer.current) clearInterval(pingTimer.current)
+        pingTimer.current = setInterval(() => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'ping' }))
+          }
+        }, 30_000)
       }
 
       socket.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data)
+
+          if (msg.type === 'pong') return
+
+          if (msg.type === 'session.not_found') {
+            const sid = msg.payload?.sessionId as string | undefined
+            if (sid) subscribers.current.get(sid)?.(SESSION_DEAD)
+            return
+          }
 
           if (msg.type === 'event') {
             const payload = msg.payload
@@ -133,6 +153,7 @@ export function useWebSocket() {
       }
 
       socket.onclose = () => {
+        if (pingTimer.current) { clearInterval(pingTimer.current); pingTimer.current = null }
         // Reconnect after 3s on unexpected close
         reconnectTimer = setTimeout(connect, 3000)
       }
@@ -142,6 +163,7 @@ export function useWebSocket() {
 
     return () => {
       clearTimeout(reconnectTimer)
+      if (pingTimer.current) { clearInterval(pingTimer.current); pingTimer.current = null }
       socket.onclose = null   // prevent reconnect on intentional unmount
       socket.close()
     }

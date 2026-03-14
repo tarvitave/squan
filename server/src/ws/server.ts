@@ -47,10 +47,19 @@ function handleMessage(clientId: string, ws: WebSocket, msg: WsMessage) {
     case 'subscribe': {
       const sessionId = msg.payload?.sessionId as string
       if (!sessionId) return
+      if (!ptyManager.list().includes(sessionId)) {
+        send(ws, { type: 'session.not_found', payload: { sessionId } })
+        return
+      }
       subscriptions.get(clientId)?.add(sessionId)
       ptyManager.subscribe(sessionId, clientId, (data: string) => {
         send(ws, { type: 'event', id: sessionId, payload: { type: 'terminal.data', data } })
       })
+      break
+    }
+
+    case 'ping': {
+      send(ws, { type: 'pong', payload: {} })
       break
     }
 
