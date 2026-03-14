@@ -16,6 +16,11 @@ class PtyManager {
   private sessions = new Map<string, PtySession>()
   private lastOutputAt = new Map<string, Date>()
   private exitCallbacks = new Map<string, (exitCode: number) => void>()
+  private globalExitHandler?: (sessionId: string, exitCode: number) => void
+
+  onAnySessionExit(cb: (sessionId: string, exitCode: number) => void) {
+    this.globalExitHandler = cb
+  }
 
   spawn(opts: {
     id?: string
@@ -62,6 +67,7 @@ class PtyManager {
       this.exitCallbacks.delete(id)
       this.sessions.delete(id)
       this.lastOutputAt.delete(id)
+      this.globalExitHandler?.(id, exitCode ?? 0)
     })
 
     this.sessions.set(id, session)

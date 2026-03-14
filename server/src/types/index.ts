@@ -174,6 +174,9 @@ export type WsMessageType =
   | 'event'
   | 'error'
   | 'ack'
+  | 'ping'
+  | 'pong'
+  | 'session.not_found'
 
 export interface WsMessage {
   type: WsMessageType

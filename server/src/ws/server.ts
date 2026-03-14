@@ -11,8 +11,22 @@ const clients = new Map<string, WebSocket>()
 // Map of clientId → Set of subscribed terminal session IDs
 const subscriptions = new Map<string, Set<string>>()
 
+// Notify all clients subscribed to a session that the session has ended
+export function notifySessionEnded(sessionId: string) {
+  for (const [clientId, sessions] of subscriptions.entries()) {
+    if (sessions.has(sessionId)) {
+      const ws = clients.get(clientId)
+      if (ws) send(ws, { type: 'session.not_found', payload: { sessionId } })
+      sessions.delete(sessionId)
+    }
+  }
+}
+
 export function setupWsServer(httpServer: Server) {
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' })
+
+  // Notify browser clients when a PTY session exits so they see "session ended" instead of a hung cursor
+  ptyManager.onAnySessionExit((sessionId) => notifySessionEnded(sessionId))
 
   wss.on('connection', (ws) => {
     const clientId = uuidv4()
