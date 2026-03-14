@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { apiFetch } from '../../lib/api.js'
 
 interface Metrics {
   projects: number
@@ -15,7 +16,7 @@ export function MetricsPanel() {
 
   const load = () => {
     setLoading(true)
-    fetch('/api/metrics')
+    apiFetch('/api/metrics')
       .then((r) => r.json())
       .then((d) => { setMetrics(d); setLoading(false) })
       .catch(() => setLoading(false))
