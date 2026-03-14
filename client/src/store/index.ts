@@ -254,6 +254,10 @@ export const useStore = create<SquansqState>()(
     {
       name: 'squansq-ui',
       version: 2,
+      migrate: (persisted) => {
+        const p = (persisted ?? {}) as Record<string, unknown>
+        return { token: p.token ?? null, user: p.user ?? null }
+      },
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Record<string, unknown>
         return {

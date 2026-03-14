@@ -5,7 +5,7 @@ export function Footer() {
       <span style={styles.sep}>·</span>
       <a href="/terms.html" target="_blank" rel="noopener noreferrer" style={styles.link}>Terms</a>
       <span style={styles.sep}>·</span>
-      <a href="https://squansq.com/blog" target="_blank" rel="noopener noreferrer" style={styles.link}>Blog</a>
+      <a href="https://squansq.com" target="_blank" rel="noopener noreferrer" style={styles.link}>Blog</a>
       <span style={styles.sep}>·</span>
       <span style={styles.copy}>© {new Date().getFullYear()} Squansq</span>
     </div>
