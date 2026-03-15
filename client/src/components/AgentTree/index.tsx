@@ -59,6 +59,17 @@ export function AgentTree() {
     }
   }
 
+  const handleClearFinished = async () => {
+    const finished = agents.filter((a) => a.status === 'zombie' || a.status === 'done')
+    for (const a of finished) {
+      try {
+        await apiFetch(`/api/workerbees/${a.id}`, { method: 'DELETE' })
+        updateAgent(a.id, { status: 'zombie', sessionId: null })
+        if (selectedAgentId === a.id) setSelectedAgent(null)
+      } catch { /* ignore */ }
+    }
+  }
+
   if (agents.length === 0) {
     return (
       <div style={styles.empty}>
@@ -67,8 +78,15 @@ export function AgentTree() {
     )
   }
 
+  const hasFinished = agents.some((a) => a.status === 'zombie' || a.status === 'done')
+
   return (
     <div style={styles.tree}>
+      {hasFinished && (
+        <div style={styles.clearRow}>
+          <button style={styles.clearBtn} onClick={handleClearFinished}>clear done/zombie</button>
+        </div>
+      )}
       {Object.entries(byProject).map(([projectId, projectAgents]) => (
         <div key={projectId}>
           <div style={styles.rigHeader}>{rigNameById[projectId] ?? projectId}</div>
@@ -130,11 +148,14 @@ function AgentRow({
         </span>
         <span style={styles.agentName} onClick={onToggle}>{agent.name}</span>
         <span style={{ ...styles.agentStatus, color: STATUS_COLOR[agent.status] }}>{agent.status}</span>
-        {agent.sessionId && (
+        {agent.sessionId && agent.status !== 'zombie' && agent.status !== 'done' && (
           <button style={styles.termBtn} onClick={onOpenTerminal} title="Open terminal">⬡</button>
         )}
         {agent.status !== 'done' && agent.status !== 'zombie' && (
           <button style={styles.killBtn} onClick={onKill} title="Kill agent">✕</button>
+        )}
+        {(agent.status === 'zombie' || agent.status === 'done') && (
+          <button style={styles.killBtn} onClick={onKill} title="Remove">✕</button>
         )}
       </div>
 
@@ -301,4 +322,10 @@ const styles = {
   },
   empty: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' },
   emptyText: { color: '#444', fontSize: 12, fontFamily: 'monospace' },
+  clearRow: { padding: '4px 8px', borderBottom: '1px solid #1a1a1a' },
+  clearBtn: {
+    background: 'none', border: '1px solid #2a2a2a', color: '#555',
+    borderRadius: 3, padding: '2px 6px', cursor: 'pointer',
+    fontSize: 9, fontFamily: 'monospace', width: '100%', textAlign: 'left' as const,
+  },
 }

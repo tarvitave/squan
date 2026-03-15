@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { apiFetch } from './lib/api.js'
 import { TabBar } from './components/TabBar/index.js'
 import { PaneGrid } from './components/PaneGrid/index.js'
@@ -32,8 +32,13 @@ export default function App() {
 
   const { connected } = useWebSocket()
 
+  // Refresh agents (and other data) when WebSocket reconnects after a server restart.
+  // This ensures stale session IDs are replaced with current state.
+  const prevConnected = useRef(false)
   useEffect(() => {
-    if (!token) return
+    const justConnected = connected && !prevConnected.current
+    prevConnected.current = connected
+    if (!token || !justConnected) return
     apiFetch('/api/workerbees')
       .then((r) => r.json())
       .then((data: Array<{
@@ -69,11 +74,31 @@ export default function App() {
       .then((r) => r.json())
       .then(setTemplates)
       .catch(() => addToast('Failed to load Templates'))
-  }, [token, setAgents, setReleaseTrains, setAtomicTasks, setTemplates, addToast])
+  }, [token, connected, setAgents, setReleaseTrains, setAtomicTasks, setTemplates, addToast])
+
+  const [sidebarWidth, setSidebarWidth] = useState(240)
+  const dragging = useRef(false)
 
   if (!token) return <AuthPage />
 
   const activeTab = tabs.find((t) => t.id === activeTabId)
+
+  const handleDragStart = (e: React.MouseEvent) => {
+    dragging.current = true
+    const startX = e.clientX
+    const startW = sidebarWidth
+    const onMove = (ev: MouseEvent) => {
+      if (!dragging.current) return
+      setSidebarWidth(Math.max(180, Math.min(600, startW + ev.clientX - startX)))
+    }
+    const onUp = () => {
+      dragging.current = false
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
 
   return (
     <div style={styles.root}>
@@ -82,7 +107,7 @@ export default function App() {
         <div style={styles.offlineBanner}>⚠ reconnecting…</div>
       )}
       {/* Left sidebar */}
-      <div style={styles.sidebar}>
+      <div style={{ ...styles.sidebar, width: sidebarWidth }}>
         <AccountPanel />
         <TownSelector />
         <div style={{ ...styles.sidebarSection, flex: 'none' }}>
@@ -111,6 +136,9 @@ export default function App() {
         </div>
         <Footer />
       </div>
+
+      {/* Resize handle */}
+      <div style={styles.resizeHandle} onMouseDown={handleDragStart} />
 
       {/* Main content area */}
       <div style={styles.main}>
@@ -174,9 +202,8 @@ const styles = {
     overflow: 'hidden',
   },
   sidebar: {
-    width: 220,
     flexShrink: 0,
-    borderRight: '1px solid #2d2d2d',
+    borderRight: 'none',
     display: 'flex',
     flexDirection: 'column' as const,
     overflow: 'hidden',
@@ -234,6 +261,15 @@ const styles = {
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column' as const,
+  },
+  resizeHandle: {
+    width: 4,
+    flexShrink: 0,
+    cursor: 'col-resize',
+    background: 'transparent',
+    borderRight: '1px solid #2d2d2d',
+    transition: 'background 0.1s',
+    ':hover': { background: '#569cd6' },
   },
   offlineBanner: {
     position: 'fixed' as const,
