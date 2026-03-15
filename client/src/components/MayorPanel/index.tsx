@@ -14,6 +14,8 @@ export function MayorPanel() {
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
   const activeTabId = useStore((s) => s.activeTabId)
+  const setActiveTab = useStore((s) => s.setActiveTab)
+  const setMainView = useStore((s) => s.setMainView)
   const addPaneToTab = useStore((s) => s.addPaneToTab)
   const addTab = useStore((s) => s.addTab)
   const tabs = useStore((s) => s.tabs)
@@ -32,14 +34,20 @@ export function MayorPanel() {
   }, [fetchMayor])
 
   const openMayorTerminal = useCallback((sessionId: string) => {
-    const hasSession = tabs.some((t) => t.panes.includes(sessionId))
-    if (hasSession) return
+    setMainView('terminals')
+    // If already open in some tab, switch to that tab
+    const existingTab = tabs.find((t) => t.panes.includes(sessionId))
+    if (existingTab) {
+      setActiveTab(existingTab.id)
+      return
+    }
+    // Otherwise add to current tab (or create one)
     if (activeTabId) {
       addPaneToTab(activeTabId, sessionId)
     } else {
       addTab('Mayor', [sessionId])
     }
-  }, [tabs, activeTabId, addPaneToTab, addTab])
+  }, [tabs, activeTabId, setMainView, setActiveTab, addPaneToTab, addTab])
 
   const handleStart = async () => {
     setLoading(true)
