@@ -3,6 +3,11 @@ import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
 import type { TownEntry } from '../../store/index.js'
 
+const SQUANSQ_ROOT = 'C:\\Users\\colin\\squansq'
+function autoPath(name: string) {
+  return `${SQUANSQ_ROOT}\\${name.toLowerCase().replace(/\s+/g, '-')}`
+}
+
 export function TownSelector() {
   const towns = useStore((s) => s.towns)
   const activeTownId = useStore((s) => s.activeTownId)
@@ -75,7 +80,13 @@ export function TownSelector() {
             style={styles.input}
             placeholder="Namespace name"
             value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            onChange={(e) => {
+              const name = e.target.value
+              setForm((f) => ({
+                name,
+                path: f.path === autoPath(f.name) ? autoPath(name) : f.path,
+              }))
+            }}
           />
           <input
             style={styles.input}
@@ -89,7 +100,7 @@ export function TownSelector() {
           </div>
         </div>
       ) : (
-        <button style={styles.newBtn} onClick={() => setShowForm(true)} title="New namespace">+</button>
+        <button style={styles.newBtn} onClick={() => { setForm({ name: '', path: autoPath('') }); setShowForm(true) }} title="New namespace">+</button>
       )}
     </div>
   )

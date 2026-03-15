@@ -31,7 +31,11 @@ export const mayorLeeManager = {
     }
 
     const id = row?.id ?? uuidv4()
-    const repoPath = DEFAULT_REPO_PATH
+
+    // Use the town's path if set, otherwise fall back to env var
+    const townRow = await db.execute({ sql: 'SELECT path FROM towns WHERE id = ?', args: [townId] })
+    const townPath = (townRow.rows[0] as unknown as { path?: string } | undefined)?.path
+    const repoPath = townPath || DEFAULT_REPO_PATH
 
     if (apiKey) preconfigureClaudeAuth(apiKey)
 
@@ -141,16 +145,14 @@ function bootstrapMayorEnv(repoPath: string) {
       'utf8'
     )
 
-    // Write MCP server config for Claude CLI
-    const claudeDir = path.join(repoPath, '.claude')
-    mkdirSync(claudeDir, { recursive: true })
+    // Write MCP server config for Claude CLI (.mcp.json at project root)
     writeFileSync(
-      path.join(claudeDir, 'mcp.json'),
+      path.join(repoPath, '.mcp.json'),
       JSON.stringify({
         mcpServers: {
           squansq: {
+            type: 'http',
             url: `${SERVER_URL}/api/mcp`,
-            transport: 'http',
           },
         },
       }, null, 2),
