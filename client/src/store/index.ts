@@ -303,7 +303,10 @@ export const useStore = create<SquansqState>()(
 
       events: [],
       pushEvent: (event) =>
-        set((s) => ({ events: [event, ...s.events].slice(0, 500) })),
+        set((s) => {
+          if (s.events.some((e) => e.id === event.id)) return s
+          return { events: [event, ...s.events].slice(0, 500) }
+        }),
 
       towns: [],
       activeTownId: null,
@@ -329,7 +332,9 @@ export const useStore = create<SquansqState>()(
           ...current,
           token: (p.token ?? null) as string | null,
           user: (p.user ?? null) as typeof current.user,
-          tabs: Array.isArray(p.tabs) ? p.tabs as typeof current.tabs : current.tabs,
+          tabs: Array.isArray(p.tabs)
+            ? (p.tabs as typeof current.tabs).map((t) => ({ ...t, panes: t.panes.filter((pane) => typeof pane === 'string') }))
+            : current.tabs,
           activeTabId: typeof p.activeTabId === 'string' ? p.activeTabId : current.activeTabId,
           mainView: p.mainView ? p.mainView as typeof current.mainView : current.mainView,
           towns: Array.isArray(p.towns) ? p.towns as typeof current.towns : current.towns,

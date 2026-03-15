@@ -34,13 +34,25 @@ class PtyManager {
     ownerUserId?: string
   }): string {
     const id = opts.id ?? uuidv4()
-    const shell = opts.shell ?? (process.platform === 'win32' ? 'cmd.exe' : 'bash')
+    const requestedShell = opts.shell ?? (process.platform === 'win32' ? 'cmd.exe' : 'bash')
+    const requestedArgs = opts.args ?? []
 
-    const proc = pty.spawn(shell, opts.args ?? [], {
+    // On Windows, node-pty cannot spawn .cmd/.bat files directly -- wrap with cmd.exe /c
+    let shell: string
+    let args: string[]
+    if (process.platform === 'win32' && requestedShell !== 'cmd.exe' && !requestedShell.endsWith('.exe')) {
+      shell = 'cmd.exe'
+      args = ['/c', requestedShell, ...requestedArgs]
+    } else {
+      shell = requestedShell
+      args = requestedArgs
+    }
+
+    const proc = pty.spawn(shell, args, {
       name: 'xterm-256color',
       cols: opts.cols ?? 120,
       rows: opts.rows ?? 30,
-      cwd: opts.cwd ?? process.env.HOME,
+      cwd: opts.cwd ?? process.env.USERPROFILE ?? process.env.HOME,
       env: { ...process.env, ...(opts.env ?? {}) } as Record<string, string>,
     })
 

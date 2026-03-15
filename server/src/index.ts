@@ -1,4 +1,10 @@
+import 'dotenv/config'
 import express from 'express'
+
+// Prevent unhandled rejections from crashing the server (Node 15+ throws by default)
+process.on('unhandledRejection', (reason) => {
+  console.error('[server] Unhandled rejection:', reason)
+})
 import { createServer } from 'http'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { z } from 'zod'
@@ -66,8 +72,10 @@ app.use('/api', requireAuth)
 
 // --- Current user ---
 app.get('/api/auth/me', async (_req, res) => {
-  const user = await getUserById(res.locals.userId as string)
-  res.json(user)
+  try {
+    const user = await getUserById(res.locals.userId as string)
+    res.json(user)
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
 app.put('/api/auth/api-key', async (req, res) => {
@@ -87,8 +95,10 @@ const ProjectSchema = z.object({
 
 // Towns
 app.get('/api/towns', async (req, res) => {
-  const userId = res.locals.userId as string
-  res.json(await townManager.list(userId))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await townManager.list(userId))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
 app.post('/api/towns', async (req, res) => {
@@ -101,13 +111,17 @@ app.post('/api/towns', async (req, res) => {
 })
 
 app.get('/api/projects', async (req, res) => {
-  const userId = res.locals.userId as string
-  res.json(await rigManager.listByTown('default', userId))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await rigManager.listByTown('default', userId))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 app.get('/api/rigs', async (req, res) => {
-  const userId = res.locals.userId as string
-  const townId = (req.query.townId as string) ?? (await townManager.ensureDefault()).id
-  res.json(await rigManager.listByTown(townId, userId))
+  try {
+    const userId = res.locals.userId as string
+    const townId = (req.query.townId as string) ?? (await townManager.ensureDefault()).id
+    res.json(await rigManager.listByTown(townId, userId))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
 app.post('/api/projects', async (req, res) => {
@@ -151,17 +165,23 @@ app.delete('/api/projects/:id', async (req, res) => {
 const SpawnSchema = z.object({ taskDescription: z.string().optional(), task: z.string().optional() })
 
 app.get('/api/workerbees', async (req, res) => {
-  const userId = res.locals.userId as string
-  res.json(await workerBeeManager.listAll(userId))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await workerBeeManager.listAll(userId))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 app.get('/api/polecats', async (req, res) => {
-  const userId = res.locals.userId as string
-  res.json(await workerBeeManager.listAll(userId))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await workerBeeManager.listAll(userId))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
 app.get('/api/projects/:projectId/workerbees', async (req, res) => {
-  const userId = res.locals.userId as string
-  res.json(await workerBeeManager.listByProject(req.params.projectId, userId))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await workerBeeManager.listByProject(req.params.projectId, userId))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
 app.post('/api/projects/:projectId/workerbees', async (req, res) => {
@@ -275,44 +295,60 @@ app.get('/api/replay/:frameId/content', async (req, res) => {
 
 // --- Mayor Lee ---
 app.post('/api/mayor-lee/start', async (req, res) => {
-  const userId = res.locals.userId as string
-  const user = await getUserById(userId)
-  res.json(await mayorLeeManager.start(req.body.townId ?? 'default', user?.anthropicApiKey ?? undefined, userId))
+  try {
+    const userId = res.locals.userId as string
+    const user = await getUserById(userId)
+    res.json(await mayorLeeManager.start(req.body.townId ?? 'default', user?.anthropicApiKey ?? undefined, userId))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 app.post('/api/mayor/start', async (req, res) => {  // backwards compat
-  const userId = res.locals.userId as string
-  const user = await getUserById(userId)
-  res.json(await mayorLeeManager.start(req.body.townId ?? 'default', user?.anthropicApiKey ?? undefined, userId))
+  try {
+    const userId = res.locals.userId as string
+    const user = await getUserById(userId)
+    res.json(await mayorLeeManager.start(req.body.townId ?? 'default', user?.anthropicApiKey ?? undefined, userId))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 app.post('/api/mayor-lee/stop', async (req, res) => {
-  const userId = res.locals.userId as string
-  await mayorLeeManager.stop(req.body.townId ?? 'default', userId)
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    await mayorLeeManager.stop(req.body.townId ?? 'default', userId)
+    res.json({ ok: true })
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 app.post('/api/mayor/stop', async (req, res) => {
-  const userId = res.locals.userId as string
-  await mayorLeeManager.stop(req.body.townId ?? 'default', userId)
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    await mayorLeeManager.stop(req.body.townId ?? 'default', userId)
+    res.json({ ok: true })
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
 app.post('/api/mayor-lee/message', async (req, res) => {
-  const userId = res.locals.userId as string
-  await mayorLeeManager.sendMessage(req.body.townId ?? 'default', req.body.message, userId)
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    await mayorLeeManager.sendMessage(req.body.townId ?? 'default', req.body.message, userId)
+    res.json({ ok: true })
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 app.post('/api/mayor/message', async (req, res) => {  // backwards compat
-  const userId = res.locals.userId as string
-  await mayorLeeManager.sendMessage(req.body.townId ?? 'default', req.body.message, userId)
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    await mayorLeeManager.sendMessage(req.body.townId ?? 'default', req.body.message, userId)
+    res.json({ ok: true })
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
 app.get('/api/mayor-lee', async (req, res) => {
-  const userId = res.locals.userId as string
-  res.json(await mayorLeeManager.get('default', userId))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await mayorLeeManager.get('default', userId))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 app.get('/api/mayor', async (req, res) => {  // backwards compat
-  const userId = res.locals.userId as string
-  res.json(await mayorLeeManager.get('default', userId))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await mayorLeeManager.get('default', userId))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
 // --- Release Trains (formerly Convoys) ---
@@ -326,12 +362,16 @@ const ReleaseTrainSchema = z.object({
 }).refine((d) => d.projectId || d.rigId, { message: 'projectId or rigId required' })
 
 app.get('/api/release-trains', async (req, res) => {
-  const userId = res.locals.userId as string
-  res.json(await releaseTrainManager.listAll(userId))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await releaseTrainManager.listAll(userId))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 app.get('/api/convoys', async (req, res) => {  // backward compat
-  const userId = res.locals.userId as string
-  res.json(await releaseTrainManager.listAll(userId))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await releaseTrainManager.listAll(userId))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
 app.post('/api/release-trains', async (req, res) => {
@@ -541,9 +581,11 @@ const HookSchema = z.object({
 })
 
 app.get('/api/hooks', async (req, res) => {
-  const userId = res.locals.userId as string
-  const { projectId } = req.query
-  res.json(projectId ? await hookManager.listByProject(projectId as string, userId) : await hookManager.listAll(userId))
+  try {
+    const userId = res.locals.userId as string
+    const { projectId } = req.query
+    res.json(projectId ? await hookManager.listByProject(projectId as string, userId) : await hookManager.listAll(userId))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
 app.post('/api/hooks', async (req, res) => {
@@ -616,20 +658,24 @@ const AtomicTaskSchema = z.object({
 })
 
 app.get('/api/atomictasks', async (req, res) => {
-  const userId = res.locals.userId as string
-  const { projectId, releaseTrainId, convoyId } = req.query
-  const rtId = (releaseTrainId ?? convoyId) as string | undefined
-  if (rtId) return res.json(await atomicTaskManager.listByConvoy(rtId, userId))
-  if (projectId) return res.json(await atomicTaskManager.listByProject(projectId as string, userId))
-  res.json(await atomicTaskManager.listAll(userId))
+  try {
+    const userId = res.locals.userId as string
+    const { projectId, releaseTrainId, convoyId } = req.query
+    const rtId = (releaseTrainId ?? convoyId) as string | undefined
+    if (rtId) return res.json(await atomicTaskManager.listByConvoy(rtId, userId))
+    if (projectId) return res.json(await atomicTaskManager.listByProject(projectId as string, userId))
+    res.json(await atomicTaskManager.listAll(userId))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 app.get('/api/beads', async (req, res) => {  // backward compat
-  const userId = res.locals.userId as string
-  const { projectId, releaseTrainId, convoyId } = req.query
-  const rtId = (releaseTrainId ?? convoyId) as string | undefined
-  if (rtId) return res.json(await atomicTaskManager.listByConvoy(rtId, userId))
-  if (projectId) return res.json(await atomicTaskManager.listByProject(projectId as string, userId))
-  res.json(await atomicTaskManager.listAll(userId))
+  try {
+    const userId = res.locals.userId as string
+    const { projectId, releaseTrainId, convoyId } = req.query
+    const rtId = (releaseTrainId ?? convoyId) as string | undefined
+    if (rtId) return res.json(await atomicTaskManager.listByConvoy(rtId, userId))
+    if (projectId) return res.json(await atomicTaskManager.listByProject(projectId as string, userId))
+    res.json(await atomicTaskManager.listAll(userId))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
 app.post('/api/atomictasks', async (req, res) => {
@@ -758,9 +804,11 @@ const TemplateSchema = z.object({
 })
 
 app.get('/api/templates', async (req, res) => {
-  const userId = res.locals.userId as string
-  const { projectId } = req.query
-  res.json(projectId ? await templateManager.listByProject(projectId as string, userId) : await templateManager.listAll(userId))
+  try {
+    const userId = res.locals.userId as string
+    const { projectId } = req.query
+    res.json(projectId ? await templateManager.listByProject(projectId as string, userId) : await templateManager.listAll(userId))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
 app.post('/api/templates', async (req, res) => {
@@ -827,23 +875,25 @@ app.get('/api/terminals', (req, res) => {
 })
 
 app.post('/api/terminals', async (req, res) => {
-  const userId = res.locals.userId as string
-  const user = await getUserById(userId)
-  const env: Record<string, string> = {}
-  if (user?.anthropicApiKey) {
-    preconfigureClaudeAuth(user.anthropicApiKey)
-    env.ANTHROPIC_API_KEY = user.anthropicApiKey
-  }
-  const id = ptyManager.spawn({
-    shell: req.body.shell ?? (process.env.TERMINAL_COMMAND ?? 'claude'),
-    args: Array.isArray(req.body.args) ? req.body.args : undefined,
-    cwd: req.body.cwd,
-    cols: req.body.cols ?? 120,
-    rows: req.body.rows ?? 30,
-    env,
-    ownerUserId: userId,
-  })
-  res.json({ id })
+  try {
+    const userId = res.locals.userId as string
+    const user = await getUserById(userId)
+    const env: Record<string, string> = {}
+    if (user?.anthropicApiKey) {
+      preconfigureClaudeAuth(user.anthropicApiKey)
+      env.ANTHROPIC_API_KEY = user.anthropicApiKey
+    }
+    const id = ptyManager.spawn({
+      shell: req.body.shell ?? (process.env.TERMINAL_COMMAND ?? 'claude'),
+      args: Array.isArray(req.body.args) ? req.body.args : undefined,
+      cwd: req.body.cwd,
+      cols: req.body.cols ?? 120,
+      rows: req.body.rows ?? 30,
+      env,
+      ownerUserId: userId,
+    })
+    res.json({ id })
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
 app.delete('/api/terminals/:id', (req, res) => {
