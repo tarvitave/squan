@@ -17,7 +17,7 @@ import { snapshotManager, replayManager, startSnapshotScheduler } from './snapsh
 import { handleMcpCall, handleMcpToolsList } from './mcp/server.js'
 import { getDb, migrate } from './db/index.js'
 import { register, login, getUserById, updateApiKey, requireAuth } from './auth/index.js'
-import { preconfigureClaudeAuth } from './claude-auth.js'
+import { preconfigureClaudeAuth, restoreClaudeConfigOnStartup } from './claude-auth.js'
 
 const app = express()
 app.use(express.json())
@@ -961,6 +961,7 @@ const PORT = process.env.PORT ?? 3001
 const httpServer = createServer(app)
 
 setupWsServer(httpServer)
+restoreClaudeConfigOnStartup()
 
 migrate().then(() => {
   startWitness()

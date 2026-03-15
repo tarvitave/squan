@@ -42,6 +42,22 @@ export function preconfigureClaudeAuth(apiKey: string): void {
   }
 }
 
+export function restoreClaudeConfigOnStartup(): void {
+  try {
+    const home = homedir()
+    const claudeJsonPath = join(home, '.claude.json')
+    if (!existsSync(claudeJsonPath)) {
+      const backup = restoreFromBackup(join(home, '.claude'))
+      if (backup) {
+        writeFileSync(claudeJsonPath, JSON.stringify(backup, null, 2))
+        console.log('[claude-auth] Restored ~/.claude.json from backup')
+      }
+    }
+  } catch {
+    // non-fatal
+  }
+}
+
 function restoreFromBackup(claudeDir: string): Record<string, unknown> | null {
   try {
     const backupsDir = join(claudeDir, 'backups')
