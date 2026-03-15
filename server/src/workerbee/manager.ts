@@ -64,6 +64,7 @@ export const workerBeeManager = {
 
     const sessionId = ptyManager.spawn({
       shell: command,
+      args: ['--dangerously-skip-permissions'],
       cwd: worktreePath,
       env: {
         SQUANSQ_WORKERBEE: name,
@@ -86,6 +87,7 @@ export const workerBeeManager = {
 
     // --- Auto-status on PTY exit ---
     ptyManager.onSessionExit(sessionId, (exitCode) => {
+      console.log(`[WorkerBee] ${name} PTY exited with code ${exitCode}`)
       this.getById(id).then((bee) => {
         if (bee && (bee.status === 'working' || bee.status === 'idle')) {
           // Clean exit → done, non-zero → zombie (witness may also catch this)

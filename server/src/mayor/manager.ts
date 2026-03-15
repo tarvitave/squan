@@ -53,6 +53,7 @@ export const mayorLeeManager = {
 
     const sessionId = ptyManager.spawn({
       shell: baseCommand,
+      args: ['--dangerously-skip-permissions'],
       cwd: repoPath,
       env,
       ownerUserId: userId,

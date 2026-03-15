@@ -67,6 +67,10 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, ts: new Date().toISOString() })
 })
 
+// MCP — public (Mayor Lee calls this server-side without a user token)
+app.get('/api/mcp/tools', handleMcpToolsList)
+app.post('/api/mcp', handleMcpCall)
+
 // --- Auth middleware for all routes below ---
 app.use('/api', requireAuth)
 
@@ -907,10 +911,6 @@ app.delete('/api/terminals/:id', (req, res) => {
   res.json({ ok: true })
 })
 
-// --- MCP Server ---
-app.get('/api/mcp/tools', handleMcpToolsList)
-app.post('/api/mcp', handleMcpCall)
-
 // --- Webhooks (GitHub/GitLab) ---
 app.post('/api/webhooks/github', express.raw({ type: 'application/json' }), async (req, res) => {
   const event = req.headers['x-github-event'] as string
@@ -1014,7 +1014,18 @@ const httpServer = createServer(app)
 setupWsServer(httpServer)
 restoreClaudeConfigOnStartup()
 
-migrate().then(() => {
+migrate().then(async () => {
+  // On startup, WorkerBees in transient states have dead PTY sessions (in-memory only).
+  // Mark them as zombie so the UI doesn't show "[session ended]" for stale entries.
+  const db = getDb()
+  const staleResult = await db.execute({
+    sql: `UPDATE workerbees SET status = 'zombie', updated_at = datetime('now') WHERE status IN ('working', 'idle', 'stalled')`,
+    args: [],
+  })
+  if (staleResult.rowsAffected > 0) {
+    console.log(`[startup] Marked ${staleResult.rowsAffected} stale WorkerBee(s) as zombie`)
+  }
+
   startWitness()
   startSnapshotScheduler(() => workerBeeManager.listAll())
   httpServer.listen(PORT, () => {
