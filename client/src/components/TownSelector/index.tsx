@@ -30,7 +30,7 @@ export function TownSelector() {
     apiFetch(`/api/rigs?townId=${id}`)
       .then((r) => r.json())
       .then(setRigs)
-      .catch(() => addToast('Failed to load projects for town'))
+      .catch(() => addToast('Failed to load projects for namespace'))
   }
 
   const handleCreate = async () => {
@@ -48,7 +48,7 @@ export function TownSelector() {
       setForm({ name: '', path: '' })
       setShowForm(false)
     } catch (err) {
-      addToast(`Failed to create town: ${(err as Error).message}`)
+      addToast(`Failed to create namespace: ${(err as Error).message}`)
     }
   }
 
@@ -73,7 +73,7 @@ export function TownSelector() {
         <div style={styles.form}>
           <input
             style={styles.input}
-            placeholder="Town name"
+            placeholder="Namespace name"
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
           />
@@ -89,7 +89,7 @@ export function TownSelector() {
           </div>
         </div>
       ) : (
-        <button style={styles.newBtn} onClick={() => setShowForm(true)} title="New town">+</button>
+        <button style={styles.newBtn} onClick={() => setShowForm(true)} title="New namespace">+</button>
       )}
     </div>
   )

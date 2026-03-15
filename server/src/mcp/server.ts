@@ -132,7 +132,7 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
       return { ok: true }
     }
     case 'list_projects': {
-      return rigManager.listByTown('default')
+      return rigManager.listAll()
     }
     case 'list_release_trains': {
       const all = await releaseTrainManager.listAll()
@@ -207,6 +207,22 @@ export async function handleMcpCall(req: Request, res: Response) {
 
   if (jsonrpc !== '2.0') {
     return res.status(400).json({ jsonrpc: '2.0', error: { code: -32600, message: 'Invalid Request' }, id: null })
+  }
+
+  if (method === 'initialize') {
+    return res.json({
+      jsonrpc: '2.0',
+      result: {
+        protocolVersion: params?.protocolVersion ?? '2024-11-05',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'squansq', version: '1.0.0' },
+      },
+      id,
+    })
+  }
+
+  if (method === 'notifications/initialized') {
+    return res.status(204).end()
   }
 
   if (method === 'tools/list') {

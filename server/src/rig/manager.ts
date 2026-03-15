@@ -30,6 +30,11 @@ export const rigManager = {
     return row ? toModel(row) : null
   },
 
+  async listAll(): Promise<Rig[]> {
+    const result = await getDb().execute({ sql: 'SELECT * FROM rigs', args: [] })
+    return result.rows.map((r) => toModel(r as unknown as DbRig))
+  },
+
   async listByTown(townId: string, userId?: string): Promise<Rig[]> {
     const db = getDb()
     if (userId) {

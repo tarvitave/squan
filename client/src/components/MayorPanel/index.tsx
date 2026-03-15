@@ -19,6 +19,9 @@ export function MayorPanel() {
   const addPaneToTab = useStore((s) => s.addPaneToTab)
   const addTab = useStore((s) => s.addTab)
   const tabs = useStore((s) => s.tabs)
+  const activeTownId = useStore((s) => s.activeTownId)
+  const towns = useStore((s) => s.towns)
+  const activeNamespace = towns.find((t) => t.id === activeTownId)
 
   const fetchMayor = useCallback(async () => {
     try {
@@ -54,7 +57,7 @@ export function MayorPanel() {
     try {
       const res = await apiFetch('/api/mayor/start', {
         method: 'POST',
-        body: JSON.stringify({ townId: 'default' }),
+        body: JSON.stringify({ townId: activeTownId ?? 'default' }),
       })
       const data = await res.json()
       setMayor(data)
@@ -69,7 +72,7 @@ export function MayorPanel() {
     try {
       await apiFetch('/api/mayor/stop', {
         method: 'POST',
-        body: JSON.stringify({ townId: 'default' }),
+        body: JSON.stringify({ townId: activeTownId ?? 'default' }),
       })
       await fetchMayor()
     } finally {
@@ -103,7 +106,9 @@ export function MayorPanel() {
     <div style={styles.panel}>
       <div style={styles.row}>
         <span style={{ ...styles.dot, background: isRunning ? '#4ec9b0' : '#444' }} />
-        <span style={styles.label}>Mayor Lee</span>
+        <span style={styles.label}>
+          Mayor Lee{activeNamespace ? <span style={styles.namespace}> · {activeNamespace.name}</span> : null}
+        </span>
         <span style={{ ...styles.status, color: isRunning ? '#4ec9b0' : '#555' }}>
           {isRunning ? 'running' : 'stopped'}
         </span>
@@ -173,6 +178,10 @@ const styles = {
     color: '#d4d4d4',
     fontFamily: 'monospace',
     flex: 1,
+  },
+  namespace: {
+    color: '#569cd6',
+    fontSize: 11,
   },
   status: {
     fontSize: 10,
