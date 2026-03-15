@@ -128,6 +128,7 @@ interface SquansqState {
   setAgents: (agents: Agent[]) => void
   addAgent: (agent: Agent) => void
   updateAgent: (id: string, patch: Partial<Agent>) => void
+  removeAgent: (id: string) => void
   selectedAgentId: string | null
   setSelectedAgent: (id: string | null) => void
 
@@ -243,6 +244,7 @@ export const useStore = create<SquansqState>()(
       addAgent: (agent) => set((s) => ({ agents: [...s.agents.filter((a) => a.id !== agent.id), agent] })),
       updateAgent: (id, patch) =>
         set((s) => ({ agents: s.agents.map((a) => (a.id === id ? { ...a, ...patch } : a)) })),
+      removeAgent: (id) => set((s) => ({ agents: s.agents.filter((a) => a.id !== id) })),
       selectedAgentId: null,
       setSelectedAgent: (selectedAgentId) => set({ selectedAgentId }),
 

@@ -32,13 +32,7 @@ export default function App() {
 
   const { connected } = useWebSocket()
 
-  // Refresh agents (and other data) when WebSocket reconnects after a server restart.
-  // This ensures stale session IDs are replaced with current state.
-  const prevConnected = useRef(false)
-  useEffect(() => {
-    const justConnected = connected && !prevConnected.current
-    prevConnected.current = connected
-    if (!token || !justConnected) return
+  const loadData = () => {
     apiFetch('/api/workerbees')
       .then((r) => r.json())
       .then((data: Array<{
@@ -58,23 +52,29 @@ export default function App() {
           branch: p.branch ?? '',
         })))
       )
-      .catch(() => addToast('Failed to load WorkerBees'))
+      .catch(() => {})
 
-    apiFetch('/api/release-trains')
-      .then((r) => r.json())
-      .then(setReleaseTrains)
-      .catch(() => addToast('Failed to load Release Trains'))
+    apiFetch('/api/release-trains').then((r) => r.json()).then(setReleaseTrains).catch(() => {})
+    apiFetch('/api/atomictasks').then((r) => r.json()).then(setAtomicTasks).catch(() => {})
+    apiFetch('/api/templates').then((r) => r.json()).then(setTemplates).catch(() => {})
+  }
 
-    apiFetch('/api/atomictasks')
-      .then((r) => r.json())
-      .then(setAtomicTasks)
-      .catch(() => addToast('Failed to load AtomicTasks'))
+  // Initial load on login
+  useEffect(() => {
+    if (!token) return
+    loadData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token])
 
-    apiFetch('/api/templates')
-      .then((r) => r.json())
-      .then(setTemplates)
-      .catch(() => addToast('Failed to load Templates'))
-  }, [token, connected, setAgents, setReleaseTrains, setAtomicTasks, setTemplates, addToast])
+  // Reload when WebSocket reconnects (clears stale session IDs after server restart)
+  const prevConnected = useRef(false)
+  useEffect(() => {
+    const justReconnected = connected && !prevConnected.current
+    prevConnected.current = connected
+    if (!token || !justReconnected) return
+    loadData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, connected])
 
   const [sidebarWidth, setSidebarWidth] = useState(240)
   const dragging = useRef(false)

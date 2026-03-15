@@ -30,6 +30,7 @@ export function AgentTree() {
   const activeTabId = useStore((s) => s.activeTabId)
   const tabs = useStore((s) => s.tabs)
   const updateAgent = useStore((s) => s.updateAgent)
+  const removeAgent = useStore((s) => s.removeAgent)
   const selectedAgentId = useStore((s) => s.selectedAgentId)
   const setSelectedAgent = useStore((s) => s.setSelectedAgent)
   const addToast = useStore((s) => s.addToast)
@@ -52,7 +53,7 @@ export function AgentTree() {
   const handleKill = async (id: string) => {
     try {
       await apiFetch(`/api/workerbees/${id}`, { method: 'DELETE' })
-      updateAgent(id, { status: 'zombie', sessionId: null })
+      removeAgent(id)
       if (selectedAgentId === id) setSelectedAgent(null)
     } catch (err) {
       addToast(`Failed to kill WorkerBee: ${(err as Error).message}`)
@@ -61,13 +62,15 @@ export function AgentTree() {
 
   const handleClearFinished = async () => {
     const finished = agents.filter((a) => a.status === 'zombie' || a.status === 'done')
-    for (const a of finished) {
-      try {
-        await apiFetch(`/api/workerbees/${a.id}`, { method: 'DELETE' })
-        updateAgent(a.id, { status: 'zombie', sessionId: null })
-        if (selectedAgentId === a.id) setSelectedAgent(null)
-      } catch { /* ignore */ }
-    }
+    await Promise.allSettled(
+      finished.map((a) =>
+        apiFetch(`/api/workerbees/${a.id}`, { method: 'DELETE' })
+          .then(() => {
+            removeAgent(a.id)
+            if (selectedAgentId === a.id) setSelectedAgent(null)
+          })
+      )
+    )
   }
 
   if (agents.length === 0) {
