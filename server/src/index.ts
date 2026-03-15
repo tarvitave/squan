@@ -86,110 +86,169 @@ const ProjectSchema = z.object({
 })
 
 // Towns
-app.get('/api/towns', async (_req, res) => {
-  res.json(await townManager.list())
+app.get('/api/towns', async (req, res) => {
+  const userId = res.locals.userId as string
+  res.json(await townManager.list(userId))
 })
 
 app.post('/api/towns', async (req, res) => {
   try {
+    const userId = res.locals.userId as string
     const { name, path } = req.body
     if (!name || !path) return res.status(400).json({ error: 'name and path required' })
-    res.json(await townManager.create(name, path))
+    res.json(await townManager.create(name, path, userId))
   } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
-app.get('/api/projects', async (_req, res) => {
-  res.json(await rigManager.listByTown('default'))
+app.get('/api/projects', async (req, res) => {
+  const userId = res.locals.userId as string
+  res.json(await rigManager.listByTown('default', userId))
 })
 app.get('/api/rigs', async (req, res) => {
+  const userId = res.locals.userId as string
   const townId = (req.query.townId as string) ?? (await townManager.ensureDefault()).id
-  res.json(await rigManager.listByTown(townId))
+  res.json(await rigManager.listByTown(townId, userId))
 })
 
 app.post('/api/projects', async (req, res) => {
   try {
+    const userId = res.locals.userId as string
     const { name, repoUrl, localPath } = validate(ProjectSchema, req.body)
-    res.json(await rigManager.add('default', name, repoUrl ?? '', localPath))
+    res.json(await rigManager.add('default', name, repoUrl ?? '', localPath, userId))
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 app.post('/api/rigs', async (req, res) => {
   try {
+    const userId = res.locals.userId as string
     const { name, repoUrl, localPath, townId: bodyTownId } = validate(ProjectSchema, req.body)
     const townId = bodyTownId ?? (await townManager.ensureDefault()).id
-    res.json(await rigManager.add(townId, name, repoUrl ?? '', localPath))
+    res.json(await rigManager.add(townId, name, repoUrl ?? '', localPath, userId))
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
 app.patch('/api/projects/:id/runtime', async (req, res) => {
   try {
-    res.json(await rigManager.setRuntime(req.params.id, req.body))
-  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
+    const userId = res.locals.userId as string
+    res.json(await rigManager.setRuntime(req.params.id, req.body, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 
 app.delete('/api/projects/:id', async (req, res) => {
-  await rigManager.remove(req.params.id)
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    await rigManager.remove(req.params.id, userId)
+    res.json({ ok: true })
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 
 // --- WorkerBees ---
 const SpawnSchema = z.object({ taskDescription: z.string().optional(), task: z.string().optional() })
 
-app.get('/api/workerbees', async (_req, res) => {
-  res.json(await workerBeeManager.listAll())
+app.get('/api/workerbees', async (req, res) => {
+  const userId = res.locals.userId as string
+  res.json(await workerBeeManager.listAll(userId))
 })
-app.get('/api/polecats', async (_req, res) => {
-  res.json(await workerBeeManager.listAll())
+app.get('/api/polecats', async (req, res) => {
+  const userId = res.locals.userId as string
+  res.json(await workerBeeManager.listAll(userId))
 })
 
 app.get('/api/projects/:projectId/workerbees', async (req, res) => {
-  res.json(await workerBeeManager.listByProject(req.params.projectId))
+  const userId = res.locals.userId as string
+  res.json(await workerBeeManager.listByProject(req.params.projectId, userId))
 })
 
 app.post('/api/projects/:projectId/workerbees', async (req, res) => {
   try {
+    const userId = res.locals.userId as string
+    // Verify project belongs to this user
+    const project = await rigManager.getById(req.params.projectId)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
+    if (project.userId && project.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
     const { taskDescription, task } = validate(SpawnSchema, req.body)
-    const user = await getUserById(res.locals.userId as string)
+    const user = await getUserById(userId)
     if (user?.anthropicApiKey) preconfigureClaudeAuth(user.anthropicApiKey)
-    res.json(await workerBeeManager.spawn(req.params.projectId, taskDescription ?? task))
+    res.json(await workerBeeManager.spawn(req.params.projectId, taskDescription ?? task, userId))
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 app.post('/api/rigs/:rigId/polecats', async (req, res) => {  // backwards compat
   try {
+    const userId = res.locals.userId as string
+    const project = await rigManager.getById(req.params.rigId)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
+    if (project.userId && project.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
     const { taskDescription, task } = validate(SpawnSchema, req.body)
-    const user = await getUserById(res.locals.userId as string)
+    const user = await getUserById(userId)
     if (user?.anthropicApiKey) preconfigureClaudeAuth(user.anthropicApiKey)
-    res.json(await workerBeeManager.spawn(req.params.rigId, taskDescription ?? task))
+    res.json(await workerBeeManager.spawn(req.params.rigId, taskDescription ?? task, userId))
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
 app.post('/api/workerbees/:id/message', async (req, res) => {
-  await workerBeeManager.sendMessage(req.params.id, req.body.message)
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    await workerBeeManager.sendMessage(req.params.id, req.body.message, userId)
+    res.json({ ok: true })
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 
 app.post('/api/workerbees/:id/done', async (req, res) => {
-  await workerBeeManager.updateStatus(req.params.id, 'done')
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    const bee = await workerBeeManager.getById(req.params.id)
+    if (!bee) return res.status(404).json({ error: 'WorkerBee not found' })
+    if (bee.userId && bee.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
+    await workerBeeManager.updateStatus(req.params.id, 'done')
+    res.json({ ok: true })
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
 app.delete('/api/workerbees/:id', async (req, res) => {
-  await workerBeeManager.nuke(req.params.id)
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    await workerBeeManager.nuke(req.params.id, userId)
+    res.json({ ok: true })
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 
 app.patch('/api/workerbees/:id/status', async (req, res) => {
-  await workerBeeManager.updateStatus(req.params.id, req.body.status)
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    const bee = await workerBeeManager.getById(req.params.id)
+    if (!bee) return res.status(404).json({ error: 'WorkerBee not found' })
+    if (bee.userId && bee.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
+    await workerBeeManager.updateStatus(req.params.id, req.body.status)
+    res.json({ ok: true })
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
 // Snapshot endpoints
 app.post('/api/workerbees/:id/snapshot', async (req, res) => {
+  const userId = res.locals.userId as string
   const bee = await workerBeeManager.getById(req.params.id)
+  if (!bee) return res.status(404).json({ error: 'WorkerBee not found' })
+  if (bee.userId && bee.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
   if (!bee?.sessionId) return res.status(400).json({ error: 'No active session' })
   res.json(await snapshotManager.capture(bee.id, bee.sessionId))
 })
 
 app.get('/api/workerbees/:id/snapshots', async (req, res) => {
+  const userId = res.locals.userId as string
+  const bee = await workerBeeManager.getById(req.params.id)
+  if (!bee) return res.status(404).json({ error: 'WorkerBee not found' })
+  if (bee.userId && bee.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
   res.json(await snapshotManager.listByWorkerBee(req.params.id))
 })
 
@@ -201,6 +260,10 @@ app.get('/api/snapshots/:id/content', async (req, res) => {
 
 // Replay frames
 app.get('/api/workerbees/:id/replay', async (req, res) => {
+  const userId = res.locals.userId as string
+  const bee = await workerBeeManager.getById(req.params.id)
+  if (!bee) return res.status(404).json({ error: 'WorkerBee not found' })
+  if (bee.userId && bee.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
   res.json(await replayManager.listFrames(req.params.id))
 })
 
@@ -212,36 +275,44 @@ app.get('/api/replay/:frameId/content', async (req, res) => {
 
 // --- Mayor Lee ---
 app.post('/api/mayor-lee/start', async (req, res) => {
-  const user = await getUserById(res.locals.userId as string)
-  res.json(await mayorLeeManager.start(req.body.townId ?? 'default', user?.anthropicApiKey ?? undefined))
+  const userId = res.locals.userId as string
+  const user = await getUserById(userId)
+  res.json(await mayorLeeManager.start(req.body.townId ?? 'default', user?.anthropicApiKey ?? undefined, userId))
 })
 app.post('/api/mayor/start', async (req, res) => {  // backwards compat
-  const user = await getUserById(res.locals.userId as string)
-  res.json(await mayorLeeManager.start(req.body.townId ?? 'default', user?.anthropicApiKey ?? undefined))
+  const userId = res.locals.userId as string
+  const user = await getUserById(userId)
+  res.json(await mayorLeeManager.start(req.body.townId ?? 'default', user?.anthropicApiKey ?? undefined, userId))
 })
 app.post('/api/mayor-lee/stop', async (req, res) => {
-  await mayorLeeManager.stop(req.body.townId ?? 'default')
+  const userId = res.locals.userId as string
+  await mayorLeeManager.stop(req.body.townId ?? 'default', userId)
   res.json({ ok: true })
 })
 app.post('/api/mayor/stop', async (req, res) => {
-  await mayorLeeManager.stop(req.body.townId ?? 'default')
+  const userId = res.locals.userId as string
+  await mayorLeeManager.stop(req.body.townId ?? 'default', userId)
   res.json({ ok: true })
 })
 
 app.post('/api/mayor-lee/message', async (req, res) => {
-  await mayorLeeManager.sendMessage(req.body.townId ?? 'default', req.body.message)
+  const userId = res.locals.userId as string
+  await mayorLeeManager.sendMessage(req.body.townId ?? 'default', req.body.message, userId)
   res.json({ ok: true })
 })
 app.post('/api/mayor/message', async (req, res) => {  // backwards compat
-  await mayorLeeManager.sendMessage(req.body.townId ?? 'default', req.body.message)
+  const userId = res.locals.userId as string
+  await mayorLeeManager.sendMessage(req.body.townId ?? 'default', req.body.message, userId)
   res.json({ ok: true })
 })
 
-app.get('/api/mayor-lee', async (_req, res) => {
-  res.json(await mayorLeeManager.get('default'))
+app.get('/api/mayor-lee', async (req, res) => {
+  const userId = res.locals.userId as string
+  res.json(await mayorLeeManager.get('default', userId))
 })
-app.get('/api/mayor', async (_req, res) => {  // backwards compat
-  res.json(await mayorLeeManager.get('default'))
+app.get('/api/mayor', async (req, res) => {  // backwards compat
+  const userId = res.locals.userId as string
+  res.json(await mayorLeeManager.get('default', userId))
 })
 
 // --- Release Trains (formerly Convoys) ---
@@ -254,101 +325,209 @@ const ReleaseTrainSchema = z.object({
   description: z.string().optional(),
 }).refine((d) => d.projectId || d.rigId, { message: 'projectId or rigId required' })
 
-app.get('/api/release-trains', async (_req, res) => {
-  res.json(await releaseTrainManager.listAll())
+app.get('/api/release-trains', async (req, res) => {
+  const userId = res.locals.userId as string
+  res.json(await releaseTrainManager.listAll(userId))
 })
-app.get('/api/convoys', async (_req, res) => {  // backward compat
-  res.json(await releaseTrainManager.listAll())
+app.get('/api/convoys', async (req, res) => {  // backward compat
+  const userId = res.locals.userId as string
+  res.json(await releaseTrainManager.listAll(userId))
 })
 
 app.post('/api/release-trains', async (req, res) => {
   try {
+    const userId = res.locals.userId as string
     const { name, projectId, rigId, atomicTaskIds, beadIds, description } = validate(ReleaseTrainSchema, req.body)
-    res.json(await releaseTrainManager.create(name, (projectId ?? rigId)!, atomicTaskIds ?? beadIds, description))
+    res.json(await releaseTrainManager.create(name, (projectId ?? rigId)!, atomicTaskIds ?? beadIds, description, userId))
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 app.post('/api/convoys', async (req, res) => {  // backward compat
   try {
+    const userId = res.locals.userId as string
     const { name, projectId, rigId, atomicTaskIds, beadIds, description } = validate(ReleaseTrainSchema, req.body)
-    res.json(await releaseTrainManager.create(name, (projectId ?? rigId)!, atomicTaskIds ?? beadIds, description))
+    res.json(await releaseTrainManager.create(name, (projectId ?? rigId)!, atomicTaskIds ?? beadIds, description, userId))
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
 app.post('/api/release-trains/:id/atomictasks', async (req, res) => {
-  res.json(await releaseTrainManager.addAtomicTasks(req.params.id, req.body.atomicTaskIds))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await releaseTrainManager.addAtomicTasks(req.params.id, req.body.atomicTaskIds, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 app.post('/api/convoys/:id/atomictasks', async (req, res) => {  // backward compat
-  res.json(await releaseTrainManager.addAtomicTasks(req.params.id, req.body.atomicTaskIds))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await releaseTrainManager.addAtomicTasks(req.params.id, req.body.atomicTaskIds, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 app.post('/api/release-trains/:id/beads', async (req, res) => {
-  res.json(await releaseTrainManager.addAtomicTasks(req.params.id, req.body.beadIds ?? req.body.atomicTaskIds))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await releaseTrainManager.addAtomicTasks(req.params.id, req.body.beadIds ?? req.body.atomicTaskIds, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 app.post('/api/convoys/:id/beads', async (req, res) => {  // backward compat
-  res.json(await releaseTrainManager.addAtomicTasks(req.params.id, req.body.beadIds ?? req.body.atomicTaskIds))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await releaseTrainManager.addAtomicTasks(req.params.id, req.body.beadIds ?? req.body.atomicTaskIds, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 
 app.delete('/api/release-trains/:id/atomictasks', async (req, res) => {
-  res.json(await releaseTrainManager.removeAtomicTasks(req.params.id, req.body.atomicTaskIds))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await releaseTrainManager.removeAtomicTasks(req.params.id, req.body.atomicTaskIds, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 app.delete('/api/convoys/:id/atomictasks', async (req, res) => {  // backward compat
-  res.json(await releaseTrainManager.removeAtomicTasks(req.params.id, req.body.atomicTaskIds))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await releaseTrainManager.removeAtomicTasks(req.params.id, req.body.atomicTaskIds, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 app.delete('/api/release-trains/:id/beads', async (req, res) => {
-  res.json(await releaseTrainManager.removeAtomicTasks(req.params.id, req.body.beadIds ?? req.body.atomicTaskIds))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await releaseTrainManager.removeAtomicTasks(req.params.id, req.body.beadIds ?? req.body.atomicTaskIds, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 app.delete('/api/convoys/:id/beads', async (req, res) => {  // backward compat
-  res.json(await releaseTrainManager.removeAtomicTasks(req.params.id, req.body.beadIds ?? req.body.atomicTaskIds))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await releaseTrainManager.removeAtomicTasks(req.params.id, req.body.beadIds ?? req.body.atomicTaskIds, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 
 app.post('/api/release-trains/:id/land', async (req, res) => {
-  await releaseTrainManager.land(req.params.id)
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    await releaseTrainManager.land(req.params.id, userId)
+    res.json({ ok: true })
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 app.post('/api/convoys/:id/land', async (req, res) => {  // backward compat
-  await releaseTrainManager.land(req.params.id)
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    await releaseTrainManager.land(req.params.id, userId)
+    res.json({ ok: true })
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 
 app.post('/api/release-trains/:id/cancel', async (req, res) => {
-  await releaseTrainManager.cancel(req.params.id)
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    await releaseTrainManager.cancel(req.params.id, userId)
+    res.json({ ok: true })
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 app.post('/api/convoys/:id/cancel', async (req, res) => {  // backward compat
-  await releaseTrainManager.cancel(req.params.id)
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    await releaseTrainManager.cancel(req.params.id, userId)
+    res.json({ ok: true })
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 
 app.post('/api/release-trains/:id/assign', async (req, res) => {
-  const releaseTrain = await releaseTrainManager.assignWorkerBee(req.params.id, req.body.workerBeeId ?? null)
-  res.json(releaseTrain)
+  try {
+    const userId = res.locals.userId as string
+    const releaseTrain = await releaseTrainManager.assignWorkerBee(req.params.id, req.body.workerBeeId ?? null, userId)
+    res.json(releaseTrain)
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 app.post('/api/convoys/:id/assign', async (req, res) => {  // backward compat
-  const releaseTrain = await releaseTrainManager.assignWorkerBee(req.params.id, req.body.workerBeeId ?? null)
-  res.json(releaseTrain)
+  try {
+    const userId = res.locals.userId as string
+    const releaseTrain = await releaseTrainManager.assignWorkerBee(req.params.id, req.body.workerBeeId ?? null, userId)
+    res.json(releaseTrain)
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 
 app.post('/api/release-trains/:id/dispatch', async (req, res) => {
-  const releaseTrain = await releaseTrainManager.getById(req.params.id)
-  if (!releaseTrain) return res.status(404).json({ error: 'ReleaseTrain not found' })
-  const taskDescription = releaseTrain.description || releaseTrain.name
-  const bee = await workerBeeManager.spawn(releaseTrain.projectId, taskDescription)
-  await releaseTrainManager.assignWorkerBee(releaseTrain.id, bee.id)
-  res.json({ bee, releaseTrain: await releaseTrainManager.getById(releaseTrain.id) })
+  try {
+    const userId = res.locals.userId as string
+    const releaseTrain = await releaseTrainManager.getById(req.params.id)
+    if (!releaseTrain) return res.status(404).json({ error: 'ReleaseTrain not found' })
+    if (releaseTrain.userId && releaseTrain.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
+    const taskDescription = releaseTrain.description || releaseTrain.name
+    const bee = await workerBeeManager.spawn(releaseTrain.projectId, taskDescription, userId)
+    await releaseTrainManager.assignWorkerBee(releaseTrain.id, bee.id, userId)
+    res.json({ bee, releaseTrain: await releaseTrainManager.getById(releaseTrain.id) })
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 app.post('/api/convoys/:id/dispatch', async (req, res) => {  // backward compat
-  const releaseTrain = await releaseTrainManager.getById(req.params.id)
-  if (!releaseTrain) return res.status(404).json({ error: 'ReleaseTrain not found' })
-  const taskDescription = releaseTrain.description || releaseTrain.name
-  const bee = await workerBeeManager.spawn(releaseTrain.projectId, taskDescription)
-  await releaseTrainManager.assignWorkerBee(releaseTrain.id, bee.id)
-  res.json({ bee, convoy: await releaseTrainManager.getById(releaseTrain.id) })
+  try {
+    const userId = res.locals.userId as string
+    const releaseTrain = await releaseTrainManager.getById(req.params.id)
+    if (!releaseTrain) return res.status(404).json({ error: 'ReleaseTrain not found' })
+    if (releaseTrain.userId && releaseTrain.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
+    const taskDescription = releaseTrain.description || releaseTrain.name
+    const bee = await workerBeeManager.spawn(releaseTrain.projectId, taskDescription, userId)
+    await releaseTrainManager.assignWorkerBee(releaseTrain.id, bee.id, userId)
+    res.json({ bee, convoy: await releaseTrainManager.getById(releaseTrain.id) })
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
 app.patch('/api/release-trains/:id/description', async (req, res) => {
-  res.json(await releaseTrainManager.updateDescription(req.params.id, req.body.description))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await releaseTrainManager.updateDescription(req.params.id, req.body.description, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 app.patch('/api/convoys/:id/description', async (req, res) => {  // backward compat
-  res.json(await releaseTrainManager.updateDescription(req.params.id, req.body.description))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await releaseTrainManager.updateDescription(req.params.id, req.body.description, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 
 // --- Hooks ---
@@ -362,36 +541,68 @@ const HookSchema = z.object({
 })
 
 app.get('/api/hooks', async (req, res) => {
+  const userId = res.locals.userId as string
   const { projectId } = req.query
-  res.json(projectId ? await hookManager.listByProject(projectId as string) : await hookManager.listAll())
+  res.json(projectId ? await hookManager.listByProject(projectId as string, userId) : await hookManager.listAll(userId))
 })
 
 app.post('/api/hooks', async (req, res) => {
   try {
+    const userId = res.locals.userId as string
     const { projectId, branch, notes, workerBeeId, atomicTaskId, beadId } = validate(HookSchema, req.body)
-    res.json(await hookManager.create(projectId, branch, notes, workerBeeId, atomicTaskId ?? beadId))
+    res.json(await hookManager.create(projectId, branch, notes, workerBeeId, atomicTaskId ?? beadId, userId))
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
 app.post('/api/hooks/:id/activate', async (req, res) => {
-  await hookManager.activate(req.params.id)
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    await hookManager.activate(req.params.id, userId)
+    res.json({ ok: true })
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 app.post('/api/hooks/:id/complete', async (req, res) => {
-  await hookManager.complete(req.params.id)
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    await hookManager.complete(req.params.id, userId)
+    res.json({ ok: true })
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 app.post('/api/hooks/:id/suspend', async (req, res) => {
-  await hookManager.suspend(req.params.id)
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    await hookManager.suspend(req.params.id, userId)
+    res.json({ ok: true })
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 app.post('/api/hooks/:id/archive', async (req, res) => {
-  await hookManager.archive(req.params.id)
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    await hookManager.archive(req.params.id, userId)
+    res.json({ ok: true })
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 app.delete('/api/hooks/:id', async (req, res) => {
-  await hookManager.remove(req.params.id)
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    await hookManager.remove(req.params.id, userId)
+    res.json({ ok: true })
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 
 // --- AtomicTasks (formerly Beads) ---
@@ -405,30 +616,34 @@ const AtomicTaskSchema = z.object({
 })
 
 app.get('/api/atomictasks', async (req, res) => {
+  const userId = res.locals.userId as string
   const { projectId, releaseTrainId, convoyId } = req.query
   const rtId = (releaseTrainId ?? convoyId) as string | undefined
-  if (rtId) return res.json(await atomicTaskManager.listByConvoy(rtId))
-  if (projectId) return res.json(await atomicTaskManager.listByProject(projectId as string))
-  res.json(await atomicTaskManager.listAll())
+  if (rtId) return res.json(await atomicTaskManager.listByConvoy(rtId, userId))
+  if (projectId) return res.json(await atomicTaskManager.listByProject(projectId as string, userId))
+  res.json(await atomicTaskManager.listAll(userId))
 })
 app.get('/api/beads', async (req, res) => {  // backward compat
+  const userId = res.locals.userId as string
   const { projectId, releaseTrainId, convoyId } = req.query
   const rtId = (releaseTrainId ?? convoyId) as string | undefined
-  if (rtId) return res.json(await atomicTaskManager.listByConvoy(rtId))
-  if (projectId) return res.json(await atomicTaskManager.listByProject(projectId as string))
-  res.json(await atomicTaskManager.listAll())
+  if (rtId) return res.json(await atomicTaskManager.listByConvoy(rtId, userId))
+  if (projectId) return res.json(await atomicTaskManager.listByProject(projectId as string, userId))
+  res.json(await atomicTaskManager.listAll(userId))
 })
 
 app.post('/api/atomictasks', async (req, res) => {
   try {
+    const userId = res.locals.userId as string
     const { projectId, title, description, releaseTrainId, convoyId, dependsOn } = validate(AtomicTaskSchema, req.body)
-    res.json(await atomicTaskManager.create(projectId, title, description, releaseTrainId ?? convoyId, dependsOn))
+    res.json(await atomicTaskManager.create(projectId, title, description, releaseTrainId ?? convoyId, dependsOn, userId))
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 app.post('/api/beads', async (req, res) => {  // backward compat
   try {
+    const userId = res.locals.userId as string
     const { projectId, title, description, releaseTrainId, convoyId, dependsOn } = validate(AtomicTaskSchema, req.body)
-    res.json(await atomicTaskManager.create(projectId, title, description, releaseTrainId ?? convoyId, dependsOn))
+    res.json(await atomicTaskManager.create(projectId, title, description, releaseTrainId ?? convoyId, dependsOn, userId))
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
@@ -440,39 +655,99 @@ app.get('/api/beads/:id/dependencies', async (req, res) => {  // backward compat
 })
 
 app.post('/api/atomictasks/:id/dependencies', async (req, res) => {
-  res.json(await atomicTaskManager.setDependencies(req.params.id, req.body.dependsOn))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await atomicTaskManager.setDependencies(req.params.id, req.body.dependsOn, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 app.post('/api/beads/:id/dependencies', async (req, res) => {  // backward compat
-  res.json(await atomicTaskManager.setDependencies(req.params.id, req.body.dependsOn))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await atomicTaskManager.setDependencies(req.params.id, req.body.dependsOn, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 
 app.post('/api/atomictasks/:id/assign', async (req, res) => {
-  res.json(await atomicTaskManager.assign(req.params.id, req.body.workerBeeId))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await atomicTaskManager.assign(req.params.id, req.body.workerBeeId, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 app.post('/api/beads/:id/assign', async (req, res) => {  // backward compat
-  res.json(await atomicTaskManager.assign(req.params.id, req.body.workerBeeId))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await atomicTaskManager.assign(req.params.id, req.body.workerBeeId, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 
 app.post('/api/atomictasks/:id/status', async (req, res) => {
-  res.json(await atomicTaskManager.setStatus(req.params.id, req.body.status))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await atomicTaskManager.setStatus(req.params.id, req.body.status, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 app.post('/api/beads/:id/status', async (req, res) => {  // backward compat
-  res.json(await atomicTaskManager.setStatus(req.params.id, req.body.status))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await atomicTaskManager.setStatus(req.params.id, req.body.status, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 app.patch('/api/atomictasks/:id/status', async (req, res) => {
-  res.json(await atomicTaskManager.setStatus(req.params.id, req.body.status))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await atomicTaskManager.setStatus(req.params.id, req.body.status, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 app.patch('/api/beads/:id/status', async (req, res) => {  // backward compat
-  res.json(await atomicTaskManager.setStatus(req.params.id, req.body.status))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await atomicTaskManager.setStatus(req.params.id, req.body.status, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 
 app.delete('/api/atomictasks/:id', async (req, res) => {
-  await atomicTaskManager.remove(req.params.id)
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    await atomicTaskManager.remove(req.params.id, userId)
+    res.json({ ok: true })
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 app.delete('/api/beads/:id', async (req, res) => {  // backward compat
-  await atomicTaskManager.remove(req.params.id)
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    await atomicTaskManager.remove(req.params.id, userId)
+    res.json({ ok: true })
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 
 // --- Templates ---
@@ -483,24 +758,38 @@ const TemplateSchema = z.object({
 })
 
 app.get('/api/templates', async (req, res) => {
+  const userId = res.locals.userId as string
   const { projectId } = req.query
-  res.json(projectId ? await templateManager.listByProject(projectId as string) : await templateManager.listAll())
+  res.json(projectId ? await templateManager.listByProject(projectId as string, userId) : await templateManager.listAll(userId))
 })
 
 app.post('/api/templates', async (req, res) => {
   try {
+    const userId = res.locals.userId as string
     const { projectId, name, content } = validate(TemplateSchema, req.body)
-    res.json(await templateManager.create(projectId, name, content))
+    res.json(await templateManager.create(projectId, name, content, userId))
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
 app.put('/api/templates/:id', async (req, res) => {
-  res.json(await templateManager.update(req.params.id, req.body))
+  try {
+    const userId = res.locals.userId as string
+    res.json(await templateManager.update(req.params.id, req.body, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 
 app.delete('/api/templates/:id', async (req, res) => {
-  await templateManager.remove(req.params.id)
-  res.json({ ok: true })
+  try {
+    const userId = res.locals.userId as string
+    await templateManager.remove(req.params.id, userId)
+    res.json({ ok: true })
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 
 // --- Events (persisted) ---
@@ -526,10 +815,20 @@ app.get('/api/events', async (req, res) => {
 })
 
 // --- Terminals ---
-app.get('/api/terminals', (_req, res) => { res.json(ptyManager.list()) })
+app.get('/api/terminals', (req, res) => {
+  const userId = res.locals.userId as string
+  // Only return terminal session IDs owned by this user
+  const allSessions = ptyManager.list()
+  const userSessions = allSessions.filter((id) => {
+    const owner = ptyManager.getOwnerUserId(id)
+    return owner === null || owner === userId
+  })
+  res.json(userSessions)
+})
 
 app.post('/api/terminals', async (req, res) => {
-  const user = await getUserById(res.locals.userId as string)
+  const userId = res.locals.userId as string
+  const user = await getUserById(userId)
   const env: Record<string, string> = {}
   if (user?.anthropicApiKey) {
     preconfigureClaudeAuth(user.anthropicApiKey)
@@ -541,11 +840,18 @@ app.post('/api/terminals', async (req, res) => {
     cols: req.body.cols ?? 120,
     rows: req.body.rows ?? 30,
     env,
+    ownerUserId: userId,
   })
   res.json({ id })
 })
 
 app.delete('/api/terminals/:id', (req, res) => {
+  const userId = res.locals.userId as string
+  const owner = ptyManager.getOwnerUserId(req.params.id)
+  if (owner !== null && owner !== userId) {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
   ptyManager.kill(req.params.id)
   res.json({ ok: true })
 })
@@ -620,12 +926,13 @@ app.post('/api/webhooks/github', express.raw({ type: 'application/json' }), asyn
 })
 
 // --- Metrics ---
-app.get('/api/metrics', async (_req, res) => {
+app.get('/api/metrics', async (req, res) => {
+  const userId = res.locals.userId as string
   const [bees, releaseTrains, atomicTasks, projects] = await Promise.all([
-    workerBeeManager.listAll(),
-    releaseTrainManager.listAll(),
-    atomicTaskManager.listAll(),
-    rigManager.listByTown('default'),
+    workerBeeManager.listAll(userId),
+    releaseTrainManager.listAll(userId),
+    atomicTaskManager.listAll(userId),
+    rigManager.listByTown('default', userId),
   ])
 
   const beesByStatus = bees.reduce<Record<string, number>>((acc, b) => {

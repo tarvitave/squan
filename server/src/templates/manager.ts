@@ -3,13 +3,13 @@ import { getDb } from '../db/index.js'
 import type { Template } from '../types/index.js'
 
 export const templateManager = {
-  async create(projectId: string, name: string, content: string): Promise<Template> {
+  async create(projectId: string, name: string, content: string, userId?: string): Promise<Template> {
     const db = getDb()
     const id = uuidv4()
     const now = new Date().toISOString()
     await db.execute({
-      sql: `INSERT INTO templates (id, project_id, name, content, created_at) VALUES (?, ?, ?, ?, ?)`,
-      args: [id, projectId, name, content, now],
+      sql: `INSERT INTO templates (id, project_id, name, content, user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+      args: [id, projectId, name, content, userId ?? null, now],
     })
     return (await this.getById(id))!
   },
@@ -21,8 +21,15 @@ export const templateManager = {
     return row ? toModel(row) : null
   },
 
-  async listByProject(projectId: string): Promise<Template[]> {
+  async listByProject(projectId: string, userId?: string): Promise<Template[]> {
     const db = getDb()
+    if (userId) {
+      const result = await db.execute({
+        sql: 'SELECT * FROM templates WHERE project_id = ? AND (user_id = ? OR user_id IS NULL) ORDER BY name ASC',
+        args: [projectId, userId],
+      })
+      return result.rows.map((r) => toModel(r as unknown as DbTemplate))
+    }
     const result = await db.execute({
       sql: 'SELECT * FROM templates WHERE project_id = ? ORDER BY name ASC',
       args: [projectId],
@@ -30,16 +37,24 @@ export const templateManager = {
     return result.rows.map((r) => toModel(r as unknown as DbTemplate))
   },
 
-  async listAll(): Promise<Template[]> {
+  async listAll(userId?: string): Promise<Template[]> {
     const db = getDb()
+    if (userId) {
+      const result = await db.execute({
+        sql: 'SELECT * FROM templates WHERE user_id = ? OR user_id IS NULL ORDER BY project_id, name ASC',
+        args: [userId],
+      })
+      return result.rows.map((r) => toModel(r as unknown as DbTemplate))
+    }
     const result = await db.execute({ sql: 'SELECT * FROM templates ORDER BY project_id, name ASC', args: [] })
     return result.rows.map((r) => toModel(r as unknown as DbTemplate))
   },
 
-  async update(id: string, patch: { name?: string; content?: string }): Promise<Template> {
+  async update(id: string, patch: { name?: string; content?: string }, userId?: string): Promise<Template> {
     const db = getDb()
     const tpl = await this.getById(id)
     if (!tpl) throw new Error(`Template ${id} not found`)
+    if (userId && tpl.userId && tpl.userId !== userId) throw new Error('Forbidden')
     await db.execute({
       sql: `UPDATE templates SET name = ?, content = ? WHERE id = ?`,
       args: [patch.name ?? tpl.name, patch.content ?? tpl.content, id],
@@ -47,7 +62,11 @@ export const templateManager = {
     return (await this.getById(id))!
   },
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, userId?: string): Promise<void> {
+    if (userId) {
+      const tpl = await this.getById(id)
+      if (tpl && tpl.userId && tpl.userId !== userId) throw new Error('Forbidden')
+    }
     await getDb().execute({ sql: 'DELETE FROM templates WHERE id = ?', args: [id] })
   },
 }
@@ -57,6 +76,7 @@ interface DbTemplate {
   project_id: string
   name: string
   content: string
+  user_id: string | null
   created_at: string
 }
 
@@ -66,6 +86,7 @@ function toModel(r: DbTemplate): Template {
     projectId: r.project_id,
     name: r.name,
     content: r.content,
+    userId: r.user_id ?? undefined,
     createdAt: r.created_at,
   }
 }

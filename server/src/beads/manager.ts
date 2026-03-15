@@ -9,16 +9,17 @@ export const atomicTaskManager = {
     title: string,
     description?: string,
     releaseTrainId?: string,
-    dependsOn?: string[]
+    dependsOn?: string[],
+    userId?: string
   ): Promise<AtomicTask> {
     const db = getDb()
     const id = uuidv4()
     const now = new Date().toISOString()
 
     await db.execute({
-      sql: `INSERT INTO atomic_tasks (id, project_id, release_train_id, title, description, status, assignee_id, depends_on, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, 'open', NULL, ?, ?, ?)`,
-      args: [id, projectId, releaseTrainId ?? null, title, description ?? '', JSON.stringify(dependsOn ?? []), now, now],
+      sql: `INSERT INTO atomic_tasks (id, project_id, release_train_id, title, description, status, assignee_id, depends_on, user_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'open', NULL, ?, ?, ?, ?)`,
+      args: [id, projectId, releaseTrainId ?? null, title, description ?? '', JSON.stringify(dependsOn ?? []), userId ?? null, now, now],
     })
 
     broadcastEvent({
@@ -38,8 +39,15 @@ export const atomicTaskManager = {
     return row ? toModel(row) : null
   },
 
-  async listByProject(projectId: string): Promise<AtomicTask[]> {
+  async listByProject(projectId: string, userId?: string): Promise<AtomicTask[]> {
     const db = getDb()
+    if (userId) {
+      const result = await db.execute({
+        sql: 'SELECT * FROM atomic_tasks WHERE project_id = ? AND (user_id = ? OR user_id IS NULL) ORDER BY created_at DESC',
+        args: [projectId, userId],
+      })
+      return result.rows.map((r) => toModel(r as unknown as DbAtomicTask))
+    }
     const result = await db.execute({
       sql: 'SELECT * FROM atomic_tasks WHERE project_id = ? ORDER BY created_at DESC',
       args: [projectId],
@@ -47,8 +55,15 @@ export const atomicTaskManager = {
     return result.rows.map((r) => toModel(r as unknown as DbAtomicTask))
   },
 
-  async listByConvoy(releaseTrainId: string): Promise<AtomicTask[]> {
+  async listByConvoy(releaseTrainId: string, userId?: string): Promise<AtomicTask[]> {
     const db = getDb()
+    if (userId) {
+      const result = await db.execute({
+        sql: 'SELECT * FROM atomic_tasks WHERE release_train_id = ? AND (user_id = ? OR user_id IS NULL) ORDER BY created_at DESC',
+        args: [releaseTrainId, userId],
+      })
+      return result.rows.map((r) => toModel(r as unknown as DbAtomicTask))
+    }
     const result = await db.execute({
       sql: 'SELECT * FROM atomic_tasks WHERE release_train_id = ? ORDER BY created_at DESC',
       args: [releaseTrainId],
@@ -56,8 +71,15 @@ export const atomicTaskManager = {
     return result.rows.map((r) => toModel(r as unknown as DbAtomicTask))
   },
 
-  async listAll(): Promise<AtomicTask[]> {
+  async listAll(userId?: string): Promise<AtomicTask[]> {
     const db = getDb()
+    if (userId) {
+      const result = await db.execute({
+        sql: 'SELECT * FROM atomic_tasks WHERE user_id = ? OR user_id IS NULL ORDER BY created_at DESC',
+        args: [userId],
+      })
+      return result.rows.map((r) => toModel(r as unknown as DbAtomicTask))
+    }
     const result = await db.execute({ sql: 'SELECT * FROM atomic_tasks ORDER BY created_at DESC', args: [] })
     return result.rows.map((r) => toModel(r as unknown as DbAtomicTask))
   },
@@ -72,8 +94,12 @@ export const atomicTaskManager = {
     return { met: blocking.length === 0, blocking }
   },
 
-  async setDependencies(id: string, dependsOn: string[]): Promise<AtomicTask> {
+  async setDependencies(id: string, dependsOn: string[], userId?: string): Promise<AtomicTask> {
     const db = getDb()
+    if (userId) {
+      const task = await this.getById(id)
+      if (task && task.userId && task.userId !== userId) throw new Error('Forbidden')
+    }
     await db.execute({
       sql: `UPDATE atomic_tasks SET depends_on = ?, updated_at = datetime('now') WHERE id = ?`,
       args: [JSON.stringify(dependsOn), id],
@@ -81,8 +107,12 @@ export const atomicTaskManager = {
     return (await this.getById(id))!
   },
 
-  async assign(id: string, workerBeeId: string): Promise<AtomicTask> {
+  async assign(id: string, workerBeeId: string, userId?: string): Promise<AtomicTask> {
     const db = getDb()
+    if (userId) {
+      const task = await this.getById(id)
+      if (task && task.userId && task.userId !== userId) throw new Error('Forbidden')
+    }
     await db.execute({
       sql: `UPDATE atomic_tasks SET assignee_id = ?, status = 'assigned', updated_at = datetime('now') WHERE id = ?`,
       args: [workerBeeId, id],
@@ -96,8 +126,12 @@ export const atomicTaskManager = {
     return (await this.getById(id))!
   },
 
-  async setStatus(id: string, status: AtomicTask['status']): Promise<AtomicTask> {
+  async setStatus(id: string, status: AtomicTask['status'], userId?: string): Promise<AtomicTask> {
     const db = getDb()
+    if (userId) {
+      const task = await this.getById(id)
+      if (task && task.userId && task.userId !== userId) throw new Error('Forbidden')
+    }
     await db.execute({
       sql: `UPDATE atomic_tasks SET status = ?, updated_at = datetime('now') WHERE id = ?`,
       args: [status, id],
@@ -113,8 +147,12 @@ export const atomicTaskManager = {
     return (await this.getById(id))!
   },
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, userId?: string): Promise<void> {
     const db = getDb()
+    if (userId) {
+      const task = await this.getById(id)
+      if (task && task.userId && task.userId !== userId) throw new Error('Forbidden')
+    }
     await db.execute({ sql: 'DELETE FROM atomic_tasks WHERE id = ?', args: [id] })
   },
 }
@@ -131,6 +169,7 @@ interface DbAtomicTask {
   status: AtomicTask['status']
   assignee_id: string | null
   depends_on: string
+  user_id: string | null
   created_at: string
   updated_at: string
 }
@@ -146,6 +185,7 @@ function toModel(r: DbAtomicTask): AtomicTask {
     status: r.status,
     assigneeId: r.assignee_id,
     dependsOn: JSON.parse(r.depends_on ?? '[]'),
+    userId: r.user_id ?? undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }

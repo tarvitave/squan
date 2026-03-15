@@ -1,8 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { useStore } from '../store/index.js'
 
-const WS_URL = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`
-
 // Sentinel value written to a terminal subscriber when its PTY session no longer exists
 export const SESSION_DEAD = '\x1b[31m\r\n[session ended — close this pane or create a new terminal]\x1b[0m\r\n'
 
@@ -28,7 +26,12 @@ export function useWebSocket() {
     let reconnectTimer: ReturnType<typeof setTimeout>
 
     function connect() {
-      socket = new WebSocket(WS_URL)
+      const token = useStore.getState().token
+      const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
+      const wsUrl = token
+        ? `${proto}://${window.location.host}/ws?token=${encodeURIComponent(token)}`
+        : `${proto}://${window.location.host}/ws`
+      socket = new WebSocket(wsUrl)
       ws.current = socket
 
       socket.onopen = () => {

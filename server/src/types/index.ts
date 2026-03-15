@@ -30,6 +30,7 @@ export interface Project {
   repoUrl: string
   localPath: string
   runtime: RuntimeConfig
+  userId?: string
   createdAt: string
 }
 
@@ -52,6 +53,7 @@ export interface WorkerBee {
   status: AgentStatus
   hookId: string | null
   sessionId: string | null
+  userId?: string
   createdAt: string
   updatedAt: string
 }
@@ -77,6 +79,7 @@ export interface AtomicTask {
   status: AtomicTaskStatus
   assigneeId: string | null
   dependsOn: string[]
+  userId?: string
   createdAt: string
   updatedAt: string
 }
@@ -90,6 +93,7 @@ export interface Template {
   projectId: string
   name: string
   content: string
+  userId?: string
   createdAt: string
 }
 
@@ -119,6 +123,7 @@ export interface Hook {
   status: HookStatus
   branch: string
   notes: string
+  userId?: string
   createdAt: string
   updatedAt: string
 }
@@ -132,6 +137,7 @@ export interface ReleaseTrain {
   atomicTaskIds: string[]
   assignedWorkerBeeId: string | null
   status: ReleaseTrainStatus
+  userId?: string
   createdAt: string
   updatedAt: string
 }

@@ -8,6 +8,7 @@ interface PtySession {
   // clientId → data callback
   subscribers: Map<string, (data: string) => void>
   history: string[]  // ring buffer of recent output for new subscribers
+  ownerUserId: string | null  // userId of the user who created this session
 }
 
 const HISTORY_LIMIT = 2000 // lines
@@ -30,6 +31,7 @@ class PtyManager {
     cols?: number
     rows?: number
     env?: Record<string, string>
+    ownerUserId?: string
   }): string {
     const id = opts.id ?? uuidv4()
     const shell = opts.shell ?? (process.platform === 'win32' ? 'cmd.exe' : 'bash')
@@ -47,6 +49,7 @@ class PtyManager {
       pty: proc,
       subscribers: new Map(),
       history: [],
+      ownerUserId: opts.ownerUserId ?? null,
     }
 
     proc.onData((data) => {
@@ -118,6 +121,10 @@ class PtyManager {
 
   onSessionExit(sessionId: string, cb: (exitCode: number) => void) {
     this.exitCallbacks.set(sessionId, cb)
+  }
+
+  getOwnerUserId(sessionId: string): string | null {
+    return this.sessions.get(sessionId)?.ownerUserId ?? null
   }
 }
 

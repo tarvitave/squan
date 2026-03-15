@@ -11,10 +11,19 @@ const DEFAULT_REPO_PATH = process.env.SQUANSQ_REPO_PATH ?? process.env.HOME ?? '
 const SERVER_URL = `http://localhost:${process.env.PORT ?? 3001}`
 
 export const mayorLeeManager = {
-  async start(townId: string, apiKey?: string): Promise<MayorLee> {
+  async start(townId: string, apiKey?: string, userId?: string): Promise<MayorLee> {
     const db = getDb()
 
-    const existing = await db.execute({ sql: 'SELECT * FROM mayors WHERE town_id = ?', args: [townId] })
+    // Scope mayor lookup to userId if provided
+    let existing
+    if (userId) {
+      existing = await db.execute({
+        sql: 'SELECT * FROM mayors WHERE town_id = ? AND (user_id = ? OR user_id IS NULL)',
+        args: [townId, userId],
+      })
+    } else {
+      existing = await db.execute({ sql: 'SELECT * FROM mayors WHERE town_id = ?', args: [townId] })
+    }
     const row = existing.rows[0] as unknown as DbRow | undefined
 
     if (row?.session_id) {
@@ -42,6 +51,7 @@ export const mayorLeeManager = {
       shell: baseCommand,
       cwd: repoPath,
       env,
+      ownerUserId: userId,
     })
 
     const now = new Date().toISOString()
@@ -52,8 +62,8 @@ export const mayorLeeManager = {
       })
     } else {
       await db.execute({
-        sql: `INSERT INTO mayors (id, town_id, session_id, status, created_at) VALUES (?, ?, ?, 'idle', ?)`,
-        args: [id, townId, sessionId, now],
+        sql: `INSERT INTO mayors (id, town_id, session_id, status, user_id, created_at) VALUES (?, ?, ?, 'idle', ?, ?)`,
+        args: [id, townId, sessionId, userId ?? null, now],
       })
     }
 
@@ -64,12 +74,20 @@ export const mayorLeeManager = {
       timestamp: now,
     })
 
-    return (await this.get(townId))!
+    return (await this.get(townId, userId))!
   },
 
-  async stop(townId: string) {
+  async stop(townId: string, userId?: string) {
     const db = getDb()
-    const result = await db.execute({ sql: 'SELECT * FROM mayors WHERE town_id = ?', args: [townId] })
+    let result
+    if (userId) {
+      result = await db.execute({
+        sql: 'SELECT * FROM mayors WHERE town_id = ? AND (user_id = ? OR user_id IS NULL)',
+        args: [townId, userId],
+      })
+    } else {
+      result = await db.execute({ sql: 'SELECT * FROM mayors WHERE town_id = ?', args: [townId] })
+    }
     const row = result.rows[0] as unknown as DbRow | undefined
     if (!row) return
     if (row.session_id) {
@@ -87,15 +105,23 @@ export const mayorLeeManager = {
     })
   },
 
-  async sendMessage(townId: string, message: string) {
-    const mayor = await this.get(townId)
+  async sendMessage(townId: string, message: string, userId?: string) {
+    const mayor = await this.get(townId, userId)
     if (mayor?.sessionId) {
       ptyManager.write(mayor.sessionId, message + '\r')
     }
   },
 
-  async get(townId: string): Promise<MayorLee | null> {
+  async get(townId: string, userId?: string): Promise<MayorLee | null> {
     const db = getDb()
+    if (userId) {
+      const result = await db.execute({
+        sql: 'SELECT * FROM mayors WHERE town_id = ? AND (user_id = ? OR user_id IS NULL)',
+        args: [townId, userId],
+      })
+      const row = result.rows[0] as unknown as DbRow | undefined
+      return row ? toModel(row) : null
+    }
     const result = await db.execute({ sql: 'SELECT * FROM mayors WHERE town_id = ?', args: [townId] })
     const row = result.rows[0] as unknown as DbRow | undefined
     return row ? toModel(row) : null
@@ -187,6 +213,7 @@ interface DbRow {
   town_id: string
   session_id: string | null
   status: MayorLee['status']
+  user_id: string | null
   created_at: string
 }
 

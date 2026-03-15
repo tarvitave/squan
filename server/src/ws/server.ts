@@ -1,15 +1,21 @@
 import { WebSocketServer, WebSocket } from 'ws'
 import { Server } from 'http'
 import { v4 as uuidv4 } from 'uuid'
+import jwt from 'jsonwebtoken'
 import type { WsMessage, SquansqEvent } from '../types/index.js'
 import { ptyManager } from '../workerbee/pty.js'
 import { getDb } from '../db/index.js'
+
+const JWT_SECRET = process.env.JWT_SECRET ?? 'squansq-dev-secret-change-in-production'
 
 // Map of clientId → WebSocket
 const clients = new Map<string, WebSocket>()
 
 // Map of clientId → Set of subscribed terminal session IDs
 const subscriptions = new Map<string, Set<string>>()
+
+// Map of clientId → authenticated userId
+const clientUserIds = new Map<string, string>()
 
 // Notify all clients subscribed to a session that the session has ended
 export function notifySessionEnded(sessionId: string) {
@@ -28,10 +34,31 @@ export function setupWsServer(httpServer: Server) {
   // Notify browser clients when a PTY session exits so they see "session ended" instead of a hung cursor
   ptyManager.onAnySessionExit((sessionId) => notifySessionEnded(sessionId))
 
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws, req) => {
+    // --- Authentication: require ?token=<jwt> query parameter ---
+    const url = new URL(req.url ?? '', `http://${req.headers.host ?? 'localhost'}`)
+    const token = url.searchParams.get('token')
+
+    let userId: string | null = null
+    if (token) {
+      try {
+        const payload = jwt.verify(token, JWT_SECRET) as { userId: string }
+        userId = payload.userId
+      } catch {
+        // invalid token — reject
+      }
+    }
+
+    if (!userId) {
+      send(ws, { type: 'error', payload: { message: 'Unauthorized: valid token required' } })
+      ws.close(1008, 'Unauthorized')
+      return
+    }
+
     const clientId = uuidv4()
     clients.set(clientId, ws)
     subscriptions.set(clientId, new Set())
+    clientUserIds.set(clientId, userId)
 
     ws.on('message', (raw) => {
       try {
@@ -48,6 +75,7 @@ export function setupWsServer(httpServer: Server) {
       })
       clients.delete(clientId)
       subscriptions.delete(clientId)
+      clientUserIds.delete(clientId)
     })
 
     send(ws, { type: 'ack', payload: { clientId } })
@@ -57,12 +85,24 @@ export function setupWsServer(httpServer: Server) {
 }
 
 function handleMessage(clientId: string, ws: WebSocket, msg: WsMessage) {
+  const userId = clientUserIds.get(clientId)
+  if (!userId) {
+    send(ws, { type: 'error', payload: { message: 'Unauthorized' } })
+    return
+  }
+
   switch (msg.type) {
     case 'subscribe': {
       const sessionId = msg.payload?.sessionId as string
       if (!sessionId) return
       if (!ptyManager.list().includes(sessionId)) {
         send(ws, { type: 'session.not_found', payload: { sessionId } })
+        return
+      }
+      // Enforce session ownership: only the owner can subscribe
+      const ownerUserId = ptyManager.getOwnerUserId(sessionId)
+      if (ownerUserId !== null && ownerUserId !== userId) {
+        send(ws, { type: 'error', payload: { message: 'Forbidden: session belongs to another user' } })
         return
       }
       subscriptions.get(clientId)?.add(sessionId)
@@ -89,6 +129,12 @@ function handleMessage(clientId: string, ws: WebSocket, msg: WsMessage) {
       const sessionId = msg.payload?.sessionId as string
       const data = msg.payload?.data as string
       if (sessionId && data) {
+        // Only allow input to sessions owned by this user (or unowned sessions)
+        const ownerUserId = ptyManager.getOwnerUserId(sessionId)
+        if (ownerUserId !== null && ownerUserId !== userId) {
+          send(ws, { type: 'error', payload: { message: 'Forbidden: session belongs to another user' } })
+          return
+        }
         ptyManager.write(sessionId, data)
       }
       break
@@ -99,6 +145,12 @@ function handleMessage(clientId: string, ws: WebSocket, msg: WsMessage) {
       const cols = msg.payload?.cols as number
       const rows = msg.payload?.rows as number
       if (sessionId && cols && rows) {
+        // Only allow resize for sessions owned by this user (or unowned sessions)
+        const ownerUserId = ptyManager.getOwnerUserId(sessionId)
+        if (ownerUserId !== null && ownerUserId !== userId) {
+          send(ws, { type: 'error', payload: { message: 'Forbidden: session belongs to another user' } })
+          return
+        }
         ptyManager.resize(sessionId, cols, rows)
       }
       break

@@ -4,14 +4,14 @@ import { broadcastEvent } from '../ws/server.js'
 import type { ReleaseTrain } from '../types/index.js'
 
 export const releaseTrainManager = {
-  async create(name: string, rigId: string, atomicTaskIds: string[] = [], description?: string): Promise<ReleaseTrain> {
+  async create(name: string, rigId: string, atomicTaskIds: string[] = [], description?: string, userId?: string): Promise<ReleaseTrain> {
     const db = getDb()
     const id = uuidv4()
     const now = new Date().toISOString()
 
     await db.execute({
-      sql: `INSERT INTO release_trains (id, name, rig_id, atomic_task_ids_json, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'open', ?, ?)`,
-      args: [id, name, rigId, JSON.stringify(atomicTaskIds), description ?? '', now, now],
+      sql: `INSERT INTO release_trains (id, name, rig_id, atomic_task_ids_json, description, status, user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?)`,
+      args: [id, name, rigId, JSON.stringify(atomicTaskIds), description ?? '', userId ?? null, now, now],
     })
 
     broadcastEvent({
@@ -31,8 +31,15 @@ export const releaseTrainManager = {
     return row ? toModel(row) : null
   },
 
-  async listByRig(rigId: string): Promise<ReleaseTrain[]> {
+  async listByRig(rigId: string, userId?: string): Promise<ReleaseTrain[]> {
     const db = getDb()
+    if (userId) {
+      const result = await db.execute({
+        sql: 'SELECT * FROM release_trains WHERE rig_id = ? AND (user_id = ? OR user_id IS NULL) ORDER BY created_at DESC',
+        args: [rigId, userId],
+      })
+      return result.rows.map((r) => toModel(r as unknown as DbReleaseTrain))
+    }
     const result = await db.execute({
       sql: 'SELECT * FROM release_trains WHERE rig_id = ? ORDER BY created_at DESC',
       args: [rigId],
@@ -40,16 +47,24 @@ export const releaseTrainManager = {
     return result.rows.map((r) => toModel(r as unknown as DbReleaseTrain))
   },
 
-  async listAll(): Promise<ReleaseTrain[]> {
+  async listAll(userId?: string): Promise<ReleaseTrain[]> {
     const db = getDb()
+    if (userId) {
+      const result = await db.execute({
+        sql: 'SELECT * FROM release_trains WHERE user_id = ? OR user_id IS NULL ORDER BY created_at DESC',
+        args: [userId],
+      })
+      return result.rows.map((r) => toModel(r as unknown as DbReleaseTrain))
+    }
     const result = await db.execute({ sql: 'SELECT * FROM release_trains ORDER BY created_at DESC', args: [] })
     return result.rows.map((r) => toModel(r as unknown as DbReleaseTrain))
   },
 
-  async addAtomicTasks(releaseTrainId: string, atomicTaskIds: string[]): Promise<ReleaseTrain> {
+  async addAtomicTasks(releaseTrainId: string, atomicTaskIds: string[], userId?: string): Promise<ReleaseTrain> {
     const db = getDb()
     const releaseTrain = await this.getById(releaseTrainId)
     if (!releaseTrain) throw new Error(`ReleaseTrain ${releaseTrainId} not found`)
+    if (userId && releaseTrain.userId && releaseTrain.userId !== userId) throw new Error('Forbidden')
     const merged = [...new Set([...releaseTrain.atomicTaskIds, ...atomicTaskIds])]
     await db.execute({
       sql: `UPDATE release_trains SET atomic_task_ids_json = ?, updated_at = datetime('now') WHERE id = ?`,
@@ -59,14 +74,15 @@ export const releaseTrainManager = {
   },
 
   /** Backward-compat alias */
-  async addBeads(releaseTrainId: string, beadIds: string[]): Promise<ReleaseTrain> {
-    return this.addAtomicTasks(releaseTrainId, beadIds)
+  async addBeads(releaseTrainId: string, beadIds: string[], userId?: string): Promise<ReleaseTrain> {
+    return this.addAtomicTasks(releaseTrainId, beadIds, userId)
   },
 
-  async removeAtomicTasks(releaseTrainId: string, atomicTaskIds: string[]): Promise<ReleaseTrain> {
+  async removeAtomicTasks(releaseTrainId: string, atomicTaskIds: string[], userId?: string): Promise<ReleaseTrain> {
     const db = getDb()
     const releaseTrain = await this.getById(releaseTrainId)
     if (!releaseTrain) throw new Error(`ReleaseTrain ${releaseTrainId} not found`)
+    if (userId && releaseTrain.userId && releaseTrain.userId !== userId) throw new Error('Forbidden')
     const filtered = releaseTrain.atomicTaskIds.filter((id) => !atomicTaskIds.includes(id))
     await db.execute({
       sql: `UPDATE release_trains SET atomic_task_ids_json = ?, updated_at = datetime('now') WHERE id = ?`,
@@ -76,12 +92,16 @@ export const releaseTrainManager = {
   },
 
   /** Backward-compat alias */
-  async removeBeads(releaseTrainId: string, beadIds: string[]): Promise<ReleaseTrain> {
-    return this.removeAtomicTasks(releaseTrainId, beadIds)
+  async removeBeads(releaseTrainId: string, beadIds: string[], userId?: string): Promise<ReleaseTrain> {
+    return this.removeAtomicTasks(releaseTrainId, beadIds, userId)
   },
 
-  async assignWorkerBee(releaseTrainId: string, workerBeeId: string | null): Promise<ReleaseTrain> {
+  async assignWorkerBee(releaseTrainId: string, workerBeeId: string | null, userId?: string): Promise<ReleaseTrain> {
     const db = getDb()
+    if (userId) {
+      const rt = await this.getById(releaseTrainId)
+      if (rt && rt.userId && rt.userId !== userId) throw new Error('Forbidden')
+    }
     await db.execute({
       sql: `UPDATE release_trains SET assigned_workerbee_id = ?, status = ?, updated_at = datetime('now') WHERE id = ?`,
       args: [workerBeeId, workerBeeId ? 'in_progress' : 'open', releaseTrainId],
@@ -95,8 +115,12 @@ export const releaseTrainManager = {
     return (await this.getById(releaseTrainId))!
   },
 
-  async updateDescription(releaseTrainId: string, description: string): Promise<ReleaseTrain> {
+  async updateDescription(releaseTrainId: string, description: string, userId?: string): Promise<ReleaseTrain> {
     const db = getDb()
+    if (userId) {
+      const rt = await this.getById(releaseTrainId)
+      if (rt && rt.userId && rt.userId !== userId) throw new Error('Forbidden')
+    }
     await db.execute({
       sql: `UPDATE release_trains SET description = ?, updated_at = datetime('now') WHERE id = ?`,
       args: [description, releaseTrainId],
@@ -104,8 +128,12 @@ export const releaseTrainManager = {
     return (await this.getById(releaseTrainId))!
   },
 
-  async land(releaseTrainId: string) {
+  async land(releaseTrainId: string, userId?: string) {
     const db = getDb()
+    if (userId) {
+      const rt = await this.getById(releaseTrainId)
+      if (rt && rt.userId && rt.userId !== userId) throw new Error('Forbidden')
+    }
     await db.execute({
       sql: `UPDATE release_trains SET status = 'landed', updated_at = datetime('now') WHERE id = ?`,
       args: [releaseTrainId],
@@ -118,8 +146,12 @@ export const releaseTrainManager = {
     })
   },
 
-  async cancel(releaseTrainId: string) {
+  async cancel(releaseTrainId: string, userId?: string) {
     const db = getDb()
+    if (userId) {
+      const rt = await this.getById(releaseTrainId)
+      if (rt && rt.userId && rt.userId !== userId) throw new Error('Forbidden')
+    }
     await db.execute({
       sql: `UPDATE release_trains SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?`,
       args: [releaseTrainId],
@@ -141,6 +173,7 @@ interface DbReleaseTrain {
   description: string
   assigned_workerbee_id: string | null
   status: ReleaseTrain['status']
+  user_id: string | null
   created_at: string
   updated_at: string
 }
@@ -154,6 +187,7 @@ function toModel(r: DbReleaseTrain): ReleaseTrain {
     atomicTaskIds: JSON.parse(r.atomic_task_ids_json ?? '[]'),
     assignedWorkerBeeId: r.assigned_workerbee_id ?? null,
     status: r.status,
+    userId: r.user_id ?? undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }

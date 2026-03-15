@@ -9,16 +9,17 @@ export const hookManager = {
     branch: string,
     notes?: string,
     workerBeeId?: string,
-    atomicTaskId?: string
+    atomicTaskId?: string,
+    userId?: string
   ): Promise<Hook> {
     const db = getDb()
     const id = uuidv4()
     const now = new Date().toISOString()
 
     await db.execute({
-      sql: `INSERT INTO hooks (id, rig_id, workerbee_id, atomic_task_id, status, branch, notes, created_at, updated_at)
-            VALUES (?, ?, ?, ?, 'created', ?, ?, ?, ?)`,
-      args: [id, projectId, workerBeeId ?? null, atomicTaskId ?? null, branch, notes ?? '', now, now],
+      sql: `INSERT INTO hooks (id, rig_id, workerbee_id, atomic_task_id, status, branch, notes, user_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 'created', ?, ?, ?, ?, ?)`,
+      args: [id, projectId, workerBeeId ?? null, atomicTaskId ?? null, branch, notes ?? '', userId ?? null, now, now],
     })
 
     broadcastEvent({
@@ -38,8 +39,15 @@ export const hookManager = {
     return row ? toModel(row) : null
   },
 
-  async listByProject(projectId: string): Promise<Hook[]> {
+  async listByProject(projectId: string, userId?: string): Promise<Hook[]> {
     const db = getDb()
+    if (userId) {
+      const result = await db.execute({
+        sql: 'SELECT * FROM hooks WHERE rig_id = ? AND (user_id = ? OR user_id IS NULL) ORDER BY created_at DESC',
+        args: [projectId, userId],
+      })
+      return result.rows.map((r) => toModel(r as unknown as DbHook))
+    }
     const result = await db.execute({
       sql: 'SELECT * FROM hooks WHERE rig_id = ? ORDER BY created_at DESC',
       args: [projectId],
@@ -47,13 +55,24 @@ export const hookManager = {
     return result.rows.map((r) => toModel(r as unknown as DbHook))
   },
 
-  async listAll(): Promise<Hook[]> {
+  async listAll(userId?: string): Promise<Hook[]> {
     const db = getDb()
+    if (userId) {
+      const result = await db.execute({
+        sql: 'SELECT * FROM hooks WHERE user_id = ? OR user_id IS NULL ORDER BY created_at DESC',
+        args: [userId],
+      })
+      return result.rows.map((r) => toModel(r as unknown as DbHook))
+    }
     const result = await db.execute({ sql: 'SELECT * FROM hooks ORDER BY created_at DESC', args: [] })
     return result.rows.map((r) => toModel(r as unknown as DbHook))
   },
 
-  async activate(id: string): Promise<void> {
+  async activate(id: string, userId?: string): Promise<void> {
+    if (userId) {
+      const hook = await this.getById(id)
+      if (hook && hook.userId && hook.userId !== userId) throw new Error('Forbidden')
+    }
     const db = getDb()
     await db.execute({
       sql: `UPDATE hooks SET status = 'active', updated_at = datetime('now') WHERE id = ?`,
@@ -67,7 +86,11 @@ export const hookManager = {
     })
   },
 
-  async suspend(id: string): Promise<void> {
+  async suspend(id: string, userId?: string): Promise<void> {
+    if (userId) {
+      const hook = await this.getById(id)
+      if (hook && hook.userId && hook.userId !== userId) throw new Error('Forbidden')
+    }
     const db = getDb()
     await db.execute({
       sql: `UPDATE hooks SET status = 'suspended', updated_at = datetime('now') WHERE id = ?`,
@@ -75,7 +98,11 @@ export const hookManager = {
     })
   },
 
-  async complete(id: string): Promise<void> {
+  async complete(id: string, userId?: string): Promise<void> {
+    if (userId) {
+      const hook = await this.getById(id)
+      if (hook && hook.userId && hook.userId !== userId) throw new Error('Forbidden')
+    }
     const db = getDb()
     await db.execute({
       sql: `UPDATE hooks SET status = 'completed', updated_at = datetime('now') WHERE id = ?`,
@@ -89,7 +116,11 @@ export const hookManager = {
     })
   },
 
-  async archive(id: string): Promise<void> {
+  async archive(id: string, userId?: string): Promise<void> {
+    if (userId) {
+      const hook = await this.getById(id)
+      if (hook && hook.userId && hook.userId !== userId) throw new Error('Forbidden')
+    }
     const db = getDb()
     await db.execute({
       sql: `UPDATE hooks SET status = 'archived', updated_at = datetime('now') WHERE id = ?`,
@@ -97,7 +128,11 @@ export const hookManager = {
     })
   },
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, userId?: string): Promise<void> {
+    if (userId) {
+      const hook = await this.getById(id)
+      if (hook && hook.userId && hook.userId !== userId) throw new Error('Forbidden')
+    }
     const db = getDb()
     await db.execute({ sql: 'DELETE FROM hooks WHERE id = ?', args: [id] })
   },
@@ -111,6 +146,7 @@ interface DbHook {
   status: Hook['status']
   branch: string
   notes: string
+  user_id: string | null
   created_at: string
   updated_at: string
 }
@@ -124,6 +160,7 @@ function toModel(r: DbHook): Hook {
     status: r.status,
     branch: r.branch,
     notes: r.notes,
+    userId: r.user_id ?? undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }

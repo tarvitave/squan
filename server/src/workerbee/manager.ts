@@ -20,7 +20,7 @@ const DONE_RE    = /\bDONE:\s*(.{1,300})/i
 const BLOCKED_RE = /\bBLOCKED:\s*(.{1,300})/i
 
 export const workerBeeManager = {
-  async spawn(projectId: string, taskDescription?: string): Promise<WorkerBee> {
+  async spawn(projectId: string, taskDescription?: string, userId?: string): Promise<WorkerBee> {
     const db = getDb()
     const id = uuidv4()
     const name = await allocateName(projectId)
@@ -71,13 +71,14 @@ export const workerBeeManager = {
         SQUANSQ_BRANCH: branch,
         SQUANSQ_WORKTREE: worktreePath,
       },
+      ownerUserId: userId,
     })
 
     const now = new Date().toISOString()
     await db.execute({
-      sql: `INSERT INTO workerbees (id, rig_id, name, branch, worktree_path, task_description, completion_note, status, hook_id, session_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, '', 'idle', NULL, ?, ?, ?)`,
-      args: [id, projectId, name, branch, worktreePath, taskDescription ?? '', sessionId, now, now],
+      sql: `INSERT INTO workerbees (id, rig_id, name, branch, worktree_path, task_description, completion_note, status, hook_id, session_id, user_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, '', 'idle', NULL, ?, ?, ?, ?)`,
+      args: [id, projectId, name, branch, worktreePath, taskDescription ?? '', sessionId, userId ?? null, now, now],
     })
 
     // --- Completion signal monitor ---
@@ -112,14 +113,28 @@ export const workerBeeManager = {
     return row ? toModel(row as unknown as DbRow) : null
   },
 
-  async listByProject(projectId: string): Promise<WorkerBee[]> {
+  async listByProject(projectId: string, userId?: string): Promise<WorkerBee[]> {
     const db = getDb()
+    if (userId) {
+      const result = await db.execute({
+        sql: 'SELECT * FROM workerbees WHERE rig_id = ? AND (user_id = ? OR user_id IS NULL)',
+        args: [projectId, userId],
+      })
+      return result.rows.map((r) => toModel(r as unknown as DbRow))
+    }
     const result = await db.execute({ sql: 'SELECT * FROM workerbees WHERE rig_id = ?', args: [projectId] })
     return result.rows.map((r) => toModel(r as unknown as DbRow))
   },
 
-  async listAll(): Promise<WorkerBee[]> {
+  async listAll(userId?: string): Promise<WorkerBee[]> {
     const db = getDb()
+    if (userId) {
+      const result = await db.execute({
+        sql: 'SELECT * FROM workerbees WHERE user_id = ? OR user_id IS NULL',
+        args: [userId],
+      })
+      return result.rows.map((r) => toModel(r as unknown as DbRow))
+    }
     const result = await db.execute({ sql: 'SELECT * FROM workerbees', args: [] })
     return result.rows.map((r) => toModel(r as unknown as DbRow))
   },
@@ -145,16 +160,18 @@ export const workerBeeManager = {
     })
   },
 
-  async sendMessage(id: string, message: string) {
+  async sendMessage(id: string, message: string, userId?: string) {
     const bee = await this.getById(id)
+    if (userId && bee?.userId && bee.userId !== userId) throw new Error('Forbidden')
     if (bee?.sessionId) {
       ptyManager.write(bee.sessionId, message + '\r')
     }
   },
 
-  async nuke(id: string) {
+  async nuke(id: string, userId?: string) {
     const db = getDb()
     const bee = await this.getById(id)
+    if (userId && bee?.userId && bee.userId !== userId) throw new Error('Forbidden')
     if (bee?.sessionId) {
       ptyManager.kill(bee.sessionId)
     }
@@ -260,6 +277,7 @@ interface DbRow {
   status: WorkerBee['status']
   hook_id: string | null
   session_id: string | null
+  user_id: string | null
   created_at: string
   updated_at: string
 }
@@ -276,6 +294,7 @@ function toModel(r: DbRow): WorkerBee {
     status: r.status,
     hookId: r.hook_id,
     sessionId: r.session_id,
+    userId: r.user_id ?? undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }

@@ -5,12 +5,20 @@ export interface Town {
   id: string
   name: string
   path: string
+  userId?: string
   createdAt: string
 }
 
 export const townManager = {
-  async list(): Promise<Town[]> {
+  async list(userId?: string): Promise<Town[]> {
     const db = getDb()
+    if (userId) {
+      const result = await db.execute({
+        sql: 'SELECT * FROM towns WHERE user_id = ? OR user_id IS NULL ORDER BY created_at ASC',
+        args: [userId],
+      })
+      return result.rows.map((r) => toModel(r as unknown as DbTown))
+    }
     const result = await db.execute({ sql: 'SELECT * FROM towns ORDER BY created_at ASC', args: [] })
     return result.rows.map((r) => toModel(r as unknown as DbTown))
   },
@@ -22,13 +30,13 @@ export const townManager = {
     return row ? toModel(row) : null
   },
 
-  async create(name: string, path: string): Promise<Town> {
+  async create(name: string, path: string, userId?: string): Promise<Town> {
     const db = getDb()
     const id = uuidv4()
     const now = new Date().toISOString()
     await db.execute({
-      sql: `INSERT INTO towns (id, name, path, created_at) VALUES (?, ?, ?, ?)`,
-      args: [id, name, path, now],
+      sql: `INSERT INTO towns (id, name, path, user_id, created_at) VALUES (?, ?, ?, ?, ?)`,
+      args: [id, name, path, userId ?? null, now],
     })
     return (await this.getById(id))!
   },
@@ -40,7 +48,7 @@ export const townManager = {
   },
 }
 
-interface DbTown { id: string; name: string; path: string; created_at: string }
+interface DbTown { id: string; name: string; path: string; user_id: string | null; created_at: string }
 function toModel(r: DbTown): Town {
-  return { id: r.id, name: r.name, path: r.path, createdAt: r.created_at }
+  return { id: r.id, name: r.name, path: r.path, userId: r.user_id ?? undefined, createdAt: r.created_at }
 }

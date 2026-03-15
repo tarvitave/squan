@@ -22,6 +22,7 @@ export async function migrate() {
       id TEXT PRIMARY KEY,
       path TEXT NOT NULL UNIQUE,
       name TEXT NOT NULL,
+      user_id TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -32,6 +33,7 @@ export async function migrate() {
       repo_url TEXT NOT NULL,
       local_path TEXT NOT NULL,
       runtime_json TEXT NOT NULL DEFAULT '{}',
+      user_id TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -44,6 +46,7 @@ export async function migrate() {
       status TEXT NOT NULL DEFAULT 'idle',
       hook_id TEXT,
       session_id TEXT,
+      user_id TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -53,6 +56,7 @@ export async function migrate() {
       town_id TEXT NOT NULL,
       session_id TEXT,
       status TEXT NOT NULL DEFAULT 'idle',
+      user_id TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -64,6 +68,7 @@ export async function migrate() {
       status TEXT NOT NULL DEFAULT 'created',
       branch TEXT NOT NULL,
       notes TEXT NOT NULL DEFAULT '',
+      user_id TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -74,6 +79,7 @@ export async function migrate() {
       rig_id TEXT NOT NULL,
       atomic_task_ids_json TEXT NOT NULL DEFAULT '[]',
       status TEXT NOT NULL DEFAULT 'open',
+      user_id TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -87,6 +93,7 @@ export async function migrate() {
       status TEXT NOT NULL DEFAULT 'open',
       assignee_id TEXT,
       depends_on TEXT NOT NULL DEFAULT '[]',
+      user_id TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -96,6 +103,7 @@ export async function migrate() {
       project_id TEXT NOT NULL,
       name TEXT NOT NULL,
       content TEXT NOT NULL DEFAULT '',
+      user_id TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -147,6 +155,15 @@ export async function migrate() {
     `ALTER TABLE release_trains RENAME COLUMN bead_ids_json TO atomic_task_ids_json`,
     `ALTER TABLE release_trains ADD COLUMN description TEXT NOT NULL DEFAULT ''`,
     `ALTER TABLE release_trains ADD COLUMN assigned_workerbee_id TEXT`,
+    // multi-tenant user_id columns
+    `ALTER TABLE towns ADD COLUMN user_id TEXT`,
+    `ALTER TABLE rigs ADD COLUMN user_id TEXT`,
+    `ALTER TABLE workerbees ADD COLUMN user_id TEXT`,
+    `ALTER TABLE mayors ADD COLUMN user_id TEXT`,
+    `ALTER TABLE hooks ADD COLUMN user_id TEXT`,
+    `ALTER TABLE release_trains ADD COLUMN user_id TEXT`,
+    `ALTER TABLE atomic_tasks ADD COLUMN user_id TEXT`,
+    `ALTER TABLE templates ADD COLUMN user_id TEXT`,
   ]
   for (const sql of alterStatements) {
     try {
