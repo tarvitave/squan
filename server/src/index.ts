@@ -836,6 +836,7 @@ app.post('/api/terminals', async (req, res) => {
   }
   const id = ptyManager.spawn({
     shell: req.body.shell ?? (process.env.TERMINAL_COMMAND ?? 'claude'),
+    args: Array.isArray(req.body.args) ? req.body.args : undefined,
     cwd: req.body.cwd,
     cols: req.body.cols ?? 120,
     rows: req.body.rows ?? 30,

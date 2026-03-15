@@ -10,6 +10,7 @@ interface Props {
 export function PaneGrid({ tab }: Props) {
   const addPaneToTab = useStore((s) => s.addPaneToTab)
   const removePaneFromTab = useStore((s) => s.removePaneFromTab)
+  const replacePaneInTab = useStore((s) => s.replacePaneInTab)
   const updateTabLayout = useStore((s) => s.updateTabLayout)
 
   if (tab.panes.length === 0) {
@@ -71,6 +72,15 @@ export function PaneGrid({ tab }: Props) {
             sessionId={sessionId}
             label={sessionId.slice(0, 8)}
             onClose={() => removePaneFromTab(tab.id, sessionId)}
+            onReconnect={async () => {
+              const res = await apiFetch('/api/terminals', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cols: 120, rows: 30, args: ['--continue'] }),
+              })
+              const { id } = await res.json()
+              replacePaneInTab(tab.id, sessionId, id)
+            }}
           />
         ))}
       </div>

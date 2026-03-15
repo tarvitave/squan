@@ -117,6 +117,7 @@ interface SquansqState {
   updateTabLayout: (id: string, layout: Tab['layout']) => void
   addPaneToTab: (tabId: string, sessionId: string) => void
   removePaneFromTab: (tabId: string, sessionId: string) => void
+  replacePaneInTab: (tabId: string, oldSessionId: string, newSessionId: string) => void
 
   // Rigs
   rigs: Rig[]
@@ -224,6 +225,13 @@ export const useStore = create<SquansqState>()(
         set((s) => ({
           tabs: s.tabs.map((t) =>
             t.id === tabId ? { ...t, panes: t.panes.filter((p) => p !== sessionId) } : t
+          ),
+        })),
+
+      replacePaneInTab: (tabId, oldSessionId, newSessionId) =>
+        set((s) => ({
+          tabs: s.tabs.map((t) =>
+            t.id === tabId ? { ...t, panes: t.panes.map((p) => (p === oldSessionId ? newSessionId : p)) } : t
           ),
         })),
 
