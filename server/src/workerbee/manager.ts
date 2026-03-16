@@ -219,10 +219,21 @@ function attachSignalMonitor(workerBeeId: string, sessionId: string) {
   let tail = ''
   let fired = false
   let markedWorking = false
+  let kicked = false   // whether we've sent the initial kickoff message
 
   ptyManager.subscribe(sessionId, monitorId, (data) => {
     if (fired) return
     tail = (tail + data).slice(-3000)
+
+    // Detect Claude's ready prompt (❯) and send a kickoff message once
+    // Claude starts in interactive mode and needs a first message to begin working
+    if (!kicked && tail.includes('\u276f')) {
+      kicked = true
+      setTimeout(() => {
+        ptyManager.write(sessionId, 'Please begin your assigned task as described in CLAUDE.md\r')
+        console.log(`[WorkerBee] ${workerBeeId} kickoff message sent`)
+      }, 500)
+    }
 
     // First real output → transition idle → working
     if (!markedWorking && data.trim().length > 0) {
