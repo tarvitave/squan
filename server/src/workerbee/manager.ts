@@ -249,15 +249,27 @@ function attachSignalMonitor(workerBeeId: string, sessionId: string) {
   let tail = ''
   let fired = false
   let markedWorking = false
-  let kicked = false   // whether we've sent the initial kickoff message
+  let kicked = false         // whether we've sent the initial kickoff message
+  let apiKeyAnswered = false // whether we've responded to the API key confirmation prompt
 
   ptyManager.subscribe(sessionId, monitorId, (data) => {
     if (fired) return
     tail = (tail + data).slice(-3000)
 
-    // Detect Claude's ready prompt (❯) and send a kickoff message once
-    // Claude starts in interactive mode and needs a first message to begin working
-    if (!kicked && tail.includes('\u276f')) {
+    // Claude may ask "Do you want to use this API key?" when ANTHROPIC_API_KEY is in env.
+    // Auto-answer "1" (Yes) so the key is used and we continue to the real ready prompt.
+    if (!apiKeyAnswered && tail.includes('Do you want to use this API key')) {
+      apiKeyAnswered = true
+      setTimeout(() => {
+        ptyManager.write(sessionId, '1\r')
+        console.log(`[WorkerBee] ${workerBeeId} accepted API key prompt`)
+      }, 300)
+    }
+
+    // Detect Claude's ready prompt (❯) and send a kickoff message once.
+    // Skip if the API key prompt is still visible (its menu also contains ❯).
+    const apiKeyPromptActive = tail.includes('Do you want to use this API key') && !apiKeyAnswered
+    if (!kicked && !apiKeyPromptActive && tail.includes('\u276f')) {
       kicked = true
       setTimeout(() => {
         ptyManager.write(sessionId, 'Please begin your assigned task as described in CLAUDE.md\r')
