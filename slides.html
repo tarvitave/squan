@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Squansq — Multi-Agent Development Platform</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0 }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #080808;
+    color: #d4d4d4;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  .deck { width: 100%; height: 100%; position: relative }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    padding: 60px 80px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.4s ease;
+  }
+  .slide.active { opacity: 1; pointer-events: all }
+
+  /* Nav */
+  .nav {
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 16px; z-index: 100;
+    background: rgba(15,15,15,0.9); border: 1px solid #1e1e1e;
+    border-radius: 40px; padding: 10px 24px;
+    backdrop-filter: blur(8px);
+  }
+  .nav button {
+    background: none; border: none; color: #555; cursor: pointer;
+    font-size: 18px; padding: 4px 8px; border-radius: 6px; transition: color 0.2s;
+  }
+  .nav button:hover { color: #d4d4d4 }
+  .nav .counter { font-size: 11px; color: #444; font-family: monospace; min-width: 40px; text-align: center }
+  .dot-nav { display: flex; gap: 6px; align-items: center }
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #2a2a2a; cursor: pointer; transition: background 0.2s;
+  }
+  .dot.active { background: #569cd6 }
+
+  /* Shared */
+  .tag {
+    font-size: 10px; font-family: monospace; letter-spacing: 0.12em;
+    text-transform: uppercase; color: #569cd6; margin-bottom: 16px;
+  }
+  h1 { font-size: 52px; font-weight: 700; line-height: 1.1; color: #fff }
+  h2 { font-size: 36px; font-weight: 700; color: #fff; margin-bottom: 8px }
+  h3 { font-size: 20px; font-weight: 600; color: #d4d4d4 }
+  p { font-size: 16px; line-height: 1.7; color: #888 }
+  .sub { font-size: 20px; color: #666; margin-top: 16px; line-height: 1.5 }
+
+  /* Slide 1 — Title */
+  #s1 { background: radial-gradient(ellipse at 60% 40%, #0d1f2d 0%, #080808 70%) }
+  .logo-mark {
+    font-size: 64px; font-family: monospace; font-weight: 900;
+    background: linear-gradient(135deg, #569cd6 0%, #4ec9b0 60%, #608b4e 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; letter-spacing: -2px;
+  }
+  .title-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 60px;
+    align-items: center; width: 100%; max-width: 1100px;
+  }
+  .title-visual { display: flex; flex-direction: column; gap: 10px; align-items: flex-end }
+  .bee-row {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(86,156,214,0.06); border: 1px solid rgba(86,156,214,0.15);
+    border-radius: 8px; padding: 10px 16px; width: 280px;
+  }
+  .bee-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0 }
+  .bee-label { font-size: 11px; font-family: monospace; color: #888; flex: 1 }
+  .bee-status { font-size: 10px; font-family: monospace }
+  .connector { width: 2px; height: 20px; background: linear-gradient(#569cd6, #4ec9b0); margin-left: 136px; opacity: 0.4 }
+
+  /* Slide 2 — Problem */
+  #s2 { background: radial-gradient(ellipse at 30% 50%, #1a0a0a 0%, #080808 70%) }
+  .problem-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; width: 100%; max-width: 1100px }
+  .problem-terminal {
+    background: #0c0c0c; border: 1px solid #2a2a2a; border-radius: 8px;
+    padding: 20px; font-family: monospace; font-size: 12px;
+  }
+  .term-bar { display: flex; gap: 6px; margin-bottom: 16px }
+  .term-dot { width: 10px; height: 10px; border-radius: 50% }
+  .term-line { color: #555; margin: 4px 0; line-height: 1.6 }
+  .term-line.active { color: #4ec9b0 }
+  .term-line.waiting { color: #ce9178 }
+  .term-cursor { display: inline-block; width: 8px; height: 14px; background: #569cd6; animation: blink 1s infinite }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  .pain-list { display: flex; flex-direction: column; gap: 16px }
+  .pain-item { display: flex; gap: 16px; align-items: flex-start }
+  .pain-icon { font-size: 20px; flex-shrink: 0; margin-top: 2px }
+  .pain-text h4 { font-size: 15px; color: #d4d4d4; margin-bottom: 4px }
+  .pain-text p { font-size: 13px; color: #666 }
+
+  /* Slide 3 — Solution */
+  #s3 { background: radial-gradient(ellipse at 70% 30%, #0a1a10 0%, #080808 70%) }
+  .solution-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: start; width: 100%; max-width: 1100px }
+  .bee-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px }
+  .bee-card {
+    background: #0d0d0d; border: 1px solid #1e1e1e; border-radius: 6px;
+    padding: 12px 14px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .bee-card-name { font-size: 11px; font-family: monospace; color: #d4d4d4 }
+  .bee-card-task { font-size: 10px; color: #555; font-family: monospace; line-height: 1.4 }
+  .bee-card-status { font-size: 9px; font-family: monospace }
+  .benefit-list { display: flex; flex-direction: column; gap: 20px; margin-top: 8px }
+  .benefit { display: flex; gap: 14px; align-items: flex-start }
+  .benefit-num { font-size: 28px; font-weight: 900; color: #569cd6; line-height: 1; flex-shrink: 0; width: 32px }
+  .benefit h4 { font-size: 15px; color: #d4d4d4; margin-bottom: 3px }
+  .benefit p { font-size: 13px; color: #666 }
+
+  /* Slide 4 — Architecture */
+  #s4 { background: #080808 }
+  .arch-wrap { width: 100%; max-width: 1100px }
+  .arch-diagram {
+    display: grid; gap: 2px;
+    grid-template-columns: 220px 1fr 220px;
+    grid-template-rows: auto auto auto;
+    align-items: start;
+  }
+  .arch-box {
+    background: #0d0d0d; border: 1px solid #1e1e1e; border-radius: 6px;
+    padding: 14px 16px;
+  }
+  .arch-box.blue { border-color: #1e3a5a; background: #091525 }
+  .arch-box.green { border-color: #1a3a20; background: #091509 }
+  .arch-box.amber { border-color: #3a2a10; background: #150f05 }
+  .arch-title { font-size: 10px; font-family: monospace; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px }
+  .arch-title.blue { color: #569cd6 }
+  .arch-title.green { color: #4ec9b0 }
+  .arch-title.amber { color: #ce9178 }
+  .arch-item { font-size: 11px; font-family: monospace; color: #666; padding: 2px 0; border-bottom: 1px solid #111 }
+  .arch-item:last-child { border-bottom: none }
+  .arch-arrow {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; color: #2a2a2a; padding: 8px 4px;
+  }
+  .arch-center { grid-column: 2; grid-row: 1 / 4; display: flex; flex-direction: column; gap: 8px; padding: 0 12px }
+  .arch-server {
+    background: #0c0c0c; border: 1px solid #2a2a2a; border-radius: 8px;
+    padding: 16px 20px; text-align: center;
+  }
+  .arch-server-title { font-size: 13px; font-family: monospace; color: #d4d4d4; margin-bottom: 12px }
+  .arch-layers { display: flex; flex-direction: column; gap: 6px }
+  .arch-layer {
+    background: #111; border: 1px solid #1e1e1e; border-radius: 4px;
+    padding: 8px 12px; font-size: 11px; font-family: monospace; color: #888;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .arch-layer-label { color: #555; font-size: 9px }
+  .worktree-row { display: flex; gap: 6px; margin-top: 4px }
+  .worktree-box {
+    flex: 1; background: #091509; border: 1px solid #1a3020; border-radius: 4px;
+    padding: 6px 8px; font-size: 9px; font-family: monospace; color: #4ec9b0; text-align: center;
+  }
+
+  /* Slide 5 — Workflow */
+  #s5 { background: radial-gradient(ellipse at 50% 20%, #0d1525 0%, #080808 60%) }
+  .flow-wrap { width: 100%; max-width: 1000px }
+  .flow-steps { display: flex; align-items: flex-start; gap: 0; margin-top: 32px }
+  .flow-step { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; position: relative }
+  .flow-step:not(:last-child)::after {
+    content: ''; position: absolute; top: 24px; left: calc(50% + 32px);
+    width: calc(100% - 64px); height: 1px;
+    background: linear-gradient(90deg, #1e3a5a, #1e1e1e);
+  }
+  .flow-num {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: #0d1a2d; border: 2px solid #569cd6;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: #569cd6; margin-bottom: 16px; position: relative; z-index: 1;
+  }
+  .flow-title { font-size: 13px; color: #d4d4d4; font-weight: 600; margin-bottom: 6px }
+  .flow-desc { font-size: 11px; color: #555; line-height: 1.5; padding: 0 8px }
+  .flow-icon { font-size: 20px; margin-bottom: 8px }
+
+  /* Slide 6 — Features */
+  #s6 { background: #080808 }
+  .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; width: 100%; max-width: 1100px; margin-top: 32px }
+  .feature-card {
+    background: #0d0d0d; border: 1px solid #1e1e1e; border-radius: 8px;
+    padding: 20px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .feature-icon { font-size: 24px }
+  .feature-title { font-size: 14px; color: #d4d4d4; font-weight: 600 }
+  .feature-desc { font-size: 12px; color: #666; line-height: 1.6 }
+
+  /* Slide 7 — Comparison */
+  #s7 { background: radial-gradient(ellipse at 50% 60%, #0a100a 0%, #080808 60%) }
+  .compare-wrap { width: 100%; max-width: 1000px }
+  .compare-table { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1px; background: #1a1a1a; border-radius: 8px; overflow: hidden; margin-top: 32px }
+  .compare-header { background: #111; padding: 14px 20px; font-size: 12px; font-family: monospace; font-weight: 700 }
+  .compare-header.center { text-align: center }
+  .compare-header.highlight { background: #091525; color: #569cd6 }
+  .compare-row { display: contents }
+  .compare-cell { background: #0d0d0d; padding: 12px 20px; font-size: 12px; font-family: monospace; color: #666; border-top: 1px solid #111 }
+  .compare-cell.feature-name { color: #888 }
+  .compare-cell.center { text-align: center }
+  .compare-cell.highlight { background: #09121e; color: #4ec9b0 }
+  .compare-cell.bad { color: #f44747 }
+  .compare-cell.ok { color: #ce9178 }
+  .compare-cell.good { color: #4ec9b0 }
+
+  /* Slide 8 — CTA */
+  #s8 { background: radial-gradient(ellipse at 50% 50%, #091525 0%, #080808 70%) }
+  .cta-center { text-align: center; max-width: 700px }
+  .cta-logo { font-size: 48px; font-family: monospace; font-weight: 900; background: linear-gradient(135deg, #569cd6, #4ec9b0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 24px }
+  .cta-tag { font-size: 11px; font-family: monospace; letter-spacing: 0.15em; color: #444; text-transform: uppercase; margin-bottom: 32px }
+  .cta-bullets { display: flex; flex-direction: column; gap: 12px; margin: 32px 0; text-align: left }
+  .cta-bullet { display: flex; gap: 12px; align-items: center; font-size: 14px; color: #888 }
+  .cta-bullet span:first-child { color: #4ec9b0; font-size: 16px }
+  .pill {
+    display: inline-block; padding: 8px 24px; border-radius: 4px;
+    font-size: 13px; font-family: monospace; font-weight: 600;
+    background: #1a3a5a; border: 1px solid #569cd6; color: #569cd6;
+    margin-top: 24px;
+  }
+
+  /* Slide number badge */
+  .slide-num {
+    position: absolute; top: 24px; right: 32px;
+    font-size: 10px; font-family: monospace; color: #2a2a2a;
+  }
+</style>
+</head>
+<body>
+
+<div class="deck">
+
+  <!-- SLIDE 1: TITLE -->
+  <div class="slide active" id="s1">
+    <div class="slide-num">01 / 08</div>
+    <div class="title-grid">
+      <div>
+        <div class="tag">Introducing</div>
+        <div class="logo-mark">squansq</div>
+        <h1 style="font-size:42px; margin-top:12px">Multi-Agent<br>Development<br>Platform</h1>
+        <p class="sub">Orchestrate a team of AI coding agents working<br>in parallel — like a software dev team, automated.</p>
+      </div>
+      <div class="title-visual">
+        <div class="bee-row">
+          <div class="bee-dot" style="background:#569cd6"></div>
+          <span class="bee-label">Mayor Lee</span>
+          <span class="bee-status" style="color:#569cd6">orchestrating</span>
+        </div>
+        <div class="connector"></div>
+        <div class="bee-row">
+          <div class="bee-dot" style="background:#4ec9b0"></div>
+          <span class="bee-label">bee-alpha · build auth API</span>
+          <span class="bee-status" style="color:#4ec9b0">● working</span>
+        </div>
+        <div class="bee-row">
+          <div class="bee-dot" style="background:#4ec9b0"></div>
+          <span class="bee-label">bee-bravo · write unit tests</span>
+          <span class="bee-status" style="color:#4ec9b0">● working</span>
+        </div>
+        <div class="bee-row">
+          <div class="bee-dot" style="background:#4ec9b0"></div>
+          <span class="bee-label">bee-charlie · security review</span>
+          <span class="bee-status" style="color:#4ec9b0">● working</span>
+        </div>
+        <div class="bee-row">
+          <div class="bee-dot" style="background:#608b4e"></div>
+          <span class="bee-label">bee-delta · update docs</span>
+          <span class="bee-status" style="color:#608b4e">✓ done</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 2: THE PROBLEM -->
+  <div class="slide" id="s2">
+    <div class="slide-num">02 / 08</div>
+    <div class="problem-layout">
+      <div>
+        <div class="tag">The Problem</div>
+        <h2>One terminal.<br>One task.<br>One bottleneck.</h2>
+        <p style="margin-top: 16px">Claude Code is powerful — but running a single session means your AI works sequentially, just like a solo developer.</p>
+        <div class="pain-list" style="margin-top: 28px">
+          <div class="pain-item">
+            <div class="pain-icon">⏱</div>
+            <div class="pain-text">
+              <h4>Sequential execution</h4>
+              <p>Each task must complete before the next begins. No parallelism.</p>
+            </div>
+          </div>
+          <div class="pain-item">
+            <div class="pain-icon">🧠</div>
+            <div class="pain-text">
+              <h4>Context window limits</h4>
+              <p>Large projects overwhelm a single session's context.</p>
+            </div>
+          </div>
+          <div class="pain-item">
+            <div class="pain-icon">👁</div>
+            <div class="pain-text">
+              <h4>No visibility</h4>
+              <p>Hard to track what the agent did, how long it ran, what it cost.</p>
+            </div>
+          </div>
+          <div class="pain-item">
+            <div class="pain-icon">🔁</div>
+            <div class="pain-text">
+              <h4>Manual repetition</h4>
+              <p>Security audits, design reviews, test runs — repeated manually every time.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="problem-terminal">
+        <div class="term-bar">
+          <div class="term-dot" style="background:#f44747"></div>
+          <div class="term-dot" style="background:#ce9178"></div>
+          <div class="term-dot" style="background:#608b4e"></div>
+          <span style="font-size:11px; color:#333; margin-left:8px">claude · 1 session</span>
+        </div>
+        <div class="term-line">$ claude</div>
+        <div class="term-line active">▶ Build the authentication API…</div>
+        <div class="term-line" style="color:#333">  thinking... ████████░░ 82%</div>
+        <div class="term-line" style="color:#333; margin-top:8px">✓ Auth API done (12 min)</div>
+        <div class="term-line waiting" style="margin-top:8px">▷ Write unit tests… (waiting)</div>
+        <div class="term-line waiting">▷ Security review… (waiting)</div>
+        <div class="term-line waiting">▷ Update docs… (waiting)</div>
+        <div class="term-line waiting">▷ Optimize database queries… (waiting)</div>
+        <div style="margin-top:16px; font-size:10px; color:#3a3a3a; border-top: 1px solid #1a1a1a; padding-top: 12px">
+          Estimated time remaining: ~48 minutes<br>
+          Tasks completed: 1 / 5
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 3: THE SOLUTION -->
+  <div class="slide" id="s3">
+    <div class="slide-num">03 / 08</div>
+    <div class="solution-layout">
+      <div>
+        <div class="tag">The Solution</div>
+        <h2>A team of agents,<br>working in parallel.</h2>
+        <p style="margin-top: 16px">Squansq spins up multiple Claude Code instances simultaneously, each isolated in its own git worktree.</p>
+        <div class="benefit-list" style="margin-top: 28px">
+          <div class="benefit">
+            <div class="benefit-num">5×</div>
+            <div>
+              <h4>Faster delivery</h4>
+              <p>5 tasks in parallel completes in the time of 1 sequential task.</p>
+            </div>
+          </div>
+          <div class="benefit">
+            <div class="benefit-num">∞</div>
+            <div>
+              <h4>Unlimited scale</h4>
+              <p>Spawn as many WorkerBees as your project needs, each with its own context.</p>
+            </div>
+          </div>
+          <div class="benefit">
+            <div class="benefit-num">0</div>
+            <div>
+              <h4>Zero conflicts</h4>
+              <p>Git worktrees keep every agent isolated — no merge hell.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:10px; font-family:monospace; color:#444; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:10px">5 agents · running now</div>
+        <div class="bee-grid">
+          <div class="bee-card" style="border-color: #1a3a20">
+            <div class="bee-card-name">bee-alpha</div>
+            <div class="bee-card-task">Build auth API with JWT tokens</div>
+            <div class="bee-card-status" style="color:#4ec9b0">● working · 4m</div>
+          </div>
+          <div class="bee-card" style="border-color: #1a3a20">
+            <div class="bee-card-name">bee-bravo</div>
+            <div class="bee-card-task">Write Jest unit tests for API</div>
+            <div class="bee-card-status" style="color:#4ec9b0">● working · 6m</div>
+          </div>
+          <div class="bee-card" style="border-color: #1a3a20">
+            <div class="bee-card-name">bee-charlie</div>
+            <div class="bee-card-task">Run full security scan</div>
+            <div class="bee-card-status" style="color:#4ec9b0">● working · 2m</div>
+          </div>
+          <div class="bee-card" style="border-color: #1a2a3a">
+            <div class="bee-card-name">bee-delta</div>
+            <div class="bee-card-task">Optimise DB query performance</div>
+            <div class="bee-card-status" style="color:#608b4e">✓ done · 8m</div>
+          </div>
+          <div class="bee-card" style="border-color: #1a3a20">
+            <div class="bee-card-name">bee-echo</div>
+            <div class="bee-card-task">Update API documentation</div>
+            <div class="bee-card-status" style="color:#4ec9b0">● working · 3m</div>
+          </div>
+          <div class="bee-card" style="border-color: #1a1a1a; opacity:0.4">
+            <div class="bee-card-name" style="color:#444">bee-foxtrot</div>
+            <div class="bee-card-task" style="color:#333">Waiting for task…</div>
+            <div class="bee-card-status" style="color:#333">○ idle</div>
+          </div>
+        </div>
+        <div style="margin-top: 12px; font-size:10px; font-family:monospace; color:#2a6a40; background:#091509; border:1px solid #1a3a20; border-radius:4px; padding: 8px 12px">
+          ✓ Estimated parallel completion: ~8 minutes (vs ~48 sequential)
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 4: ARCHITECTURE -->
+  <div class="slide" id="s4">
+    <div class="slide-num">04 / 08</div>
+    <div class="arch-wrap">
+      <div class="tag">Architecture</div>
+      <h2 style="margin-bottom: 24px">How it works under the hood</h2>
+      <div class="arch-diagram">
+
+        <!-- Left: Browser -->
+        <div>
+          <div class="arch-box blue" style="margin-bottom:8px">
+            <div class="arch-title blue">Browser (React)</div>
+            <div class="arch-item">Kanban Board</div>
+            <div class="arch-item">Terminal Panes (xterm.js)</div>
+            <div class="arch-item">Agent Tree sidebar</div>
+            <div class="arch-item">Cost & Metrics views</div>
+          </div>
+          <div class="arch-box blue">
+            <div class="arch-title blue">Mayor Lee</div>
+            <div class="arch-item">Orchestrator agent</div>
+            <div class="arch-item">MCP tools</div>
+            <div class="arch-item">Spawns WorkerBees</div>
+          </div>
+        </div>
+
+        <!-- Center: Server -->
+        <div class="arch-center">
+          <div class="arch-server">
+            <div class="arch-server-title">Node.js Server</div>
+            <div class="arch-layers">
+              <div class="arch-layer">
+                <span>WebSocket</span>
+                <span class="arch-layer-label">real-time events</span>
+              </div>
+              <div class="arch-layer">
+                <span>Express REST API</span>
+                <span class="arch-layer-label">projects · tasks · agents</span>
+              </div>
+              <div class="arch-layer">
+                <span>node-pty</span>
+                <span class="arch-layer-label">PTY sessions</span>
+              </div>
+              <div class="arch-layer">
+                <span>Signal Monitor</span>
+                <span class="arch-layer-label">DONE / BLOCKED detection</span>
+              </div>
+              <div class="arch-layer">
+                <span>SQLite</span>
+                <span class="arch-layer-label">projects · agents · tasks</span>
+              </div>
+            </div>
+          </div>
+          <div style="text-align:center; font-size:10px; color:#2a2a2a; font-family:monospace; margin: 4px 0">↕ WebSocket · REST</div>
+          <div class="arch-server" style="border-color:#1a3a20">
+            <div class="arch-server-title" style="color:#4ec9b0">Git Worktrees (per WorkerBee)</div>
+            <div class="worktree-row">
+              <div class="worktree-box">bee-alpha<br>branch</div>
+              <div class="worktree-box">bee-bravo<br>branch</div>
+              <div class="worktree-box">bee-charlie<br>branch</div>
+              <div class="worktree-box">bee-delta<br>branch</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Agents -->
+        <div>
+          <div class="arch-box green">
+            <div class="arch-title green">WorkerBee (Claude Code)</div>
+            <div class="arch-item">PTY subprocess</div>
+            <div class="arch-item">CLAUDE.md task injection</div>
+            <div class="arch-item">ANTHROPIC_API_KEY env</div>
+            <div class="arch-item">Auto-kickoff on ❯ prompt</div>
+            <div class="arch-item">DONE: / BLOCKED: signals</div>
+          </div>
+          <div class="arch-box amber" style="margin-top:8px">
+            <div class="arch-title amber">Release Trains</div>
+            <div class="arch-item">Work bundles (Kanban)</div>
+            <div class="arch-item">Auto-land on DONE:</div>
+            <div class="arch-item">Auto-cancel on kill</div>
+            <div class="arch-item">Standby templates</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 5: WORKFLOW -->
+  <div class="slide" id="s5">
+    <div class="slide-num">05 / 08</div>
+    <div class="flow-wrap">
+      <div class="tag">Developer Workflow</div>
+      <h2>From idea to merged code</h2>
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="flow-num">1</div>
+          <div class="flow-icon">📋</div>
+          <div class="flow-title">Create Release Train</div>
+          <div class="flow-desc">Write a description of the feature or task. This becomes the agent's instructions (CLAUDE.md).</div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">2</div>
+          <div class="flow-icon">🚀</div>
+          <div class="flow-title">Dispatch</div>
+          <div class="flow-desc">Squansq spawns a WorkerBee in an isolated git worktree and auto-sends the kickoff message.</div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">3</div>
+          <div class="flow-icon">👁</div>
+          <div class="flow-title">Monitor</div>
+          <div class="flow-desc">Watch the live terminal, view replay frames, or let Mayor Lee coordinate while you focus elsewhere.</div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">4</div>
+          <div class="flow-icon">✅</div>
+          <div class="flow-title">Auto-land</div>
+          <div class="flow-desc">When the agent signals DONE:, the Release Train lands automatically. Review the branch and merge.</div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">5</div>
+          <div class="flow-icon">🔁</div>
+          <div class="flow-title">Repeat</div>
+          <div class="flow-desc">Standbys let you re-run security reviews, design audits, and tests with a single click.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 6: FEATURES -->
+  <div class="slide" id="s6">
+    <div class="slide-num">06 / 08</div>
+    <div style="width:100%; max-width:1100px">
+      <div class="tag">Key Features</div>
+      <h2>Everything you need to run a dev team at scale</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🐝</div>
+          <div class="feature-title">WorkerBees</div>
+          <div class="feature-desc">Ephemeral Claude Code agents, each with a git worktree, CLAUDE.md task injection, and auto-kickoff. Up to 15 named agents per project.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🎛</div>
+          <div class="feature-title">Mayor Lee Orchestrator</div>
+          <div class="feature-desc">An AI manager that coordinates WorkerBees via MCP tools — creating tasks, dispatching agents, monitoring progress, and landing work.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <div class="feature-title">Kanban Board</div>
+          <div class="feature-desc">Visual workflow board tracking every task from Open → In Progress → Landed. One-click dispatch, re-dispatch for stalled work, automatic cancellation.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">⎇</div>
+          <div class="feature-title">Git Worktree Isolation</div>
+          <div class="feature-desc">Every WorkerBee gets its own branch and working directory. Agents never conflict. Failed agents don't pollute the main branch.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📡</div>
+          <div class="feature-title">Live Terminals</div>
+          <div class="feature-desc">Full xterm.js terminals for every agent. Watch Claude think in real time, send messages, or view ANSI-stripped replay frames after completion.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <div class="feature-title">Standbys</div>
+          <div class="feature-desc">One-click dispatch for repeatable tasks — security reviews, design audits, performance checks. System templates included, create your own.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">💰</div>
+          <div class="feature-title">Pay-as-you-go API</div>
+          <div class="feature-desc">WorkerBees use your Anthropic API key directly, avoiding Claude Pro subscription limits. Built-in cost activity dashboard.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔄</div>
+          <div class="feature-title">Session Replay</div>
+          <div class="feature-desc">Every 30 seconds a frame is captured. Step through what an agent did, view completion notes, and diagnose zombie failures.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🏗</div>
+          <div class="feature-title">Multi-workspace</div>
+          <div class="feature-desc">Multiple workspaces, each with projects, agents, and a dedicated Mayor Lee. Add projects by detecting git repos in your workspace directory.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 7: COMPARISON -->
+  <div class="slide" id="s7">
+    <div class="slide-num">07 / 08</div>
+    <div class="compare-wrap">
+      <div class="tag">vs. the alternative</div>
+      <h2>Single terminal vs. Squansq</h2>
+      <div class="compare-table">
+        <div class="compare-header">Capability</div>
+        <div class="compare-header center">Single Claude Code</div>
+        <div class="compare-header center highlight">Squansq</div>
+
+        <div class="compare-row">
+          <div class="compare-cell feature-name">Parallel tasks</div>
+          <div class="compare-cell center bad">✕ Sequential only</div>
+          <div class="compare-cell center highlight good">✓ Unlimited agents</div>
+        </div>
+        <div class="compare-row">
+          <div class="compare-cell feature-name">Task isolation</div>
+          <div class="compare-cell center bad">✕ Shared workspace</div>
+          <div class="compare-cell center highlight good">✓ Per-agent git worktree</div>
+        </div>
+        <div class="compare-row">
+          <div class="compare-cell feature-name">Work tracking</div>
+          <div class="compare-cell center bad">✕ Manual</div>
+          <div class="compare-cell center highlight good">✓ Kanban + Release Trains</div>
+        </div>
+        <div class="compare-row">
+          <div class="compare-cell feature-name">Orchestration</div>
+          <div class="compare-cell center bad">✕ Human-driven</div>
+          <div class="compare-cell center highlight good">✓ Mayor Lee AI manager</div>
+        </div>
+        <div class="compare-row">
+          <div class="compare-cell feature-name">Session history</div>
+          <div class="compare-cell center bad">✕ Lost on exit</div>
+          <div class="compare-cell center highlight good">✓ 30s replay frames</div>
+        </div>
+        <div class="compare-row">
+          <div class="compare-cell feature-name">Repeatable tasks</div>
+          <div class="compare-cell center ok">~ Re-type each time</div>
+          <div class="compare-cell center highlight good">✓ Standby templates</div>
+        </div>
+        <div class="compare-row">
+          <div class="compare-cell feature-name">Cost tracking</div>
+          <div class="compare-cell center bad">✕ None</div>
+          <div class="compare-cell center highlight good">✓ Activity dashboard</div>
+        </div>
+        <div class="compare-row">
+          <div class="compare-cell feature-name">API billing</div>
+          <div class="compare-cell center ok">~ Pro subscription</div>
+          <div class="compare-cell center highlight good">✓ Pay-per-use API key</div>
+        </div>
+        <div class="compare-row">
+          <div class="compare-cell feature-name">Multi-project</div>
+          <div class="compare-cell center ok">~ Manual switching</div>
+          <div class="compare-cell center highlight good">✓ Multiple workspaces</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDE 8: CTA -->
+  <div class="slide" id="s8">
+    <div class="slide-num">08 / 08</div>
+    <div class="cta-center">
+      <div class="cta-logo">squansq</div>
+      <h2 style="font-size:32px">Your AI dev team,<br>ready to ship.</h2>
+      <div class="cta-tag" style="margin-top:16px">squansq.com</div>
+      <div class="cta-bullets">
+        <div class="cta-bullet"><span>✦</span><span>Spawn multiple Claude Code agents in parallel, each in an isolated git worktree</span></div>
+        <div class="cta-bullet"><span>✦</span><span>Let Mayor Lee orchestrate your backlog — create tasks, dispatch agents, land work</span></div>
+        <div class="cta-bullet"><span>✦</span><span>One-click Standbys for security reviews, design audits, and repeatable tasks</span></div>
+        <div class="cta-bullet"><span>✦</span><span>Real-time terminals, session replay, cost tracking — full visibility over every agent</span></div>
+        <div class="cta-bullet"><span>✦</span><span>Pay-as-you-go with your own Anthropic API key — no Pro subscription limits</span></div>
+      </div>
+      <div style="margin-top: 32px; display: flex; justify-content: center; gap: 12px">
+        <div class="pill">squansq.com</div>
+        <div class="pill" style="background:#091509; border-color:#4ec9b0; color:#4ec9b0">github.com/tarvitave/squansq</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end deck -->
+
+<!-- Navigation -->
+<div class="nav">
+  <button id="prev" onclick="go(-1)">‹</button>
+  <div class="dot-nav" id="dots"></div>
+  <button id="next" onclick="go(1)">›</button>
+  <span class="counter" id="counter">1 / 8</span>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide')
+  const total = slides.length
+  let cur = 0
+
+  const dotsEl = document.getElementById('dots')
+  slides.forEach((_, i) => {
+    const d = document.createElement('div')
+    d.className = 'dot' + (i === 0 ? ' active' : '')
+    d.onclick = () => go(i - cur)
+    dotsEl.appendChild(d)
+  })
+
+  function go(delta) {
+    slides[cur].classList.remove('active')
+    dotsEl.children[cur].classList.remove('active')
+    cur = Math.max(0, Math.min(total - 1, cur + delta))
+    slides[cur].classList.add('active')
+    dotsEl.children[cur].classList.add('active')
+    document.getElementById('counter').textContent = `${cur+1} / ${total}`
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') go(1)
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   go(-1)
+  })
+</script>
+
+</body>
+</html>
