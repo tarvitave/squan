@@ -95,7 +95,7 @@ export interface TownEntry {
   createdAt: string
 }
 
-export type MainView = 'terminals' | 'kanban' | 'metrics' | 'events'
+export type MainView = 'terminals' | 'kanban' | 'metrics' | 'events' | 'costs'
 
 interface SquansqState {
   // Auth

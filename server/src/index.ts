@@ -985,6 +985,63 @@ app.post('/api/webhooks/github', express.raw({ type: 'application/json' }), asyn
   }
 })
 
+// --- Costs ---
+app.get('/api/costs/summary', requireAuth, async (req, res) => {
+  const userId = res.locals.userId as string
+  const db = getDb()
+
+  // All workerbees for this user, all time
+  const result = await db.execute({
+    sql: `SELECT name, status, task_description, created_at, updated_at
+          FROM workerbees WHERE user_id = ? OR user_id IS NULL ORDER BY created_at DESC`,
+    args: [userId],
+  })
+  const bees = result.rows as unknown as Array<{
+    name: string; status: string; task_description: string; created_at: string; updated_at: string
+  }>
+
+  // Per-day counts for the last 30 days
+  const dailyResult = await db.execute({
+    sql: `SELECT date(created_at) as day, COUNT(*) as spawned,
+          SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) as done,
+          SUM(CASE WHEN status = 'zombie' THEN 1 ELSE 0 END) as zombie
+          FROM workerbees WHERE (user_id = ? OR user_id IS NULL)
+            AND created_at >= date('now', '-30 days')
+          GROUP BY day ORDER BY day ASC`,
+    args: [userId],
+  })
+
+  const user = await getUserById(userId)
+  const hasApiKey = !!user?.anthropicApiKey
+
+  res.json({
+    hasApiKey,
+    apiKeyMasked: user?.anthropicApiKey
+      ? `sk-ant-...${user.anthropicApiKey.slice(-8)}`
+      : null,
+    totalSpawned: bees.length,
+    byStatus: bees.reduce<Record<string, number>>((acc, b) => {
+      acc[b.status] = (acc[b.status] ?? 0) + 1; return acc
+    }, {}),
+    recent: bees.slice(0, 50).map((b) => ({
+      name: b.name,
+      status: b.status,
+      task: b.task_description?.slice(0, 80),
+      createdAt: b.created_at,
+      updatedAt: b.updated_at,
+      durationMs: b.updated_at && b.created_at
+        ? new Date(b.updated_at).getTime() - new Date(b.created_at).getTime()
+        : null,
+    })),
+    daily: dailyResult.rows.map((r) => ({
+      day: r.day as string,
+      spawned: Number(r.spawned),
+      done: Number(r.done),
+      zombie: Number(r.zombie),
+    })),
+  })
+})
+
 // --- Metrics ---
 app.get('/api/metrics', async (req, res) => {
   const userId = res.locals.userId as string

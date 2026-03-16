@@ -10,6 +10,7 @@ import { AuthPage } from './components/AuthPage/index.js'
 import { AccountPanel } from './components/AccountPanel/index.js'
 import { KanbanView } from './components/KanbanView/index.js'
 import { MetricsPanel } from './components/MetricsPanel/index.js'
+import { CostPanel } from './components/CostPanel/index.js'
 import { ToastContainer } from './components/Toast/index.js'
 import { TownSelector } from './components/TownSelector/index.js'
 import { useStore } from './store/index.js'
@@ -133,6 +134,7 @@ export default function App() {
           <ViewBtn label="Kanban" view="kanban" active={mainView === 'kanban'} onClick={setMainView} />
           <ViewBtn label="Metrics" view="metrics" active={mainView === 'metrics'} onClick={setMainView} />
           <ViewBtn label="Events" view="events" active={mainView === 'events'} onClick={setMainView} />
+          <ViewBtn label="Costs" view="costs" active={mainView === 'costs'} onClick={setMainView} />
         </div>
 
         <div style={styles.content}>
@@ -151,6 +153,8 @@ export default function App() {
 
           {mainView === 'metrics' && <MetricsPanel />}
 
+          {mainView === 'costs' && <CostPanel />}
+
           {mainView === 'events' && (
             <div style={styles.eventsPane}>
               <EventStream />
@@ -166,7 +170,7 @@ function ViewBtn({
   label, view, active, onClick
 }: {
   label: string
-  view: 'terminals' | 'kanban' | 'metrics' | 'events'
+  view: 'terminals' | 'kanban' | 'metrics' | 'events' | 'costs'
   active: boolean
   onClick: (v: typeof view) => void
 }) {
