@@ -50,11 +50,17 @@ function Board() {
   const rigs = useStore((s) => s.rigs)
   const atomicTasks = useStore((s) => s.atomicTasks)
   const updateReleaseTrain = useStore((s) => s.updateReleaseTrain)
+  const addReleaseTrain = useStore((s) => s.addReleaseTrain)
   const addAgent = useStore((s) => s.addAgent)
   const addPaneToTab = useStore((s) => s.addPaneToTab)
   const addTab = useStore((s) => s.addTab)
   const activeTabId = useStore((s) => s.activeTabId)
   const tabs = useStore((s) => s.tabs)
+
+  const [showNewForm, setShowNewForm] = useState(false)
+  const [newForm, setNewForm] = useState({ name: '', description: '', projectId: '' })
+  const [creating, setCreating] = useState(false)
+  const [autoDispatch, setAutoDispatch] = useState(true)
 
   const agentById = Object.fromEntries(agents.map((a) => [a.id, a]))
   const rigNameById = Object.fromEntries(rigs.map((r) => [r.id, r.name]))
@@ -107,6 +113,42 @@ function Board() {
     }
   }
 
+  const handleCreate = async () => {
+    const projectId = newForm.projectId || rigs[0]?.id
+    if (!newForm.name.trim() || !projectId) return
+    setCreating(true)
+    try {
+      const res = await apiFetch('/api/release-trains', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newForm.name.trim(), description: newForm.description.trim(), projectId }),
+      })
+      const created = await res.json()
+      addReleaseTrain(created)
+      setShowNewForm(false)
+      setNewForm({ name: '', description: '', projectId: '' })
+      if (autoDispatch) {
+        const dres = await apiFetch(`/api/release-trains/${created.id}/dispatch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        })
+        const data = await dres.json()
+        if (data.bee) addAgent({ ...data.bee, taskDescription: data.bee.taskDescription ?? '', worktreePath: data.bee.worktreePath ?? '', branch: data.bee.branch ?? '' })
+        if (data.releaseTrain) updateReleaseTrain(created.id, { assignedWorkerBeeId: data.releaseTrain.assignedWorkerBeeId, status: data.releaseTrain.status })
+        if (data.bee?.sessionId) {
+          const hasSession = tabs.some((t: { panes: string[] }) => t.panes.includes(data.bee.sessionId))
+          if (!hasSession) {
+            if (activeTabId) addPaneToTab(activeTabId, data.bee.sessionId)
+            else addTab(data.bee.name, [data.bee.sessionId])
+          }
+        }
+      }
+    } finally {
+      setCreating(false)
+    }
+  }
+
   const openBeeTerminal = (bee: { sessionId: string | null; name: string }) => {
     if (!bee.sessionId) return
     const hasSession = tabs.some((t: { panes: string[] }) => t.panes.includes(bee.sessionId!))
@@ -125,7 +167,48 @@ function Board() {
             <div style={styles.colHeader}>
               <span style={{ ...styles.colTitle, color: col.color }}>{col.label}</span>
               <span style={styles.colCount}>{cards.length}</span>
+              {col.status === 'open' && (
+                <button style={styles.newBtn} onClick={() => setShowNewForm((v) => !v)} title="New release train">+</button>
+              )}
             </div>
+            {col.status === 'open' && showNewForm && (
+              <div style={styles.newForm}>
+                <input
+                  style={styles.formInput}
+                  placeholder="Task name…"
+                  value={newForm.name}
+                  onChange={(e) => setNewForm((f) => ({ ...f, name: e.target.value }))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleCreate() }}
+                  autoFocus
+                />
+                <textarea
+                  style={{ ...styles.formInput, resize: 'vertical' as const, minHeight: 48 }}
+                  placeholder="Description (becomes the WorkerBee's instructions)…"
+                  value={newForm.description}
+                  rows={2}
+                  onChange={(e) => setNewForm((f) => ({ ...f, description: e.target.value }))}
+                />
+                {rigs.length > 1 && (
+                  <select
+                    style={styles.formInput}
+                    value={newForm.projectId || rigs[0]?.id}
+                    onChange={(e) => setNewForm((f) => ({ ...f, projectId: e.target.value }))}
+                  >
+                    {rigs.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                  </select>
+                )}
+                <label style={styles.checkRow}>
+                  <input type="checkbox" checked={autoDispatch} onChange={(e) => setAutoDispatch(e.target.checked)} />
+                  <span style={styles.checkLabel}>auto-dispatch WorkerBee</span>
+                </label>
+                <div style={styles.formActions}>
+                  <button style={styles.actionBtn} onClick={handleCreate} disabled={creating || !newForm.name.trim()}>
+                    {creating ? '…' : autoDispatch ? 'Create & Dispatch' : 'Create'}
+                  </button>
+                  <button style={{ ...styles.actionBtn, color: '#555' }} onClick={() => setShowNewForm(false)}>cancel</button>
+                </div>
+              </div>
+            )}
             <div style={styles.cards}>
               {cards.map((releaseTrain) => {
                 const assignedBee = releaseTrain.assignedWorkerBeeId ? agentById[releaseTrain.assignedWorkerBeeId] : null
@@ -364,5 +447,50 @@ const styles = {
     fontFamily: 'monospace',
     textAlign: 'center' as const,
     padding: '16px 0',
+  },
+  newBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#444',
+    cursor: 'pointer',
+    fontSize: 16,
+    lineHeight: 1,
+    padding: '0 2px',
+    marginLeft: 4,
+  },
+  newForm: {
+    padding: '8px 10px',
+    borderBottom: '1px solid #1e1e1e',
+    background: '#0c0c0c',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 6,
+  },
+  formInput: {
+    background: '#111',
+    border: '1px solid #2a2a2a',
+    color: '#d4d4d4',
+    borderRadius: 3,
+    padding: '4px 6px',
+    fontSize: 11,
+    fontFamily: 'monospace',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box' as const,
+  },
+  checkRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    cursor: 'pointer',
+  },
+  checkLabel: {
+    fontSize: 10,
+    color: '#888',
+    fontFamily: 'monospace',
+  },
+  formActions: {
+    display: 'flex',
+    gap: 4,
   },
 }
