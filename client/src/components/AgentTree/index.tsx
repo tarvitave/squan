@@ -172,11 +172,12 @@ function AgentRow({
 
       {expanded && (
         <div style={styles.detail}>
+          <button style={styles.collapseBtn} onClick={onToggle}>▲ collapse</button>
           {/* Task */}
           {agent.taskDescription && (
             <div style={styles.detailSection}>
               <div style={styles.detailLabel}>task</div>
-              <div style={styles.detailText}>{agent.taskDescription}</div>
+              <div style={{ ...styles.detailText, maxHeight: 80, overflow: 'auto' }}>{agent.taskDescription}</div>
             </div>
           )}
 
@@ -286,9 +287,12 @@ const styles = {
     fontSize: 12, padding: '0 2px', flexShrink: 0,
   },
   killBtn: {
-    background: 'none', border: 'none', color: '#3a2020', cursor: 'pointer',
+    background: 'none', border: 'none', color: '#f44747', cursor: 'pointer',
     fontSize: 10, padding: '0 2px', flexShrink: 0,
-    ':hover': { color: '#f44747' },
+  },
+  collapseBtn: {
+    background: 'none', border: 'none', color: '#444', cursor: 'pointer',
+    fontSize: 9, fontFamily: 'monospace', padding: '0 0 4px', textAlign: 'left' as const,
   },
   detail: {
     background: '#0c0c0c', borderBottom: '1px solid #1a1a1a',
