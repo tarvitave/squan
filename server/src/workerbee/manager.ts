@@ -7,6 +7,7 @@ import { ptyManager } from './pty.js'
 import { rigManager } from '../rig/manager.js'
 import { releaseTrainManager } from '../releasetrain/manager.js'
 import { broadcastEvent } from '../ws/server.js'
+import { getUserById } from '../auth/index.js'
 import type { WorkerBee } from '../types/index.js'
 
 // WorkerBee name pool
@@ -63,16 +64,23 @@ export const workerBeeManager = {
       }
     }
 
+    // Inject the user's Anthropic API key so WorkerBees use pay-as-you-go billing
+    const user = userId ? await getUserById(userId) : null
+    const workerEnv: Record<string, string> = {
+      SQUANSQ_WORKERBEE: name,
+      SQUANSQ_PROJECT: projectId,
+      SQUANSQ_BRANCH: branch,
+      SQUANSQ_WORKTREE: worktreePath,
+    }
+    if (user?.anthropicApiKey) {
+      workerEnv.ANTHROPIC_API_KEY = user.anthropicApiKey
+    }
+
     const sessionId = ptyManager.spawn({
       shell: command,
       args: ['--dangerously-skip-permissions'],
       cwd: worktreePath,
-      env: {
-        SQUANSQ_WORKERBEE: name,
-        SQUANSQ_PROJECT: projectId,
-        SQUANSQ_BRANCH: branch,
-        SQUANSQ_WORKTREE: worktreePath,
-      },
+      env: workerEnv,
       ownerUserId: userId,
     })
 
