@@ -496,6 +496,10 @@ app.post('/api/convoys/:id/land', async (req, res) => {  // backward compat
 app.post('/api/release-trains/:id/cancel', async (req, res) => {
   try {
     const userId = res.locals.userId as string
+    const rt = await releaseTrainManager.getById(req.params.id)
+    if (rt?.assignedWorkerBeeId) {
+      await workerBeeManager.nuke(rt.assignedWorkerBeeId, userId).catch(() => {})
+    }
     await releaseTrainManager.cancel(req.params.id, userId)
     res.json({ ok: true })
   } catch (err) {

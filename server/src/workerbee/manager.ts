@@ -213,19 +213,22 @@ export const workerBeeManager = {
     }
     await db.execute({ sql: 'DELETE FROM workerbees WHERE id = ?', args: [id] })
 
-    // Reset any in_progress release train assigned to this bee back to open
-    const rtResult = await db.execute({
-      sql: `UPDATE release_trains SET status = 'open', assigned_workerbee_id = NULL, updated_at = datetime('now')
-            WHERE assigned_workerbee_id = ? AND status = 'in_progress'`,
+    // Cancel any in_progress release train assigned to this bee
+    const assignedRts = await db.execute({
+      sql: `SELECT id FROM release_trains WHERE assigned_workerbee_id = ? AND status = 'in_progress'`,
       args: [id],
     })
-    if (rtResult.rowsAffected > 0) {
-      const rts = await db.execute({ sql: `SELECT id FROM release_trains WHERE assigned_workerbee_id IS NULL AND status = 'open'`, args: [] })
-      for (const row of rts.rows) {
+    if (assignedRts.rows.length > 0) {
+      await db.execute({
+        sql: `UPDATE release_trains SET status = 'cancelled', assigned_workerbee_id = NULL, updated_at = datetime('now')
+              WHERE assigned_workerbee_id = ? AND status = 'in_progress'`,
+        args: [id],
+      })
+      for (const row of assignedRts.rows) {
         broadcastEvent({
           id: uuidv4(),
-          type: 'releasetrain.assigned',
-          payload: { releaseTrainId: row.id, workerBeeId: null },
+          type: 'releasetrain.cancelled',
+          payload: { releaseTrainId: row.id as string },
           timestamp: new Date().toISOString(),
         })
       }
