@@ -25,10 +25,11 @@ export function MayorPanel() {
 
   const fetchMayor = useCallback(async () => {
     try {
-      const res = await apiFetch('/api/mayor')
+      const res = await apiFetch(`/api/mayor?townId=${encodeURIComponent(activeTownId ?? 'default')}`)
       if (res.ok) setMayor(await res.json())
+      else setMayor(null)
     } catch { /* server not ready yet */ }
-  }, [])
+  }, [activeTownId])
 
   useEffect(() => {
     fetchMayor()
@@ -90,7 +91,7 @@ export function MayorPanel() {
     try {
       await apiFetch('/api/mayor/message', {
         method: 'POST',
-        body: JSON.stringify({ message: message.trim() }),
+        body: JSON.stringify({ townId: activeTownId ?? 'default', message: message.trim() }),
       })
       setMessage('')
       // Open terminal so user can see Mayor Lee respond

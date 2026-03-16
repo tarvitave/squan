@@ -348,13 +348,15 @@ app.post('/api/mayor/message', async (req, res) => {  // backwards compat
 app.get('/api/mayor-lee', async (req, res) => {
   try {
     const userId = res.locals.userId as string
-    res.json(await mayorLeeManager.get('default', userId))
+    const townId = (req.query.townId as string) || 'default'
+    res.json(await mayorLeeManager.get(townId, userId))
   } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 app.get('/api/mayor', async (req, res) => {  // backwards compat
   try {
     const userId = res.locals.userId as string
-    res.json(await mayorLeeManager.get('default', userId))
+    const townId = (req.query.townId as string) || 'default'
+    res.json(await mayorLeeManager.get(townId, userId))
   } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
