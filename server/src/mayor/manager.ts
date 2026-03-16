@@ -8,7 +8,7 @@ import { preconfigureClaudeAuth } from '../claude-auth.js'
 import type { MayorLee } from '../types/index.js'
 
 const DEFAULT_REPO_PATH = process.env.SQUANSQ_REPO_PATH ?? process.env.HOME ?? '/opt/squansq-repo'
-const SERVER_URL = `http://localhost:${process.env.PORT ?? 3001}`
+const SERVER_URL = `http://127.0.0.1:${process.env.PORT ?? 3001}`
 
 export const mayorLeeManager = {
   async start(townId: string, apiKey?: string, userId?: string): Promise<MayorLee> {
@@ -26,8 +26,14 @@ export const mayorLeeManager = {
     }
     const row = existing.rows[0] as unknown as DbRow | undefined
 
-    if (row?.session_id) {
+    if (row?.session_id && ptyManager.list().includes(row.session_id)) {
       return toModel(row)
+    }
+
+    // Session ID in DB but PTY is gone — clear it so we spawn a fresh session
+    if (row?.session_id) {
+      await db.execute({ sql: `UPDATE mayors SET session_id = NULL WHERE id = ?`, args: [row.id] })
+      ;(row as DbRow).session_id = null
     }
 
     const id = row?.id ?? uuidv4()
@@ -51,12 +57,17 @@ export const mayorLeeManager = {
 
     const baseCommand = process.env.MAYOR_COMMAND ?? 'claude'
 
+    console.log(`[Mayor Lee] Spawning: ${baseCommand} --dangerously-skip-permissions in ${repoPath}`)
     const sessionId = ptyManager.spawn({
       shell: baseCommand,
       args: ['--dangerously-skip-permissions'],
       cwd: repoPath,
       env,
       ownerUserId: userId,
+    })
+    ptyManager.onSessionExit(sessionId, (exitCode) => {
+      console.log(`[Mayor Lee] PTY exited with code ${exitCode} (sessionId=${sessionId})`)
+      db.execute({ sql: `UPDATE mayors SET session_id = NULL WHERE session_id = ?`, args: [sessionId] }).catch(() => {})
     })
 
     const now = new Date().toISOString()

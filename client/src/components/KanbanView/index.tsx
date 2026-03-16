@@ -1,6 +1,11 @@
+import { useState } from 'react'
 import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
 import type { ReleaseTrainEntry } from '../../store/index.js'
+import { ReleaseTrainPanel } from '../ReleaseTrainPanel/index.js'
+import { AtomicTasksPanel } from '../AtomicTasksPanel/index.js'
+
+type KanbanTab = 'board' | 'trains' | 'tasks'
 
 const COLUMNS: Array<{ status: ReleaseTrainEntry['status']; label: string; color: string }> = [
   { status: 'open', label: 'Open', color: '#569cd6' },
@@ -10,6 +15,36 @@ const COLUMNS: Array<{ status: ReleaseTrainEntry['status']; label: string; color
 ]
 
 export function KanbanView() {
+  const [tab, setTab] = useState<KanbanTab>('board')
+
+  return (
+    <div style={styles.root}>
+      <div style={styles.tabBar}>
+        <TabBtn label="Board" active={tab === 'board'} onClick={() => setTab('board')} />
+        <TabBtn label="Release Trains" active={tab === 'trains'} onClick={() => setTab('trains')} />
+        <TabBtn label="Atomic Tasks" active={tab === 'tasks'} onClick={() => setTab('tasks')} />
+      </div>
+      <div style={styles.body}>
+        {tab === 'board' && <Board />}
+        {tab === 'trains' && <ReleaseTrainPanel />}
+        {tab === 'tasks' && <AtomicTasksPanel />}
+      </div>
+    </div>
+  )
+}
+
+function TabBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      style={{ ...styles.tabBtn, ...(active ? styles.tabBtnActive : {}) }}
+      onClick={onClick}
+    >
+      {label}
+    </button>
+  )
+}
+
+function Board() {
   const releaseTrains = useStore((s) => s.releaseTrains)
   const agents = useStore((s) => s.agents)
   const rigs = useStore((s) => s.rigs)
@@ -175,6 +210,41 @@ const STATUS_COLOR: Record<string, string> = {
 }
 
 const styles = {
+  root: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    height: '100%',
+    overflow: 'hidden',
+  },
+  tabBar: {
+    display: 'flex',
+    gap: 1,
+    background: '#0a0a0a',
+    borderBottom: '1px solid #1e1e1e',
+    padding: '4px 8px',
+    flexShrink: 0,
+  },
+  tabBtn: {
+    background: 'none',
+    border: '1px solid transparent',
+    color: '#555',
+    borderRadius: 3,
+    padding: '2px 10px',
+    cursor: 'pointer',
+    fontSize: 11,
+    fontFamily: 'monospace',
+  },
+  tabBtnActive: {
+    color: '#d4d4d4',
+    borderColor: '#2d2d2d',
+    background: '#1a1a1a',
+  },
+  body: {
+    flex: 1,
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column' as const,
+  },
   board: {
     display: 'flex',
     gap: 1,

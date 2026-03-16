@@ -36,7 +36,9 @@ export function AgentTree() {
   const addToast = useStore((s) => s.addToast)
 
   const rigNameById = Object.fromEntries(rigs.map((r) => [r.id, r.name]))
-  const byProject = agents.reduce<Record<string, Agent[]>>((acc, a) => {
+  const rigIds = new Set(rigs.map((r) => r.id))
+  const visibleAgents = agents.filter((a) => rigIds.has(a.projectId))
+  const byProject = visibleAgents.reduce<Record<string, Agent[]>>((acc, a) => {
     ;(acc[a.projectId] ??= []).push(a)
     return acc
   }, {})
@@ -52,7 +54,12 @@ export function AgentTree() {
 
   const handleKill = async (id: string) => {
     try {
-      await apiFetch(`/api/workerbees/${id}`, { method: 'DELETE' })
+      const res = await apiFetch(`/api/workerbees/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        addToast(`Failed to kill WorkerBee: ${body.error ?? res.status}`)
+        return
+      }
       removeAgent(id)
       if (selectedAgentId === id) setSelectedAgent(null)
     } catch (err) {
@@ -61,7 +68,7 @@ export function AgentTree() {
   }
 
   const handleClearFinished = async () => {
-    const finished = agents.filter((a) => a.status === 'zombie' || a.status === 'done')
+    const finished = visibleAgents.filter((a) => a.status === 'zombie' || a.status === 'done')
     await Promise.allSettled(
       finished.map((a) =>
         apiFetch(`/api/workerbees/${a.id}`, { method: 'DELETE' })
@@ -73,7 +80,7 @@ export function AgentTree() {
     )
   }
 
-  if (agents.length === 0) {
+  if (visibleAgents.length === 0) {
     return (
       <div style={styles.empty}>
         <span style={styles.emptyText}>No WorkerBees</span>
@@ -81,7 +88,7 @@ export function AgentTree() {
     )
   }
 
-  const hasFinished = agents.some((a) => a.status === 'zombie' || a.status === 'done')
+  const hasFinished = visibleAgents.some((a) => a.status === 'zombie' || a.status === 'done')
 
   return (
     <div style={styles.tree}>

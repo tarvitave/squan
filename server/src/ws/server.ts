@@ -8,6 +8,9 @@ import { getDb } from '../db/index.js'
 
 const JWT_SECRET = process.env.JWT_SECRET ?? 'squansq-dev-secret-change-in-production'
 
+// Unique ID for this server process — changes on every restart
+const BOOT_ID = uuidv4()
+
 // Map of clientId → WebSocket
 const clients = new Map<string, WebSocket>()
 
@@ -78,7 +81,7 @@ export function setupWsServer(httpServer: Server) {
       clientUserIds.delete(clientId)
     })
 
-    send(ws, { type: 'ack', payload: { clientId } })
+    send(ws, { type: 'ack', payload: { clientId, bootId: BOOT_ID } })
   })
 
   return wss

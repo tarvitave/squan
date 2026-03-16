@@ -190,6 +190,12 @@ export const workerBeeManager = {
       }
     }
     await db.execute({ sql: 'DELETE FROM workerbees WHERE id = ?', args: [id] })
+    broadcastEvent({
+      id: uuidv4(),
+      type: 'workerbee.deleted',
+      payload: { workerBeeId: id },
+      timestamp: new Date().toISOString(),
+    })
   },
 }
 

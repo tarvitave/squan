@@ -3,16 +3,13 @@ import { apiFetch } from './lib/api.js'
 import { TabBar } from './components/TabBar/index.js'
 import { PaneGrid } from './components/PaneGrid/index.js'
 import { AgentTree } from './components/AgentTree/index.js'
-import { ReleaseTrainPanel } from './components/ReleaseTrainPanel/index.js'
 import { EventStream } from './components/EventStream/index.js'
 import { MayorPanel } from './components/MayorPanel/index.js'
 import { RigPanel } from './components/RigPanel/index.js'
-import { Footer } from './components/Footer/index.js'
 import { AuthPage } from './components/AuthPage/index.js'
 import { AccountPanel } from './components/AccountPanel/index.js'
 import { KanbanView } from './components/KanbanView/index.js'
 import { MetricsPanel } from './components/MetricsPanel/index.js'
-import { AtomicTasksPanel } from './components/AtomicTasksPanel/index.js'
 import { ToastContainer } from './components/Toast/index.js'
 import { TownSelector } from './components/TownSelector/index.js'
 import { useStore } from './store/index.js'
@@ -29,8 +26,9 @@ export default function App() {
   const setAtomicTasks = useStore((s) => s.setAtomicTasks)
   const setTemplates = useStore((s) => s.setTemplates)
   const addToast = useStore((s) => s.addToast)
+  const clearAllPanes = useStore((s) => s.clearAllPanes)
 
-  const { connected } = useWebSocket()
+  const { connected, serverRestarted, clearServerRestarted } = useWebSocket()
 
   const loadData = () => {
     apiFetch('/api/workerbees')
@@ -66,15 +64,15 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
-  // Reload when WebSocket reconnects (clears stale session IDs after server restart)
-  const prevConnected = useRef(false)
+  // Reload when server restarts (detected via boot ID change in WS ack)
   useEffect(() => {
-    const justReconnected = connected && !prevConnected.current
-    prevConnected.current = connected
-    if (!token || !justReconnected) return
+    if (!token || !serverRestarted) return
+    // Clear all terminal panes — all PTY sessions are lost on server restart
+    clearAllPanes()
+    clearServerRestarted()
     loadData()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, connected])
+  }, [token, serverRestarted])
 
   const [sidebarWidth, setSidebarWidth] = useState(240)
   const dragging = useRef(false)
@@ -122,19 +120,6 @@ export default function App() {
           <div style={styles.sectionTitle}>WorkerBees</div>
           <AgentTree />
         </div>
-        <div style={styles.sidebarSection}>
-          <div style={styles.sectionTitle}>Release Trains</div>
-          <ReleaseTrainPanel />
-        </div>
-        <div style={styles.sidebarSection}>
-          <div style={styles.sectionTitle}>Atomic Tasks</div>
-          <AtomicTasksPanel />
-        </div>
-        <div style={styles.sidebarSection}>
-          <div style={styles.sectionTitle}>Events</div>
-          <EventStream />
-        </div>
-        <Footer />
       </div>
 
       {/* Resize handle */}
@@ -147,6 +132,7 @@ export default function App() {
           <ViewBtn label="Terminals" view="terminals" active={mainView === 'terminals'} onClick={setMainView} />
           <ViewBtn label="Kanban" view="kanban" active={mainView === 'kanban'} onClick={setMainView} />
           <ViewBtn label="Metrics" view="metrics" active={mainView === 'metrics'} onClick={setMainView} />
+          <ViewBtn label="Events" view="events" active={mainView === 'events'} onClick={setMainView} />
         </div>
 
         <div style={styles.content}>
@@ -164,6 +150,12 @@ export default function App() {
           {mainView === 'kanban' && <KanbanView />}
 
           {mainView === 'metrics' && <MetricsPanel />}
+
+          {mainView === 'events' && (
+            <div style={styles.eventsPane}>
+              <EventStream />
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -174,7 +166,7 @@ function ViewBtn({
   label, view, active, onClick
 }: {
   label: string
-  view: 'terminals' | 'kanban' | 'metrics'
+  view: 'terminals' | 'kanban' | 'metrics' | 'events'
   active: boolean
   onClick: (v: typeof view) => void
 }) {
@@ -290,5 +282,11 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     color: '#888',
+  },
+  eventsPane: {
+    flex: 1,
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column' as const,
   },
 }

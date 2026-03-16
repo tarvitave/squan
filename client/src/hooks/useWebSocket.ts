@@ -12,10 +12,13 @@ export function useWebSocket() {
   const subscribers = useRef<Map<string, DataCallback>>(new Map())
   const pingTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const retryDelay = useRef(1000)             // exponential backoff, starts at 1s, caps at 30s
+  const lastBootId = useRef<string | null>(null)
   const [connected, setConnected] = useState(false)
+  const [serverRestarted, setServerRestarted] = useState(false)
   const pushEvent = useStore((s) => s.pushEvent)
   const addAgent = useStore((s) => s.addAgent)
   const updateAgent = useStore((s) => s.updateAgent)
+  const removeAgent = useStore((s) => s.removeAgent)
   const addReleaseTrain = useStore((s) => s.addReleaseTrain)
   const updateReleaseTrain = useStore((s) => s.updateReleaseTrain)
   const addAtomicTask = useStore((s) => s.addAtomicTask)
@@ -59,6 +62,16 @@ export function useWebSocket() {
           const msg = JSON.parse(e.data)
 
           if (msg.type === 'pong') return
+
+          if (msg.type === 'ack') {
+            const bootId = msg.payload?.bootId as string | undefined
+            if (bootId && lastBootId.current !== null && lastBootId.current !== bootId) {
+              // Server restarted — signal App to clear stale panes
+              setServerRestarted(true)
+            }
+            if (bootId) lastBootId.current = bootId
+            return
+          }
 
           if (msg.type === 'session.not_found') {
             const sid = msg.payload?.sessionId as string | undefined
@@ -104,6 +117,12 @@ export function useWebSocket() {
               updateAgent(payload.workerBeeId as string, { status: 'stalled', completionNote: (payload.note as string) ?? '' })
             if (payload?.type === 'workerbee.zombie')
               updateAgent(payload.workerBeeId as string, { status: 'zombie' })
+            if (payload?.type === 'workerbee.deleted') {
+              const workerBeeId = payload.workerBeeId as string
+              const agent = useStore.getState().agents.find((a) => a.id === workerBeeId)
+              if (agent?.sessionId) useStore.getState().removePaneFromAllTabs(agent.sessionId)
+              removeAgent(workerBeeId)
+            }
 
             // ReleaseTrain events
             if (payload?.type === 'releasetrain.created') {
@@ -174,10 +193,12 @@ export function useWebSocket() {
     return () => {
       clearTimeout(reconnectTimer)
       if (pingTimer.current) { clearInterval(pingTimer.current); pingTimer.current = null }
+      socket.onopen = null    // prevent stale state setters firing after unmount
+      socket.onmessage = null
       socket.onclose = null   // prevent reconnect on intentional unmount
       socket.close()
     }
-  }, [pushEvent, addAgent, updateAgent, addReleaseTrain, updateReleaseTrain, addAtomicTask, updateAtomicTask])
+  }, [pushEvent, addAgent, updateAgent, removeAgent, addReleaseTrain, updateReleaseTrain, addAtomicTask, updateAtomicTask])
 
   // Safe send: queues if socket not yet open
   const safeSend = useCallback((msg: object) => {
@@ -208,5 +229,5 @@ export function useWebSocket() {
     safeSend({ type: 'terminal.resize', payload: { sessionId, cols, rows } })
   }, [safeSend])
 
-  return { subscribe, unsubscribe, sendInput, sendResize, connected }
+  return { subscribe, unsubscribe, sendInput, sendResize, connected, serverRestarted, clearServerRestarted: () => setServerRestarted(false) }
 }

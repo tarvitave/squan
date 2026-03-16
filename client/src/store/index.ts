@@ -95,7 +95,7 @@ export interface TownEntry {
   createdAt: string
 }
 
-export type MainView = 'terminals' | 'kanban' | 'metrics'
+export type MainView = 'terminals' | 'kanban' | 'metrics' | 'events'
 
 interface SquansqState {
   // Auth
@@ -118,6 +118,8 @@ interface SquansqState {
   addPaneToTab: (tabId: string, sessionId: string) => void
   removePaneFromTab: (tabId: string, sessionId: string) => void
   replacePaneInTab: (tabId: string, oldSessionId: string, newSessionId: string) => void
+  clearAllPanes: () => void
+  removePaneFromAllTabs: (sessionId: string) => void
 
   // Rigs
   rigs: Rig[]
@@ -235,6 +237,12 @@ export const useStore = create<SquansqState>()(
             t.id === tabId ? { ...t, panes: t.panes.map((p) => (p === oldSessionId ? newSessionId : p)) } : t
           ),
         })),
+
+      clearAllPanes: () =>
+        set((s) => ({ tabs: s.tabs.map((t) => ({ ...t, panes: [] })) })),
+
+      removePaneFromAllTabs: (sessionId) =>
+        set((s) => ({ tabs: s.tabs.map((t) => ({ ...t, panes: t.panes.filter((p) => p !== sessionId) })) })),
 
       rigs: [],
       setRigs: (rigs) => set({ rigs }),

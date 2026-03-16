@@ -42,7 +42,7 @@ export function AccountPanel() {
             ⚙
           </button>
           <button style={styles.btn} onClick={clearAuth}>
-            Sign out
+            logout
           </button>
         </div>
       </div>

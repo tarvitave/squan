@@ -239,10 +239,13 @@ app.post('/api/workerbees/:id/done', async (req, res) => {
 app.delete('/api/workerbees/:id', async (req, res) => {
   try {
     const userId = res.locals.userId as string
+    console.log(`[DELETE] workerbee ${req.params.id} by user ${userId}`)
     await workerBeeManager.nuke(req.params.id, userId)
+    console.log(`[DELETE] workerbee ${req.params.id} OK`)
     res.json({ ok: true })
   } catch (err) {
     const msg = (err as Error).message
+    console.error(`[DELETE] workerbee ${req.params.id} FAILED: ${msg}`)
     res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
   }
 })
@@ -1025,6 +1028,9 @@ migrate().then(async () => {
   if (staleResult.rowsAffected > 0) {
     console.log(`[startup] Marked ${staleResult.rowsAffected} stale WorkerBee(s) as zombie`)
   }
+
+  // Clear stale Mayor Lee session IDs — PTY sessions are in-memory only and lost on restart
+  await db.execute({ sql: `UPDATE mayors SET session_id = NULL WHERE session_id IS NOT NULL`, args: [] })
 
   startWitness()
   startSnapshotScheduler(() => workerBeeManager.listAll())

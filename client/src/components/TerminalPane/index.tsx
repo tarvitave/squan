@@ -65,6 +65,7 @@ export function TerminalPane({ sessionId, label, onClose, onReconnect }: Props) 
 
     return () => {
       ro.disconnect()
+      fitRef.current?.dispose()  // disconnect FitAddon's internal ResizeObserver before terminal dispose
       unsubscribe(sessionId)
       term.dispose()
     }
