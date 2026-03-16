@@ -128,6 +128,46 @@ app.get('/api/rigs', async (req, res) => {
   } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
+app.get('/api/suggest-repos', requireAuth, async (req, res) => {
+  try {
+    const userId = res.locals.userId as string
+    const townId = (req.query.townId as string) ?? (await townManager.ensureDefault()).id
+    const town = await townManager.getById(townId)
+    const existingRigs = await rigManager.listByTown(townId, userId)
+
+    const suggestions: Array<{ path: string; name: string; source: 'existing' | 'detected' }> = []
+
+    // Existing projects in this workspace as "use same repo" options
+    for (const rig of existingRigs) {
+      suggestions.push({ path: rig.localPath, name: rig.name, source: 'existing' })
+    }
+
+    // Scan workspace path for git repos (depth 1 and 2)
+    if (town?.path) {
+      const { readdirSync, statSync, existsSync } = await import('fs')
+      const scan = (dir: string, depth: number) => {
+        if (depth > 2) return
+        try {
+          const entries = readdirSync(dir, { withFileTypes: true })
+          for (const entry of entries) {
+            if (!entry.isDirectory() || entry.name.startsWith('.')) continue
+            const full = `${dir}/${entry.name}`
+            if (existsSync(`${full}/.git`)) {
+              const already = suggestions.some((s) => s.path === full)
+              if (!already) suggestions.push({ path: full, name: entry.name, source: 'detected' })
+            } else {
+              scan(full, depth + 1)
+            }
+          }
+        } catch { /* ignore permission errors */ }
+      }
+      if (existsSync(town.path)) scan(town.path, 1)
+    }
+
+    res.json({ workspacePath: town?.path ?? '', suggestions })
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
+})
+
 app.post('/api/projects', async (req, res) => {
   try {
     const userId = res.locals.userId as string

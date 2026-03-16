@@ -4,6 +4,8 @@ import { useStore } from '../../store/index.js'
 import { TemplatesPanel } from '../TemplatesPanel/index.js'
 import type { Rig } from '../../store/index.js'
 
+interface RepoSuggestion { path: string; name: string; source: 'existing' | 'detected' }
+
 export function RigPanel() {
   const rigs = useStore((s) => s.rigs)
   const setRigs = useStore((s) => s.setRigs)
@@ -16,6 +18,10 @@ export function RigPanel() {
 
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', repoUrl: '', localPath: '' })
+  const [suggestions, setSuggestions] = useState<RepoSuggestion[]>([])
+  const [workspacePath, setWorkspacePath] = useState('')
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
+  const [manualPath, setManualPath] = useState(false)
   const [spawning, setSpawning] = useState<string | null>(null)
   const [spawnTask, setSpawnTask] = useState<{ rigId: string; taskDescription: string } | null>(null)
   const [expandedRig, setExpandedRig] = useState<string | null>(null)
@@ -28,6 +34,24 @@ export function RigPanel() {
       .then(setRigs)
       .catch(() => {})
   }, [setRigs, activeTownId])
+
+  const openForm = () => {
+    setShowForm(true)
+    setManualPath(false)
+    setForm({ name: '', repoUrl: '', localPath: '' })
+    setLoadingSuggestions(true)
+    const url = activeTownId ? `/api/suggest-repos?townId=${activeTownId}` : '/api/suggest-repos'
+    apiFetch(url)
+      .then((r) => r.json())
+      .then((d) => { setSuggestions(d.suggestions ?? []); setWorkspacePath(d.workspacePath ?? '') })
+      .catch(() => {})
+      .finally(() => setLoadingSuggestions(false))
+  }
+
+  const pickSuggestion = (s: RepoSuggestion) => {
+    setForm((f) => ({ ...f, localPath: s.path, name: f.name || s.name }))
+    setManualPath(true)
+  }
 
   const handleAdd = async () => {
     if (!form.name || !form.localPath) return
@@ -209,32 +233,90 @@ export function RigPanel() {
 
       {showForm ? (
         <div style={styles.form}>
-          <input
-            style={styles.input}
-            placeholder="Name (e.g. squansq)"
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-          />
-          <input
-            style={styles.input}
-            placeholder="Local path (e.g. /repo)"
-            value={form.localPath}
-            onChange={(e) => setForm((f) => ({ ...f, localPath: e.target.value }))}
-          />
-          <input
-            style={styles.input}
-            placeholder="Repo URL (optional)"
-            value={form.repoUrl}
-            onChange={(e) => setForm((f) => ({ ...f, repoUrl: e.target.value }))}
-          />
-          <div style={styles.formBtns}>
-            <button style={styles.addBtn} onClick={handleAdd}>Add</button>
-            <button style={styles.cancelBtn} onClick={() => setShowForm(false)}>Cancel</button>
-          </div>
+          <div style={styles.formTitle}>Add Project</div>
+
+          {/* Repo picker */}
+          {!manualPath ? (
+            <>
+              {workspacePath && (
+                <div style={styles.wsPath}>workspace: {workspacePath}</div>
+              )}
+              {loadingSuggestions ? (
+                <div style={styles.scanNote}>scanning for repos…</div>
+              ) : suggestions.length > 0 ? (
+                <>
+                  <div style={styles.pickLabel}>Pick a repository</div>
+                  <div style={styles.suggList}>
+                    {suggestions.map((s) => (
+                      <button key={s.path} style={styles.suggItem} onClick={() => pickSuggestion(s)}>
+                        <span style={styles.suggName}>{s.name}</span>
+                        <span style={styles.suggPath}>{s.path}</span>
+                        {s.source === 'existing' && (
+                          <span style={styles.suggBadge}>already in workspace</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                  <button style={styles.manualLink} onClick={() => setManualPath(true)}>
+                    enter path manually →
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div style={styles.scanNote}>No git repos found in workspace path.</div>
+                  <button style={styles.manualLink} onClick={() => setManualPath(true)}>
+                    enter path manually →
+                  </button>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              {/* After picking or manual: show the full form */}
+              <div style={styles.selectedPath}>
+                <span style={styles.selectedPathLabel}>repo</span>
+                <span style={styles.selectedPathValue}>{form.localPath || '—'}</span>
+                <button style={styles.changeBtn} onClick={() => { setManualPath(false); setForm((f) => ({ ...f, localPath: '' })) }}>change</button>
+              </div>
+              {!form.localPath && (
+                <input
+                  style={styles.input}
+                  placeholder="Local path (e.g. C:/projects/myapp)"
+                  value={form.localPath}
+                  autoFocus
+                  onChange={(e) => setForm((f) => ({ ...f, localPath: e.target.value }))}
+                />
+              )}
+              <input
+                style={styles.input}
+                placeholder="Project name"
+                value={form.name}
+                autoFocus={!!form.localPath}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAdd() }}
+              />
+              <input
+                style={styles.input}
+                placeholder="Repo URL (optional, e.g. github.com/…)"
+                value={form.repoUrl}
+                onChange={(e) => setForm((f) => ({ ...f, repoUrl: e.target.value }))}
+              />
+              <div style={styles.formBtns}>
+                <button style={styles.addBtn} onClick={handleAdd} disabled={!form.name || !form.localPath}>
+                  Add Project
+                </button>
+                <button style={styles.cancelBtn} onClick={() => setShowForm(false)}>Cancel</button>
+              </div>
+            </>
+          )}
+
+          {manualPath ? null : (
+            <button style={{ ...styles.cancelBtn, marginTop: 4 }} onClick={() => setShowForm(false)}>Cancel</button>
+          )}
         </div>
       ) : (
         !spawnTask && (
-          <button style={styles.newRigBtn} onClick={() => setShowForm(true)}>
+          <button style={styles.newRigBtn} onClick={openForm}>
             + Add Project
           </button>
         )
@@ -324,5 +406,37 @@ const styles = {
     margin: '4px 8px', background: 'none', border: '1px dashed #333', color: '#569cd6',
     borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, fontFamily: 'monospace',
     textAlign: 'left' as const,
+  },
+  formTitle: { fontSize: 11, color: '#d4d4d4', fontFamily: 'monospace', fontWeight: 'bold' as const, marginBottom: 2 },
+  wsPath: { fontSize: 9, color: '#444', fontFamily: 'monospace', wordBreak: 'break-all' as const },
+  pickLabel: { fontSize: 9, color: '#569cd6', fontFamily: 'monospace', textTransform: 'uppercase' as const, letterSpacing: '0.08em' },
+  scanNote: { fontSize: 10, color: '#555', fontFamily: 'monospace' },
+  suggList: { display: 'flex', flexDirection: 'column' as const, gap: 3 },
+  suggItem: {
+    background: '#111', border: '1px solid #1e1e1e', borderRadius: 3,
+    padding: '6px 8px', cursor: 'pointer', textAlign: 'left' as const,
+    display: 'flex', flexDirection: 'column' as const, gap: 2,
+    transition: 'border-color 0.1s',
+  },
+  suggName: { fontSize: 11, color: '#d4d4d4', fontFamily: 'monospace' },
+  suggPath: { fontSize: 9, color: '#555', fontFamily: 'monospace', wordBreak: 'break-all' as const },
+  suggBadge: {
+    fontSize: 8, color: '#4ec9b0', fontFamily: 'monospace',
+    background: '#0d2a25', border: '1px solid #1a4a3a', borderRadius: 2, padding: '1px 4px',
+    alignSelf: 'flex-start' as const,
+  },
+  manualLink: {
+    background: 'none', border: 'none', color: '#444', cursor: 'pointer',
+    fontSize: 9, fontFamily: 'monospace', textAlign: 'left' as const, padding: 0,
+  },
+  selectedPath: {
+    display: 'flex', alignItems: 'center', gap: 6,
+    background: '#0d2010', border: '1px solid #1a3a20', borderRadius: 3, padding: '5px 8px',
+  },
+  selectedPathLabel: { fontSize: 9, color: '#4ec9b0', fontFamily: 'monospace', flexShrink: 0 },
+  selectedPathValue: { fontSize: 10, color: '#888', fontFamily: 'monospace', flex: 1, wordBreak: 'break-all' as const },
+  changeBtn: {
+    background: 'none', border: 'none', color: '#444', cursor: 'pointer',
+    fontSize: 9, fontFamily: 'monospace', flexShrink: 0,
   },
 }
