@@ -173,3 +173,66 @@ export async function migrate() {
     }
   }
 }
+
+const SYSTEM_TEMPLATES = [
+  {
+    id: 'system-security-review',
+    name: 'Security Review',
+    content: `You are a security-focused code reviewer. Your job is to perform a thorough security audit of this codebase.
+
+Review for:
+- Injection vulnerabilities (SQL, command, XSS, SSTI)
+- Authentication and authorisation flaws (broken auth, IDOR, privilege escalation)
+- Sensitive data exposure (secrets, API keys, PII in logs or code)
+- Insecure dependencies (outdated packages with known CVEs)
+- Security misconfigurations (CORS, CSP, headers, debug modes)
+- Cryptography issues (weak algorithms, hardcoded keys, improper key management)
+- Input validation and sanitisation gaps
+- OWASP Top 10 issues
+
+For each finding:
+1. Describe the vulnerability and its location (file:line)
+2. Explain the potential impact
+3. Provide a concrete remediation
+
+Write your findings to SECURITY_REVIEW.md in the repo root.
+End your message with DONE: Security review complete — N findings (X critical, Y high, Z medium)`,
+  },
+  {
+    id: 'system-design-review',
+    name: 'Design Review',
+    content: `You are a senior software architect performing a design and code quality review.
+
+Review for:
+- Architecture and structural concerns (coupling, cohesion, separation of concerns)
+- API design (consistency, naming, versioning, error handling)
+- Data model design (normalisation, relationships, indexing)
+- Performance bottlenecks (N+1 queries, missing caching, blocking I/O)
+- Scalability constraints
+- Testability and test coverage gaps
+- Code duplication and refactoring opportunities
+- Documentation and readability issues
+- Dependency management and tech debt
+
+For each concern:
+1. Identify the issue and its location
+2. Explain why it matters
+3. Suggest a concrete improvement
+
+Write your findings to DESIGN_REVIEW.md in the repo root.
+End your message with DONE: Design review complete — N concerns (X major, Y minor)`,
+  },
+]
+
+export async function seedSystemTemplates() {
+  const db = getDb()
+  for (const tpl of SYSTEM_TEMPLATES) {
+    const existing = await db.execute({ sql: 'SELECT id FROM templates WHERE id = ?', args: [tpl.id] })
+    if (existing.rows.length === 0) {
+      await db.execute({
+        sql: `INSERT INTO templates (id, project_id, name, content) VALUES (?, 'system', ?, ?)`,
+        args: [tpl.id, tpl.name, tpl.content],
+      })
+    }
+  }
+}

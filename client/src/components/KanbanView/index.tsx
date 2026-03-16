@@ -646,14 +646,16 @@ function StandbysPanel() {
   const [form, setForm] = useState({ name: '', content: '', projectId: '' })
   const [saving, setSaving] = useState(false)
 
-  const handleDispatch = async (tpl: TemplateEntry) => {
+  const handleDispatch = async (tpl: TemplateEntry, overrideProjectId?: string) => {
+    const projectId = overrideProjectId ?? (tpl.projectId === 'system' ? rigs[0]?.id : tpl.projectId)
+    if (!projectId) return
     setDispatching(tpl.id)
     try {
       // Create a release train from the template then dispatch it
       const rtRes = await apiFetch('/api/release-trains', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: tpl.name, description: tpl.content, projectId: tpl.projectId }),
+        body: JSON.stringify({ name: tpl.name, description: tpl.content, projectId }),
       })
       const rt = await rtRes.json()
       addReleaseTrain(rt)
@@ -719,7 +721,7 @@ function StandbysPanel() {
         <div key={tpl.id} style={styles.standbyCard}>
           <div style={styles.standbyCardHeader}>
             <span style={styles.standbyName}>{tpl.name}</span>
-            <span style={styles.standbyProject}>{rigNameById[tpl.projectId] ?? '(unknown project)'}</span>
+            <span style={styles.standbyProject}>{tpl.projectId === 'system' ? 'system' : (rigNameById[tpl.projectId] ?? '(unknown project)')}</span>
             <button style={styles.deleteBtn} onClick={() => handleDelete(tpl.id)} title="Delete template">✕</button>
           </div>
           <div

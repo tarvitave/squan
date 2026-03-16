@@ -163,6 +163,7 @@ export type EventType =
   | 'workerbee.done'
   | 'workerbee.stalled'
   | 'workerbee.zombie'
+  | 'workerbee.deleted'
   | 'releasetrain.created'
   | 'releasetrain.landed'
   | 'releasetrain.assigned'

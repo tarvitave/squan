@@ -25,13 +25,13 @@ export const templateManager = {
     const db = getDb()
     if (userId) {
       const result = await db.execute({
-        sql: 'SELECT * FROM templates WHERE project_id = ? AND (user_id = ? OR user_id IS NULL) ORDER BY name ASC',
+        sql: 'SELECT * FROM templates WHERE (project_id = ? OR project_id = \'system\') AND (user_id = ? OR user_id IS NULL) ORDER BY project_id DESC, name ASC',
         args: [projectId, userId],
       })
       return result.rows.map((r) => toModel(r as unknown as DbTemplate))
     }
     const result = await db.execute({
-      sql: 'SELECT * FROM templates WHERE project_id = ? ORDER BY name ASC',
+      sql: 'SELECT * FROM templates WHERE project_id = ? OR project_id = \'system\' ORDER BY project_id DESC, name ASC',
       args: [projectId],
     })
     return result.rows.map((r) => toModel(r as unknown as DbTemplate))

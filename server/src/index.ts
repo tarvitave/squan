@@ -21,7 +21,7 @@ import { atomicTaskManager, beadManager } from './beads/manager.js'
 import { templateManager } from './templates/manager.js'
 import { snapshotManager, replayManager, startSnapshotScheduler } from './snapshots/manager.js'
 import { handleMcpCall, handleMcpToolsList } from './mcp/server.js'
-import { getDb, migrate } from './db/index.js'
+import { getDb, migrate, seedSystemTemplates } from './db/index.js'
 import { register, login, getUserById, updateApiKey, requireAuth } from './auth/index.js'
 import { preconfigureClaudeAuth, restoreClaudeConfigOnStartup } from './claude-auth.js'
 
@@ -1033,6 +1033,8 @@ migrate().then(async () => {
 
   // Clear stale Mayor Lee session IDs — PTY sessions are in-memory only and lost on restart
   await db.execute({ sql: `UPDATE mayors SET session_id = NULL WHERE session_id IS NOT NULL`, args: [] })
+
+  await seedSystemTemplates()
 
   startWitness()
   startSnapshotScheduler(() => workerBeeManager.listAll())
