@@ -623,12 +623,46 @@ const styles = {
     fontFamily: 'monospace',
     textAlign: 'left' as const,
   },
+  contextBar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    background: '#0c0c0c',
+    border: '1px solid #1e1e1e',
+    borderRadius: 3,
+    padding: '5px 10px',
+  },
+  contextLabel: {
+    fontSize: 10,
+    color: '#444',
+    fontFamily: 'monospace',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.06em',
+  },
+  contextValue: {
+    fontSize: 11,
+    color: '#d4d4d4',
+    fontFamily: 'monospace',
+  },
+  contextSep: {
+    color: '#333',
+    fontSize: 11,
+  },
+  contextSelect: {
+    background: 'transparent',
+    border: 'none',
+    color: '#d4d4d4',
+    fontFamily: 'monospace',
+    fontSize: 11,
+    cursor: 'pointer',
+    outline: 'none',
+    padding: 0,
+  },
 }
 
 function StandbysPanel() {
   const templates = useStore((s) => s.templates)
   const rigs = useStore((s) => s.rigs)
-  const agents = useStore((s) => s.agents)
   const addAgent = useStore((s) => s.addAgent)
   const addReleaseTrain = useStore((s) => s.addReleaseTrain)
   const updateReleaseTrain = useStore((s) => s.updateReleaseTrain)
@@ -639,15 +673,22 @@ function StandbysPanel() {
   const activeTabId = useStore((s) => s.activeTabId)
   const tabs = useStore((s) => s.tabs)
 
+  const activeTownId = useStore((s) => s.activeTownId)
+  const towns = useStore((s) => s.towns)
+  const activeTown = towns.find((t) => t.id === activeTownId)
+
   const rigNameById = Object.fromEntries(rigs.map((r) => [r.id, r.name]))
+  const [activeProjectId, setActiveProjectId] = useState<string>('')
+  const resolvedProjectId = activeProjectId || rigs[0]?.id || ''
+
   const [expanded, setExpanded] = useState<string | null>(null)
   const [dispatching, setDispatching] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', content: '', projectId: '' })
   const [saving, setSaving] = useState(false)
 
-  const handleDispatch = async (tpl: TemplateEntry, overrideProjectId?: string) => {
-    const projectId = overrideProjectId ?? (tpl.projectId === 'system' ? rigs[0]?.id : tpl.projectId)
+  const handleDispatch = async (tpl: TemplateEntry) => {
+    const projectId = tpl.projectId === 'system' ? resolvedProjectId : tpl.projectId
     if (!projectId) return
     setDispatching(tpl.id)
     try {
@@ -709,6 +750,26 @@ function StandbysPanel() {
         <span style={{ fontSize: 10, color: '#444', fontFamily: 'monospace' }}>
           one-click dispatch · Mayor Lee can also trigger these
         </span>
+      </div>
+
+      <div style={styles.contextBar}>
+        <span style={styles.contextLabel}>workspace</span>
+        <span style={styles.contextValue}>{activeTown?.name ?? activeTownId ?? '—'}</span>
+        <span style={styles.contextSep}>·</span>
+        <span style={styles.contextLabel}>project</span>
+        {rigs.length === 0 ? (
+          <span style={{ ...styles.contextValue, color: '#f44747' }}>no projects in workspace</span>
+        ) : rigs.length === 1 ? (
+          <span style={styles.contextValue}>{rigs[0].name}</span>
+        ) : (
+          <select
+            style={styles.contextSelect}
+            value={resolvedProjectId}
+            onChange={(e) => setActiveProjectId(e.target.value)}
+          >
+            {rigs.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+        )}
       </div>
 
       {templates.length === 0 && !showForm && (
