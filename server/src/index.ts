@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import { execFileSync } from 'child_process'
 import express from 'express'
 
 // Prevent unhandled rejections from crashing the server (Node 15+ throws by default)
@@ -126,6 +127,19 @@ app.get('/api/rigs', async (req, res) => {
     const townId = (req.query.townId as string) ?? (await townManager.ensureDefault()).id
     res.json(await rigManager.listByTown(townId, userId))
   } catch (err) { res.status(500).json({ error: (err as Error).message }) }
+})
+
+app.post('/api/init-repo', requireAuth, async (req, res) => {
+  try {
+    const { path: repoPath } = req.body as { path: string }
+    if (!repoPath) return res.status(400).json({ error: 'path required' })
+    const { mkdirSync } = await import('fs')
+    mkdirSync(repoPath, { recursive: true })
+    execFileSync('git', ['init', repoPath], { stdio: 'pipe' })
+    res.json({ ok: true, path: repoPath })
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message })
+  }
 })
 
 app.get('/api/suggest-repos', requireAuth, async (req, res) => {

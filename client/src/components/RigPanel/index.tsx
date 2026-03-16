@@ -21,7 +21,9 @@ export function RigPanel() {
   const [suggestions, setSuggestions] = useState<RepoSuggestion[]>([])
   const [workspacePath, setWorkspacePath] = useState('')
   const [loadingSuggestions, setLoadingSuggestions] = useState(false)
-  const [manualPath, setManualPath] = useState(false)
+  // 'choose' = picking mode vs new, 'new' = create new repo, 'existing' = pick from list, 'manual' = type path
+  const [repoMode, setRepoMode] = useState<'choose' | 'new' | 'existing' | 'manual'>('choose')
+  const [creating, setCreating] = useState(false)
   const [spawning, setSpawning] = useState<string | null>(null)
   const [spawnTask, setSpawnTask] = useState<{ rigId: string; taskDescription: string } | null>(null)
   const [expandedRig, setExpandedRig] = useState<string | null>(null)
@@ -37,7 +39,7 @@ export function RigPanel() {
 
   const openForm = () => {
     setShowForm(true)
-    setManualPath(false)
+    setRepoMode('choose')
     setForm({ name: '', repoUrl: '', localPath: '' })
     setLoadingSuggestions(true)
     const url = activeTownId ? `/api/suggest-repos?townId=${activeTownId}` : '/api/suggest-repos'
@@ -48,25 +50,58 @@ export function RigPanel() {
       .finally(() => setLoadingSuggestions(false))
   }
 
+  const closeForm = () => { setShowForm(false); setRepoMode('choose') }
+
   const pickSuggestion = (s: RepoSuggestion) => {
     setForm((f) => ({ ...f, localPath: s.path, name: f.name || s.name }))
-    setManualPath(true)
+    setRepoMode('manual')  // re-use manual state to show confirm screen
   }
 
-  const handleAdd = async () => {
-    if (!form.name || !form.localPath) return
+  // Derived: path that would be created for a new repo
+  const newRepoPath = workspacePath && form.name
+    ? `${workspacePath.replace(/[\\/]+$/, '')}/${form.name.toLowerCase().replace(/\s+/g, '-')}`
+    : ''
+
+  const handleAdd = async (localPath?: string) => {
+    const path = localPath ?? form.localPath
+    if (!form.name || !path) return
+    setCreating(true)
     try {
       const res = await apiFetch('/api/rigs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, townId: activeTownId ?? undefined }),
+        body: JSON.stringify({ ...form, localPath: path, townId: activeTownId ?? undefined }),
       })
       const rig = await res.json()
       setRigs([...rigs, rig])
       setForm({ name: '', repoUrl: '', localPath: '' })
-      setShowForm(false)
+      closeForm()
     } catch (err) {
       addToast(`Failed to add project: ${(err as Error).message}`)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleCreateNew = async () => {
+    if (!newRepoPath || !form.name) return
+    setCreating(true)
+    try {
+      const initRes = await apiFetch('/api/init-repo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: newRepoPath }),
+      })
+      if (!initRes.ok) {
+        const err = await initRes.json().catch(() => ({}))
+        addToast(`Failed to create repo: ${err.error ?? initRes.status}`)
+        return
+      }
+      await handleAdd(newRepoPath)
+    } catch (err) {
+      addToast(`Failed to create repo: ${(err as Error).message}`)
+    } finally {
+      setCreating(false)
     }
   }
 
@@ -233,50 +268,102 @@ export function RigPanel() {
 
       {showForm ? (
         <div style={styles.form}>
-          <div style={styles.formTitle}>Add Project</div>
+          {/* Always-visible name field */}
+          <input
+            style={styles.input}
+            placeholder="Project name…"
+            value={form.name}
+            autoFocus
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+          />
 
-          {/* Repo picker */}
-          {!manualPath ? (
+          {/* Mode: choose / new / existing / manual */}
+          {repoMode === 'choose' && (
             <>
-              {workspacePath && (
-                <div style={styles.wsPath}>workspace: {workspacePath}</div>
-              )}
+              <div style={styles.pickLabel}>Where is the code?</div>
+              <button
+                style={styles.optionCard}
+                onClick={() => setRepoMode('new')}
+                disabled={!form.name.trim()}
+                title={!form.name.trim() ? 'Enter a project name first' : undefined}
+              >
+                <span style={styles.optionIcon}>✦</span>
+                <div style={styles.optionText}>
+                  <span style={styles.optionTitle}>Create new repo</span>
+                  <span style={styles.optionDesc}>
+                    {form.name.trim()
+                      ? `Will create ${workspacePath ? workspacePath.replace(/[\\/]+$/, '') + '/' : ''}${form.name.toLowerCase().replace(/\s+/g, '-')}`
+                      : 'Enter a name above first'}
+                  </span>
+                </div>
+              </button>
+              <button style={styles.optionCard} onClick={() => setRepoMode('existing')}>
+                <span style={styles.optionIcon}>⎇</span>
+                <div style={styles.optionText}>
+                  <span style={styles.optionTitle}>Use existing repo</span>
+                  <span style={styles.optionDesc}>
+                    {loadingSuggestions ? 'scanning…' : `${suggestions.length} repo${suggestions.length !== 1 ? 's' : ''} found`}
+                  </span>
+                </div>
+              </button>
+              <button style={styles.cancelBtn} onClick={closeForm}>Cancel</button>
+            </>
+          )}
+
+          {repoMode === 'new' && (
+            <>
+              <div style={styles.selectedPath}>
+                <span style={styles.selectedPathLabel}>will create</span>
+                <span style={styles.selectedPathValue}>{newRepoPath || '—'}</span>
+                <button style={styles.changeBtn} onClick={() => setRepoMode('choose')}>back</button>
+              </div>
+              <input
+                style={styles.input}
+                placeholder="Repo URL (optional, e.g. github.com/…)"
+                value={form.repoUrl}
+                onChange={(e) => setForm((f) => ({ ...f, repoUrl: e.target.value }))}
+              />
+              <div style={styles.formBtns}>
+                <button style={styles.addBtn} onClick={handleCreateNew} disabled={creating || !form.name.trim() || !newRepoPath}>
+                  {creating ? '…' : 'Create & Add'}
+                </button>
+                <button style={styles.cancelBtn} onClick={closeForm}>Cancel</button>
+              </div>
+            </>
+          )}
+
+          {repoMode === 'existing' && (
+            <>
               {loadingSuggestions ? (
                 <div style={styles.scanNote}>scanning for repos…</div>
               ) : suggestions.length > 0 ? (
-                <>
-                  <div style={styles.pickLabel}>Pick a repository</div>
-                  <div style={styles.suggList}>
-                    {suggestions.map((s) => (
-                      <button key={s.path} style={styles.suggItem} onClick={() => pickSuggestion(s)}>
-                        <span style={styles.suggName}>{s.name}</span>
-                        <span style={styles.suggPath}>{s.path}</span>
-                        {s.source === 'existing' && (
-                          <span style={styles.suggBadge}>already in workspace</span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                  <button style={styles.manualLink} onClick={() => setManualPath(true)}>
-                    enter path manually →
-                  </button>
-                </>
+                <div style={styles.suggList}>
+                  {suggestions.map((s) => (
+                    <button key={s.path} style={styles.suggItem} onClick={() => pickSuggestion(s)}>
+                      <span style={styles.suggName}>{s.name}</span>
+                      <span style={styles.suggPath}>{s.path}</span>
+                      {s.source === 'existing' && (
+                        <span style={styles.suggBadge}>already in workspace</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
               ) : (
-                <>
-                  <div style={styles.scanNote}>No git repos found in workspace path.</div>
-                  <button style={styles.manualLink} onClick={() => setManualPath(true)}>
-                    enter path manually →
-                  </button>
-                </>
+                <div style={styles.scanNote}>No git repos found in workspace path.</div>
               )}
+              <button style={styles.manualLink} onClick={() => setRepoMode('manual')}>
+                enter path manually →
+              </button>
+              <button style={styles.cancelBtn} onClick={closeForm}>Cancel</button>
             </>
-          ) : (
+          )}
+
+          {repoMode === 'manual' && (
             <>
-              {/* After picking or manual: show the full form */}
               <div style={styles.selectedPath}>
                 <span style={styles.selectedPathLabel}>repo</span>
                 <span style={styles.selectedPathValue}>{form.localPath || '—'}</span>
-                <button style={styles.changeBtn} onClick={() => { setManualPath(false); setForm((f) => ({ ...f, localPath: '' })) }}>change</button>
+                <button style={styles.changeBtn} onClick={() => { setRepoMode('existing'); setForm((f) => ({ ...f, localPath: '' })) }}>back</button>
               </div>
               {!form.localPath && (
                 <input
@@ -289,29 +376,18 @@ export function RigPanel() {
               )}
               <input
                 style={styles.input}
-                placeholder="Project name"
-                value={form.name}
-                autoFocus={!!form.localPath}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleAdd() }}
-              />
-              <input
-                style={styles.input}
-                placeholder="Repo URL (optional, e.g. github.com/…)"
+                placeholder="Repo URL (optional)"
                 value={form.repoUrl}
                 onChange={(e) => setForm((f) => ({ ...f, repoUrl: e.target.value }))}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAdd() }}
               />
               <div style={styles.formBtns}>
-                <button style={styles.addBtn} onClick={handleAdd} disabled={!form.name || !form.localPath}>
-                  Add Project
+                <button style={styles.addBtn} onClick={() => handleAdd()} disabled={creating || !form.name || !form.localPath}>
+                  {creating ? '…' : 'Add Project'}
                 </button>
-                <button style={styles.cancelBtn} onClick={() => setShowForm(false)}>Cancel</button>
+                <button style={styles.cancelBtn} onClick={closeForm}>Cancel</button>
               </div>
             </>
-          )}
-
-          {manualPath ? null : (
-            <button style={{ ...styles.cancelBtn, marginTop: 4 }} onClick={() => setShowForm(false)}>Cancel</button>
           )}
         </div>
       ) : (
@@ -407,9 +483,16 @@ const styles = {
     borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, fontFamily: 'monospace',
     textAlign: 'left' as const,
   },
-  formTitle: { fontSize: 11, color: '#d4d4d4', fontFamily: 'monospace', fontWeight: 'bold' as const, marginBottom: 2 },
-  wsPath: { fontSize: 9, color: '#444', fontFamily: 'monospace', wordBreak: 'break-all' as const },
   pickLabel: { fontSize: 9, color: '#569cd6', fontFamily: 'monospace', textTransform: 'uppercase' as const, letterSpacing: '0.08em' },
+  optionCard: {
+    background: '#111', border: '1px solid #1e1e1e', borderRadius: 4,
+    padding: '8px 10px', cursor: 'pointer', textAlign: 'left' as const,
+    display: 'flex', alignItems: 'flex-start', gap: 8,
+  },
+  optionIcon: { fontSize: 14, color: '#569cd6', flexShrink: 0, lineHeight: 1.2 },
+  optionText: { display: 'flex', flexDirection: 'column' as const, gap: 2 },
+  optionTitle: { fontSize: 11, color: '#d4d4d4', fontFamily: 'monospace' },
+  optionDesc: { fontSize: 9, color: '#555', fontFamily: 'monospace', wordBreak: 'break-all' as const },
   scanNote: { fontSize: 10, color: '#555', fontFamily: 'monospace' },
   suggList: { display: 'flex', flexDirection: 'column' as const, gap: 3 },
   suggItem: {
