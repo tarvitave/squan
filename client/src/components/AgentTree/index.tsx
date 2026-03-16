@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
 import type { Agent } from '../../store/index.js'
@@ -19,8 +20,101 @@ const STATUS_ICON: Record<Agent['status'], string> = {
   done: '✓',
 }
 
+// Strip ANSI escape codes for readable display
+function stripAnsi(str: string): string {
+  // eslint-disable-next-line no-control-regex
+  return str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '').replace(/\r/g, '')
+}
+
 interface Snapshot { id: string; capturedAt: string }
 interface ReplayFrame { id: string; frameAt: string }
+
+// Full-screen modal for viewing terminal output
+function ContentModal({ title, text, onClose }: { title: string; text: string; onClose: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  const clean = stripAnsi(text)
+
+  return createPortal(
+    <div style={modal.overlay} onClick={onClose}>
+      <div style={modal.dialog} onClick={(e) => e.stopPropagation()}>
+        <div style={modal.header}>
+          <span style={modal.title}>{title}</span>
+          <span style={modal.hint}>esc to close</span>
+          <button style={modal.closeBtn} onClick={onClose}>✕</button>
+        </div>
+        <pre style={modal.body}>{clean}</pre>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
+const modal = {
+  overlay: {
+    position: 'fixed' as const,
+    inset: 0,
+    background: 'rgba(0,0,0,0.75)',
+    zIndex: 9999,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dialog: {
+    background: '#0f0f0f',
+    border: '1px solid #2a2a2a',
+    borderRadius: 6,
+    width: '80vw',
+    height: '80vh',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    overflow: 'hidden',
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '8px 14px',
+    borderBottom: '1px solid #1e1e1e',
+    background: '#111',
+    flexShrink: 0,
+  },
+  title: {
+    fontSize: 11,
+    color: '#d4d4d4',
+    fontFamily: 'monospace',
+    flex: 1,
+  },
+  hint: {
+    fontSize: 9,
+    color: '#333',
+    fontFamily: 'monospace',
+  },
+  closeBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#555',
+    cursor: 'pointer',
+    fontSize: 12,
+    padding: '0 2px',
+  },
+  body: {
+    flex: 1,
+    overflow: 'auto',
+    padding: '12px 16px',
+    margin: 0,
+    fontSize: 12,
+    lineHeight: 1.5,
+    color: '#c8c8c8',
+    fontFamily: '"Cascadia Code", "Fira Code", "Consolas", monospace',
+    whiteSpace: 'pre-wrap' as const,
+    wordBreak: 'break-word' as const,
+  },
+}
 
 export function AgentTree() {
   const agents = useStore((s) => s.agents)
@@ -133,27 +227,44 @@ function AgentRow({
 }) {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([])
   const [frames, setFrames] = useState<ReplayFrame[]>([])
-  const [viewContent, setViewContent] = useState<{ title: string; text: string } | null>(null)
+  const [modal, setModal] = useState<{ title: string; text: string } | null>(null)
   const [replayIdx, setReplayIdx] = useState(0)
+  const [latestFrame, setLatestFrame] = useState<string | null>(null)
+  const [loadingLatest, setLoadingLatest] = useState(false)
 
   useEffect(() => {
     if (!expanded) return
     apiFetch(`/api/workerbees/${agent.id}/snapshots`).then((r) => r.json()).then(setSnapshots).catch(() => {})
-    apiFetch(`/api/workerbees/${agent.id}/replay`).then((r) => r.json()).then((f) => { setFrames(f); setReplayIdx(f.length - 1) }).catch(() => {})
+    apiFetch(`/api/workerbees/${agent.id}/replay`).then((r) => r.json()).then((f) => {
+      setFrames(f)
+      setReplayIdx(f.length - 1)
+      // Auto-load latest frame for inline preview
+      const last = f[f.length - 1]
+      if (last) {
+        setLoadingLatest(true)
+        apiFetch(`/api/replay/${last.id}/content`).then((r) => r.json()).then((d) => {
+          setLatestFrame(d.content ?? null)
+        }).catch(() => {}).finally(() => setLoadingLatest(false))
+      }
+    }).catch(() => {})
   }, [expanded, agent.id])
 
-  const viewSnapshot = async (id: string, label: string) => {
+  const openSnapshot = async (id: string, label: string) => {
     const { content } = await apiFetch(`/api/snapshots/${id}/content`).then((r) => r.json())
-    setViewContent({ title: label, text: content })
+    setModal({ title: label, text: content })
   }
 
-  const viewFrame = async (id: string, label: string) => {
+  const openFrame = async (id: string, label: string) => {
     const { content } = await apiFetch(`/api/replay/${id}/content`).then((r) => r.json())
-    setViewContent({ title: label, text: content })
+    setModal({ title: label, text: content })
   }
+
+  const isActive = agent.status === 'working' || agent.status === 'idle'
 
   return (
     <>
+      {modal && <ContentModal title={modal.title} text={modal.text} onClose={() => setModal(null)} />}
+
       <div style={styles.agentRow}>
         <span
           style={{ ...styles.statusDot, color: STATUS_COLOR[agent.status] }}
@@ -164,20 +275,23 @@ function AgentRow({
         </span>
         <span style={styles.agentName} onClick={onToggle}>{agent.name}</span>
         <span style={{ ...styles.agentStatus, color: STATUS_COLOR[agent.status] }}>{agent.status}</span>
-        {agent.sessionId && agent.status !== 'zombie' && agent.status !== 'done' && (
-          <button style={styles.termBtn} onClick={onOpenTerminal} title="Open terminal">⬡</button>
+        {agent.sessionId && isActive && (
+          <button style={styles.termBtn} onClick={onOpenTerminal} title="Open live terminal">⬡</button>
         )}
-        {agent.status !== 'done' && agent.status !== 'zombie' && (
-          <button style={styles.killBtn} onClick={onKill} title="Kill agent">✕</button>
-        )}
-        {(agent.status === 'zombie' || agent.status === 'done') && (
-          <button style={styles.killBtn} onClick={onKill} title="Remove">✕</button>
-        )}
+        <button style={styles.killBtn} onClick={onKill} title={agent.status === 'done' || agent.status === 'zombie' ? 'Remove' : 'Kill agent'}>✕</button>
       </div>
 
       {expanded && (
         <div style={styles.detail}>
           <button style={styles.collapseBtn} onClick={onToggle}>▲ collapse</button>
+
+          {/* Live terminal button — prominent for active agents */}
+          {agent.sessionId && isActive && (
+            <button style={styles.liveBtn} onClick={onOpenTerminal}>
+              ▶ open live terminal
+            </button>
+          )}
+
           {/* Task */}
           {agent.taskDescription && (
             <div style={styles.detailSection}>
@@ -190,11 +304,33 @@ function AgentRow({
           {agent.completionNote && (
             <div style={styles.detailSection}>
               <div style={styles.detailLabel}>
-                {agent.status === 'done' ? 'done' : 'blocked'}
+                {agent.status === 'done' ? 'done' : agent.status === 'zombie' ? 'last output' : 'blocked'}
               </div>
-              <div style={{ ...styles.detailText, color: agent.status === 'done' ? '#608b4e' : '#ce9178' }}>
+              <div style={{ ...styles.detailText, color: agent.status === 'done' ? '#608b4e' : '#ce9178', whiteSpace: 'pre-wrap' as const }}>
                 {agent.completionNote}
               </div>
+            </div>
+          )}
+
+          {/* Latest replay frame inline preview */}
+          {(latestFrame || loadingLatest) && (
+            <div style={styles.detailSection}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={styles.detailLabel}>latest output</div>
+                {latestFrame && (
+                  <button
+                    style={styles.expandViewBtn}
+                    onClick={() => openFrame(frames[frames.length - 1].id, `Latest output — ${agent.name}`)}
+                  >
+                    expand ↗
+                  </button>
+                )}
+              </div>
+              {loadingLatest ? (
+                <div style={{ ...styles.detailText, color: '#333' }}>loading…</div>
+              ) : (
+                <pre style={styles.inlinePreview}>{stripAnsi(latestFrame ?? '').slice(-1200)}</pre>
+              )}
             </div>
           )}
 
@@ -207,24 +343,6 @@ function AgentRow({
             <div style={styles.detailSection}>
               <div style={styles.detailLabel}>worktree</div>
               <div style={{ ...styles.detailText, color: '#555', fontSize: 9 }}>{agent.worktreePath}</div>
-            </div>
-          )}
-
-          {/* Snapshots */}
-          {snapshots.length > 0 && (
-            <div style={styles.detailSection}>
-              <div style={styles.detailLabel}>snapshots</div>
-              <div style={styles.itemList}>
-                {snapshots.slice(0, 5).map((s) => (
-                  <button
-                    key={s.id}
-                    style={styles.itemBtn}
-                    onClick={() => viewSnapshot(s.id, new Date(s.capturedAt).toLocaleTimeString())}
-                  >
-                    {new Date(s.capturedAt).toLocaleTimeString([], { hour12: false })}
-                  </button>
-                ))}
-              </div>
             </div>
           )}
 
@@ -242,10 +360,10 @@ function AgentRow({
                   style={{ ...styles.replayBtn, color: '#4ec9b0' }}
                   onClick={() => {
                     const f = frames[replayIdx]
-                    if (f) viewFrame(f.id, `Frame ${replayIdx + 1} — ${new Date(f.frameAt).toLocaleTimeString([], { hour12: false })}`)
+                    if (f) openFrame(f.id, `Frame ${replayIdx + 1} of ${frames.length} — ${new Date(f.frameAt).toLocaleTimeString([], { hour12: false })}`)
                   }}
                 >
-                  view
+                  view ↗
                 </button>
               </div>
               <div style={styles.replayTs}>
@@ -254,14 +372,21 @@ function AgentRow({
             </div>
           )}
 
-          {/* Content viewer */}
-          {viewContent && (
-            <div style={styles.contentViewer}>
-              <div style={styles.contentHeader}>
-                <span style={styles.contentTitle}>{viewContent.title}</span>
-                <button style={styles.closeBtn} onClick={() => setViewContent(null)}>✕</button>
+          {/* Snapshots */}
+          {snapshots.length > 0 && (
+            <div style={styles.detailSection}>
+              <div style={styles.detailLabel}>snapshots</div>
+              <div style={styles.itemList}>
+                {snapshots.slice(0, 5).map((s) => (
+                  <button
+                    key={s.id}
+                    style={styles.itemBtn}
+                    onClick={() => openSnapshot(s.id, `Snapshot — ${new Date(s.capturedAt).toLocaleTimeString([], { hour12: false })}`)}
+                  >
+                    {new Date(s.capturedAt).toLocaleTimeString([], { hour12: false })}
+                  </button>
+                ))}
               </div>
-              <pre style={styles.contentPre}>{viewContent.text}</pre>
             </div>
           )}
         </div>
@@ -299,6 +424,11 @@ const styles = {
     background: 'none', border: 'none', color: '#444', cursor: 'pointer',
     fontSize: 9, fontFamily: 'monospace', padding: '0 0 4px', textAlign: 'left' as const,
   },
+  liveBtn: {
+    background: '#0d1f10', border: '1px solid #2a4a2a', color: '#4ec9b0',
+    borderRadius: 3, padding: '4px 8px', cursor: 'pointer',
+    fontSize: 10, fontFamily: 'monospace', textAlign: 'left' as const, width: '100%',
+  },
   detail: {
     background: '#0c0c0c', borderBottom: '1px solid #1a1a1a',
     padding: '6px 8px 8px', display: 'flex', flexDirection: 'column' as const, gap: 6,
@@ -309,6 +439,25 @@ const styles = {
     textTransform: 'uppercase' as const, letterSpacing: '0.08em',
   },
   detailText: { fontSize: 10, color: '#888', fontFamily: 'monospace', wordBreak: 'break-all' as const },
+  inlinePreview: {
+    margin: 0,
+    background: '#080808',
+    border: '1px solid #1a1a1a',
+    borderRadius: 3,
+    padding: '6px 8px',
+    fontSize: 10,
+    lineHeight: 1.45,
+    color: '#aaa',
+    fontFamily: '"Cascadia Code", "Fira Code", "Consolas", monospace',
+    whiteSpace: 'pre-wrap' as const,
+    wordBreak: 'break-word' as const,
+    maxHeight: 180,
+    overflow: 'auto',
+  },
+  expandViewBtn: {
+    background: 'none', border: 'none', color: '#4ec9b0', cursor: 'pointer',
+    fontSize: 9, fontFamily: 'monospace', padding: 0,
+  },
   itemList: { display: 'flex', flexWrap: 'wrap' as const, gap: 3 },
   itemBtn: {
     background: 'none', border: '1px solid #1e1e1e', color: '#555',
@@ -323,23 +472,6 @@ const styles = {
   },
   replayPos: { fontSize: 9, color: '#555', fontFamily: 'monospace', padding: '0 3px' },
   replayTs: { fontSize: 9, color: '#333', fontFamily: 'monospace' },
-  contentViewer: {
-    background: '#0a0a0a', border: '1px solid #1e1e1e', borderRadius: 3,
-    display: 'flex', flexDirection: 'column' as const, maxHeight: 200,
-  },
-  contentHeader: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: '3px 6px', borderBottom: '1px solid #1e1e1e', flexShrink: 0,
-  },
-  contentTitle: { fontSize: 9, color: '#555', fontFamily: 'monospace' },
-  closeBtn: {
-    background: 'none', border: 'none', color: '#444', cursor: 'pointer', fontSize: 9,
-  },
-  contentPre: {
-    margin: 0, padding: '4px 6px', fontSize: 9, color: '#888',
-    fontFamily: 'monospace', overflow: 'auto', flex: 1,
-    whiteSpace: 'pre-wrap' as const, wordBreak: 'break-all' as const,
-  },
   empty: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' },
   emptyText: { color: '#444', fontSize: 12, fontFamily: 'monospace' },
   clearRow: { padding: '4px 8px', borderBottom: '1px solid #1a1a1a' },
