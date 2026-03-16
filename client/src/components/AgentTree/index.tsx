@@ -31,6 +31,7 @@ export function AgentTree() {
   const tabs = useStore((s) => s.tabs)
   const updateAgent = useStore((s) => s.updateAgent)
   const removeAgent = useStore((s) => s.removeAgent)
+  const removePaneFromAllTabs = useStore((s) => s.removePaneFromAllTabs)
   const selectedAgentId = useStore((s) => s.selectedAgentId)
   const setSelectedAgent = useStore((s) => s.setSelectedAgent)
   const addToast = useStore((s) => s.addToast)
@@ -54,6 +55,8 @@ export function AgentTree() {
   }
 
   const handleKill = async (id: string) => {
+    // Save sessionId before removing so we can close the pane
+    const sessionId = agents.find((a) => a.id === id)?.sessionId
     try {
       const res = await apiFetch(`/api/workerbees/${id}`, { method: 'DELETE' })
       if (!res.ok) {
@@ -61,6 +64,7 @@ export function AgentTree() {
         addToast(`Failed to kill WorkerBee: ${body.error ?? res.status}`)
         return
       }
+      if (sessionId) removePaneFromAllTabs(sessionId)
       removeAgent(id)
       if (selectedAgentId === id) setSelectedAgent(null)
     } catch (err) {
@@ -74,6 +78,7 @@ export function AgentTree() {
       finished.map((a) =>
         apiFetch(`/api/workerbees/${a.id}`, { method: 'DELETE' })
           .then(() => {
+            if (a.sessionId) removePaneFromAllTabs(a.sessionId)
             removeAgent(a.id)
             if (selectedAgentId === a.id) setSelectedAgent(null)
           })
