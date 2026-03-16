@@ -86,15 +86,16 @@ export const workerBeeManager = {
     // --- Completion signal monitor ---
     attachSignalMonitor(id, sessionId)
 
-    // --- Auto-status on PTY exit ---
+    // --- Auto-status on clean PTY exit (non-zero exits handled by signal monitor with note) ---
     ptyManager.onSessionExit(sessionId, (exitCode) => {
       console.log(`[WorkerBee] ${name} PTY exited with code ${exitCode}`)
-      this.getById(id).then((bee) => {
-        if (bee && (bee.status === 'working' || bee.status === 'idle')) {
-          // Clean exit → done, non-zero → zombie (witness may also catch this)
-          this.updateStatus(id, exitCode === 0 ? 'done' : 'zombie').catch(() => {})
-        }
-      }).catch(() => {})
+      if (exitCode === 0) {
+        this.getById(id).then((bee) => {
+          if (bee && (bee.status === 'working' || bee.status === 'idle')) {
+            this.updateStatus(id, 'done').catch(() => {})
+          }
+        }).catch(() => {})
+      }
     })
 
     const bee = await this.getById(id)
@@ -261,6 +262,18 @@ function attachSignalMonitor(workerBeeId: string, sessionId: string) {
       console.log(`[WorkerBee] ${workerBeeId} signalled BLOCKED: ${note}`)
       workerBeeManager.updateStatus(workerBeeId, 'stalled', note).catch(() => {})
     }
+  })
+
+  // When PTY exits with error, save last output as zombie note so user can diagnose
+  ptyManager.onSessionExit(sessionId, (exitCode) => {
+    if (fired || exitCode === 0) return
+    fired = true
+    ptyManager.unsubscribe(sessionId, monitorId)
+    // Strip ANSI escape codes for readability
+    const plain = tail.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').trim()
+    const note = plain.slice(-400) || `exited with code ${exitCode}`
+    console.log(`[WorkerBee] ${workerBeeId} zombie note: ${note.slice(0, 120)}`)
+    workerBeeManager.updateStatus(workerBeeId, 'zombie', note).catch(() => {})
   })
 }
 
