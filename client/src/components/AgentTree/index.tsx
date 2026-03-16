@@ -37,7 +37,8 @@ export function AgentTree() {
 
   const rigNameById = Object.fromEntries(rigs.map((r) => [r.id, r.name]))
   const rigIds = new Set(rigs.map((r) => r.id))
-  const visibleAgents = agents.filter((a) => rigIds.has(a.projectId))
+  // Only filter by workspace if rigs have loaded; otherwise show all agents
+  const visibleAgents = rigs.length > 0 ? agents.filter((a) => rigIds.has(a.projectId)) : agents
   const byProject = visibleAgents.reduce<Record<string, Agent[]>>((acc, a) => {
     ;(acc[a.projectId] ??= []).push(a)
     return acc
@@ -99,7 +100,7 @@ export function AgentTree() {
       )}
       {Object.entries(byProject).map(([projectId, projectAgents]) => (
         <div key={projectId}>
-          <div style={styles.rigHeader}>{rigNameById[projectId] ?? projectId}</div>
+          <div style={styles.rigHeader}>{rigNameById[projectId] ?? '(unknown project)'}</div>
           {projectAgents.map((agent) => (
             <AgentRow
               key={agent.id}
