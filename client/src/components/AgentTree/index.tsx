@@ -123,6 +123,8 @@ export function AgentTree() {
   const addTab = useStore((s) => s.addTab)
   const activeTabId = useStore((s) => s.activeTabId)
   const tabs = useStore((s) => s.tabs)
+  const setMainView = useStore((s) => s.setMainView)
+  const setActiveTab = useStore((s) => s.setActiveTab)
   const updateAgent = useStore((s) => s.updateAgent)
   const removeAgent = useStore((s) => s.removeAgent)
   const removePaneFromAllTabs = useStore((s) => s.removePaneFromAllTabs)
@@ -141,11 +143,15 @@ export function AgentTree() {
 
   const handleOpenTerminal = (agent: Agent) => {
     if (!agent.sessionId) return
-    const hasSession = tabs.some((t) => t.panes.includes(agent.sessionId!))
-    if (!hasSession) {
-      if (activeTabId) addPaneToTab(activeTabId, agent.sessionId)
-      else addTab(agent.name, [agent.sessionId])
+    const existingTab = tabs.find((t) => t.panes.includes(agent.sessionId!))
+    if (existingTab) {
+      setActiveTab(existingTab.id)
+    } else if (activeTabId) {
+      addPaneToTab(activeTabId, agent.sessionId)
+    } else {
+      addTab(agent.name, [agent.sessionId])
     }
+    setMainView('terminals')
   }
 
   const handleKill = async (id: string) => {
