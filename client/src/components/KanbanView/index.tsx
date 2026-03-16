@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
-import type { ReleaseTrainEntry } from '../../store/index.js'
+import type { ReleaseTrainEntry, TemplateEntry } from '../../store/index.js'
 import { ReleaseTrainPanel } from '../ReleaseTrainPanel/index.js'
 import { AtomicTasksPanel } from '../AtomicTasksPanel/index.js'
 
-type KanbanTab = 'board' | 'trains' | 'tasks'
+type KanbanTab = 'board' | 'trains' | 'tasks' | 'standbys'
 
 const COLUMNS: Array<{ status: ReleaseTrainEntry['status']; label: string; color: string }> = [
   { status: 'open', label: 'Open', color: '#569cd6' },
@@ -21,11 +21,13 @@ export function KanbanView() {
     <div style={styles.root}>
       <div style={styles.tabBar}>
         <TabBtn label="Board" active={tab === 'board'} onClick={() => setTab('board')} />
+        <TabBtn label="Standbys" active={tab === 'standbys'} onClick={() => setTab('standbys')} />
         <TabBtn label="Release Trains" active={tab === 'trains'} onClick={() => setTab('trains')} />
         <TabBtn label="Atomic Tasks" active={tab === 'tasks'} onClick={() => setTab('tasks')} />
       </div>
       <div style={styles.body}>
         {tab === 'board' && <Board />}
+        {tab === 'standbys' && <StandbysPanel />}
         {tab === 'trains' && <ReleaseTrainPanel />}
         {tab === 'tasks' && <AtomicTasksPanel />}
       </div>
@@ -56,6 +58,8 @@ function Board() {
   const addTab = useStore((s) => s.addTab)
   const activeTabId = useStore((s) => s.activeTabId)
   const tabs = useStore((s) => s.tabs)
+
+  const templates = useStore((s) => s.templates)
 
   const [showNewForm, setShowNewForm] = useState(false)
   const [newForm, setNewForm] = useState({ name: '', description: '', projectId: '' })
@@ -173,6 +177,19 @@ function Board() {
             </div>
             {col.status === 'open' && showNewForm && (
               <div style={styles.newForm}>
+                {templates.length > 0 && (
+                  <select
+                    style={styles.formInput}
+                    defaultValue=""
+                    onChange={(e) => {
+                      const tpl = templates.find((t) => t.id === e.target.value)
+                      if (tpl) setNewForm((f) => ({ ...f, name: f.name || tpl.name, description: tpl.content, projectId: f.projectId || tpl.projectId }))
+                    }}
+                  >
+                    <option value="" disabled>— use a standby template —</option>
+                    {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                )}
                 <input
                   style={styles.formInput}
                   placeholder="Task name…"
@@ -493,4 +510,276 @@ const styles = {
     display: 'flex',
     gap: 4,
   },
+  // Standbys
+  standbys: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    height: '100%',
+    overflow: 'auto',
+    padding: 16,
+    gap: 12,
+  },
+  standbysHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  standbysTitle: {
+    fontSize: 11,
+    color: '#888',
+    fontFamily: 'monospace',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.08em',
+  },
+  standbyCard: {
+    background: '#111',
+    border: '1px solid #1e1e1e',
+    borderRadius: 4,
+    padding: '10px 12px',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 6,
+  },
+  standbyCardHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+  },
+  standbyName: {
+    fontSize: 13,
+    color: '#d4d4d4',
+    fontFamily: 'monospace',
+    flex: 1,
+  },
+  standbyProject: {
+    fontSize: 10,
+    color: '#569cd6',
+    fontFamily: 'monospace',
+  },
+  standbyDesc: {
+    fontSize: 10,
+    color: '#666',
+    fontFamily: 'monospace',
+    whiteSpace: 'pre-wrap' as const,
+    maxHeight: 60,
+    overflow: 'hidden',
+  },
+  standbyDescExpanded: {
+    fontSize: 10,
+    color: '#888',
+    fontFamily: 'monospace',
+    whiteSpace: 'pre-wrap' as const,
+  },
+  standbyActions: {
+    display: 'flex',
+    gap: 6,
+    alignItems: 'center',
+  },
+  dispatchBtn: {
+    background: '#1a2a3a',
+    border: '1px solid #569cd6',
+    color: '#569cd6',
+    borderRadius: 3,
+    padding: '3px 10px',
+    cursor: 'pointer',
+    fontSize: 11,
+    fontFamily: 'monospace',
+  },
+  expandBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#444',
+    cursor: 'pointer',
+    fontSize: 10,
+    fontFamily: 'monospace',
+    padding: 0,
+  },
+  deleteBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#3a1a1a',
+    cursor: 'pointer',
+    fontSize: 10,
+    marginLeft: 'auto',
+  },
+  addStandbyForm: {
+    background: '#0c0c0c',
+    border: '1px dashed #2a2a2a',
+    borderRadius: 4,
+    padding: '10px 12px',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 6,
+  },
+  addStandbyBtn: {
+    background: 'none',
+    border: '1px dashed #2a2a2a',
+    color: '#555',
+    borderRadius: 4,
+    padding: '8px 12px',
+    cursor: 'pointer',
+    fontSize: 11,
+    fontFamily: 'monospace',
+    textAlign: 'left' as const,
+  },
+}
+
+function StandbysPanel() {
+  const templates = useStore((s) => s.templates)
+  const rigs = useStore((s) => s.rigs)
+  const agents = useStore((s) => s.agents)
+  const addAgent = useStore((s) => s.addAgent)
+  const addReleaseTrain = useStore((s) => s.addReleaseTrain)
+  const updateReleaseTrain = useStore((s) => s.updateReleaseTrain)
+  const addTemplate = useStore((s) => s.addTemplate)
+  const removeTemplate = useStore((s) => s.removeTemplate)
+  const addPaneToTab = useStore((s) => s.addPaneToTab)
+  const addTab = useStore((s) => s.addTab)
+  const activeTabId = useStore((s) => s.activeTabId)
+  const tabs = useStore((s) => s.tabs)
+
+  const rigNameById = Object.fromEntries(rigs.map((r) => [r.id, r.name]))
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [dispatching, setDispatching] = useState<string | null>(null)
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({ name: '', content: '', projectId: '' })
+  const [saving, setSaving] = useState(false)
+
+  const handleDispatch = async (tpl: TemplateEntry) => {
+    setDispatching(tpl.id)
+    try {
+      // Create a release train from the template then dispatch it
+      const rtRes = await apiFetch('/api/release-trains', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: tpl.name, description: tpl.content, projectId: tpl.projectId }),
+      })
+      const rt = await rtRes.json()
+      addReleaseTrain(rt)
+      const dRes = await apiFetch(`/api/release-trains/${rt.id}/dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const data = await dRes.json()
+      if (data.bee) addAgent({ ...data.bee, taskDescription: data.bee.taskDescription ?? '', worktreePath: data.bee.worktreePath ?? '', branch: data.bee.branch ?? '' })
+      if (data.releaseTrain) updateReleaseTrain(rt.id, { assignedWorkerBeeId: data.releaseTrain.assignedWorkerBeeId, status: data.releaseTrain.status })
+      if (data.bee?.sessionId) {
+        const hasSession = tabs.some((t: { panes: string[] }) => t.panes.includes(data.bee.sessionId))
+        if (!hasSession) {
+          if (activeTabId) addPaneToTab(activeTabId, data.bee.sessionId)
+          else addTab(data.bee.name, [data.bee.sessionId])
+        }
+      }
+    } finally {
+      setDispatching(null)
+    }
+  }
+
+  const handleSave = async () => {
+    const projectId = form.projectId || rigs[0]?.id
+    if (!form.name.trim() || !form.content.trim() || !projectId) return
+    setSaving(true)
+    try {
+      const res = await apiFetch('/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: form.name.trim(), content: form.content.trim(), projectId }),
+      })
+      addTemplate(await res.json())
+      setForm({ name: '', content: '', projectId: '' })
+      setShowForm(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    await apiFetch(`/api/templates/${id}`, { method: 'DELETE' })
+    removeTemplate(id)
+  }
+
+  return (
+    <div style={styles.standbys}>
+      <div style={styles.standbysHeader}>
+        <span style={styles.standbysTitle}>Standby Templates</span>
+        <span style={{ fontSize: 10, color: '#444', fontFamily: 'monospace' }}>
+          one-click dispatch · Mayor Lee can also trigger these
+        </span>
+      </div>
+
+      {templates.length === 0 && !showForm && (
+        <div style={{ color: '#444', fontSize: 11, fontFamily: 'monospace' }}>
+          No standbys yet. Create a template to define a repeatable job (security review, design audit, etc.)
+        </div>
+      )}
+
+      {templates.map((tpl) => (
+        <div key={tpl.id} style={styles.standbyCard}>
+          <div style={styles.standbyCardHeader}>
+            <span style={styles.standbyName}>{tpl.name}</span>
+            <span style={styles.standbyProject}>{rigNameById[tpl.projectId] ?? '(unknown project)'}</span>
+            <button style={styles.deleteBtn} onClick={() => handleDelete(tpl.id)} title="Delete template">✕</button>
+          </div>
+          <div
+            style={expanded === tpl.id ? styles.standbyDescExpanded : styles.standbyDesc}
+          >
+            {tpl.content}
+          </div>
+          <div style={styles.standbyActions}>
+            <button
+              style={styles.dispatchBtn}
+              onClick={() => handleDispatch(tpl)}
+              disabled={dispatching === tpl.id}
+            >
+              {dispatching === tpl.id ? '…' : '▶ Dispatch Now'}
+            </button>
+            <button
+              style={styles.expandBtn}
+              onClick={() => setExpanded(expanded === tpl.id ? null : tpl.id)}
+            >
+              {expanded === tpl.id ? 'collapse' : 'expand'}
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {showForm ? (
+        <div style={styles.addStandbyForm}>
+          <input
+            style={styles.formInput}
+            placeholder="Standby name (e.g. Security Review)"
+            value={form.name}
+            autoFocus
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+          />
+          <textarea
+            style={{ ...styles.formInput, resize: 'vertical' as const, minHeight: 100 }}
+            placeholder="Instructions for the WorkerBee…"
+            value={form.content}
+            rows={5}
+            onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
+          />
+          {rigs.length > 1 && (
+            <select
+              style={styles.formInput}
+              value={form.projectId || rigs[0]?.id}
+              onChange={(e) => setForm((f) => ({ ...f, projectId: e.target.value }))}
+            >
+              {rigs.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+          )}
+          <div style={styles.formActions}>
+            <button style={styles.dispatchBtn} onClick={handleSave} disabled={saving || !form.name.trim() || !form.content.trim()}>
+              {saving ? '…' : 'Save Standby'}
+            </button>
+            <button style={{ ...styles.actionBtn, color: '#555' }} onClick={() => setShowForm(false)}>cancel</button>
+          </div>
+        </div>
+      ) : (
+        <button style={styles.addStandbyBtn} onClick={() => setShowForm(true)}>+ New Standby</button>
+      )}
+    </div>
+  )
 }
