@@ -235,8 +235,9 @@ function attachSignalMonitor(workerBeeId: string, sessionId: string) {
       }, 500)
     }
 
-    // First real output → transition idle → working
-    if (!markedWorking && data.trim().length > 0) {
+    // Transition idle → working as soon as any PTY data arrives after kickoff
+    // (Claude's thinking spinner uses cursor-position codes that trim to empty, so check data.length not trim)
+    if (!markedWorking && kicked && data.length > 0) {
       markedWorking = true
       workerBeeManager.getById(workerBeeId).then((bee) => {
         if (bee?.status === 'idle') {
