@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { getDb } from '../db/index.js'
 import { ptyManager } from './pty.js'
 import { rigManager } from '../rig/manager.js'
+import { releaseTrainManager } from '../releasetrain/manager.js'
 import { broadcastEvent } from '../ws/server.js'
 import type { WorkerBee } from '../types/index.js'
 
@@ -160,6 +161,18 @@ export const workerBeeManager = {
       payload: { workerBeeId: id, status, note: note ?? '' },
       timestamp: new Date().toISOString(),
     })
+
+    // Auto-land the assigned release train when the WorkerBee completes
+    if (status === 'done') {
+      const db = getDb()
+      const rtResult = await db.execute({
+        sql: `SELECT id FROM release_trains WHERE assigned_workerbee_id = ? AND status = 'in_progress'`,
+        args: [id],
+      })
+      for (const row of rtResult.rows) {
+        await releaseTrainManager.land(row.id as string).catch(() => {})
+      }
+    }
   },
 
   async sendMessage(id: string, message: string, userId?: string) {
