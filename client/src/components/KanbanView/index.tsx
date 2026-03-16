@@ -270,6 +270,15 @@ function Board() {
                           dispatch
                         </button>
                       )}
+                      {col.status === 'in_progress' && !assignedBee && (
+                        <button
+                          style={styles.actionBtn}
+                          onClick={() => dispatchReleaseTrain(releaseTrain.id)}
+                          title="WorkerBee is gone — dispatch a new one"
+                        >
+                          re-dispatch
+                        </button>
+                      )}
                       {col.status === 'in_progress' && (
                         <button
                           style={{ ...styles.actionBtn, color: '#608b4e', borderColor: '#608b4e' }}

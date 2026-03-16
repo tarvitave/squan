@@ -204,6 +204,25 @@ export const workerBeeManager = {
       }
     }
     await db.execute({ sql: 'DELETE FROM workerbees WHERE id = ?', args: [id] })
+
+    // Reset any in_progress release train assigned to this bee back to open
+    const rtResult = await db.execute({
+      sql: `UPDATE release_trains SET status = 'open', assigned_workerbee_id = NULL, updated_at = datetime('now')
+            WHERE assigned_workerbee_id = ? AND status = 'in_progress'`,
+      args: [id],
+    })
+    if (rtResult.rowsAffected > 0) {
+      const rts = await db.execute({ sql: `SELECT id FROM release_trains WHERE assigned_workerbee_id IS NULL AND status = 'open'`, args: [] })
+      for (const row of rts.rows) {
+        broadcastEvent({
+          id: uuidv4(),
+          type: 'releasetrain.assigned',
+          payload: { releaseTrainId: row.id, workerBeeId: null },
+          timestamp: new Date().toISOString(),
+        })
+      }
+    }
+
     broadcastEvent({
       id: uuidv4(),
       type: 'workerbee.deleted',
