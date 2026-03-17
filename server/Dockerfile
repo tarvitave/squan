@@ -36,9 +36,8 @@ RUN mkdir -p /data
 
 ENV PORT=3001
 ENV DB_URL=file:/data/squansq.db
-# Set via docker-compose or GitHub secret — never hardcode
-ENV ANTHROPIC_API_KEY=""
 ENV SQUANSQ_REPO_PATH=/repo
+# ANTHROPIC_API_KEY and other secrets are injected at runtime via docker-compose or env — not set here
 
 EXPOSE 3001
 
