@@ -11,6 +11,9 @@ export function AccountPanel() {
   const [apiKey, setApiKey] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [ghToken, setGhToken] = useState('')
+  const [savingGh, setSavingGh] = useState(false)
+  const [savedGh, setSavedGh] = useState(false)
 
   const save = async () => {
     if (!apiKey.trim()) return
@@ -26,6 +29,23 @@ export function AccountPanel() {
       setTimeout(() => setSaved(false), 2000)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const saveGithubToken = async () => {
+    if (!ghToken.trim()) return
+    setSavingGh(true)
+    try {
+      await apiFetch('/api/auth/github-token', {
+        method: 'PUT',
+        body: JSON.stringify({ githubToken: ghToken.trim() }),
+      })
+      if (user && token) setAuth(token, { ...user, githubToken: ghToken.trim() })
+      setGhToken('')
+      setSavedGh(true)
+      setTimeout(() => setSavedGh(false), 2000)
+    } finally {
+      setSavingGh(false)
     }
   }
 
@@ -68,6 +88,26 @@ export function AccountPanel() {
             />
             <button style={styles.saveBtn} onClick={save} disabled={saving || !apiKey.trim()}>
               {saved ? '✓' : saving ? '…' : 'Save'}
+            </button>
+          </div>
+          <div style={styles.keyStatus}>
+            GitHub token: {user?.githubToken ? (
+              <span style={styles.keySet}>✓ set</span>
+            ) : (
+              <span style={styles.keyMissing}>not set — needed for PR creation</span>
+            )}
+          </div>
+          <div style={styles.row}>
+            <input
+              style={styles.input}
+              type="password"
+              placeholder="github_pat_..."
+              value={ghToken}
+              onChange={(e) => setGhToken(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && saveGithubToken()}
+            />
+            <button style={styles.saveBtn} onClick={saveGithubToken} disabled={savingGh || !ghToken.trim()}>
+              {savedGh ? '✓' : savingGh ? '…' : 'Save'}
             </button>
           </div>
         </div>

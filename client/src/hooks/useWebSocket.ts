@@ -150,6 +150,14 @@ export function useWebSocket() {
             if (payload?.type === 'releasetrain.cancelled') {
               updateReleaseTrain(payload.releaseTrainId as string, { status: 'cancelled' })
             }
+            if (payload?.type === 'releasetrain.pr_review') {
+              const p = payload as Record<string, unknown>
+              updateReleaseTrain(p.releaseTrainId as string, {
+                status: 'pr_review',
+                prUrl: p.prUrl as string,
+                prNumber: p.prNumber as number,
+              })
+            }
 
             // AtomicTask events
             if (payload?.type === 'atomictask.created') {
