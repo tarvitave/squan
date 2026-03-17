@@ -1,6 +1,6 @@
 {
   "name": "squansq",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "workspaces": [
     "server",
@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace=server\" \"npm run dev --workspace=client\"",
-    "build": "npm run build --workspace=server && npm run build --workspace=client",
+    "build": "node scripts/bump-version.mjs && npm run build --workspace=server && npm run build --workspace=client",
     "install:all": "npm install"
   },
   "devDependencies": {

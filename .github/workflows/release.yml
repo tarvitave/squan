@@ -14,7 +14,7 @@ on:
 env:
   REGISTRY: ghcr.io
   SERVER_IMAGE: ghcr.io/tarvitave/squansq-server
-  CLIENT_IMAGE: ghcr.io/tarvitade/squansq-client
+  CLIENT_IMAGE: ghcr.io/tarvitave/squansq-client
 
 jobs:
   build-and-push:

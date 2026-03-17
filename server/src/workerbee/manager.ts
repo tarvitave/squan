@@ -64,7 +64,9 @@ export const workerBeeManager = {
       }
     }
 
-    // Inject the user's Anthropic API key so WorkerBees use pay-as-you-go billing
+    // Inject the user's Anthropic API key so WorkerBees use pay-as-you-go billing.
+    // Use an isolated CLAUDE_CONFIG_DIR (no oauth token) to avoid auth conflicts
+    // when both a claude.ai login and ANTHROPIC_API_KEY are present.
     const user = userId ? await getUserById(userId) : null
     const workerEnv: Record<string, string> = {
       SQUANSQ_WORKERBEE: name,
@@ -258,8 +260,10 @@ function attachSignalMonitor(workerBeeId: string, sessionId: string) {
 
     // Claude may ask "Do you want to use this API key?" when ANTHROPIC_API_KEY is in env.
     // Auto-answer "1" (Yes) so the key is used and we continue to the real ready prompt.
+    // Clear tail immediately so the menu's ❯ doesn't falsely trigger kickoff.
     if (!apiKeyAnswered && tail.includes('Do you want to use this API key')) {
       apiKeyAnswered = true
+      tail = '' // clear stale ❯ from API key menu
       setTimeout(() => {
         ptyManager.write(sessionId, '1\r')
         console.log(`[WorkerBee] ${workerBeeId} accepted API key prompt`)
@@ -267,9 +271,8 @@ function attachSignalMonitor(workerBeeId: string, sessionId: string) {
     }
 
     // Detect Claude's ready prompt (❯) and send a kickoff message once.
-    // Skip if the API key prompt is still visible (its menu also contains ❯).
-    const apiKeyPromptActive = tail.includes('Do you want to use this API key') && !apiKeyAnswered
-    if (!kicked && !apiKeyPromptActive && tail.includes('\u276f')) {
+    // Only fire after the API key prompt has fully cleared (tail was reset above).
+    if (!kicked && tail.includes('\u276f')) {
       kicked = true
       setTimeout(() => {
         ptyManager.write(sessionId, 'Please begin your assigned task as described in CLAUDE.md\r')

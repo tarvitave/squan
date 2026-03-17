@@ -164,6 +164,10 @@ export async function migrate() {
     `ALTER TABLE release_trains ADD COLUMN user_id TEXT`,
     `ALTER TABLE atomic_tasks ADD COLUMN user_id TEXT`,
     `ALTER TABLE templates ADD COLUMN user_id TEXT`,
+    `ALTER TABLE release_trains ADD COLUMN manual INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE release_trains ADD COLUMN pr_url TEXT`,
+    `ALTER TABLE release_trains ADD COLUMN pr_number INTEGER`,
+    `ALTER TABLE users ADD COLUMN github_token TEXT`,
   ]
   for (const sql of alterStatements) {
     try {
@@ -178,25 +182,78 @@ const SYSTEM_TEMPLATES = [
   {
     id: 'system-security-review',
     name: 'Security Review',
-    content: `You are a security-focused code reviewer. Your job is to perform a thorough security audit of this codebase.
+    content: `You are a security engineer performing a thorough security audit of this codebase. Approach this like Claude Code Security — systematic, comprehensive, and actionable.
 
-Review for:
-- Injection vulnerabilities (SQL, command, XSS, SSTI)
-- Authentication and authorisation flaws (broken auth, IDOR, privilege escalation)
-- Sensitive data exposure (secrets, API keys, PII in logs or code)
-- Insecure dependencies (outdated packages with known CVEs)
-- Security misconfigurations (CORS, CSP, headers, debug modes)
-- Cryptography issues (weak algorithms, hardcoded keys, improper key management)
-- Input validation and sanitisation gaps
-- OWASP Top 10 issues
+## Scope
 
-For each finding:
-1. Describe the vulnerability and its location (file:line)
-2. Explain the potential impact
-3. Provide a concrete remediation
+Review every file in the repository. Focus on:
 
-Write your findings to SECURITY_REVIEW.md in the repo root.
-End your message with DONE: Security review complete — N findings (X critical, Y high, Z medium)`,
+### Injection & Input
+- SQL injection, command injection, XSS, SSTI, path traversal
+- Missing input validation and sanitisation
+- Unsafe use of eval, exec, shell commands
+
+### Authentication & Authorisation
+- Broken authentication flows
+- Insecure direct object references (IDOR)
+- Missing authorisation checks on API endpoints
+- Privilege escalation paths
+
+### Secrets & Data Exposure
+- Hardcoded API keys, passwords, tokens in source
+- Sensitive data in logs, error messages, or client-visible responses
+- PII exposure
+- Insecure storage of credentials
+
+### Dependencies
+- Run \`npm audit\` (or equivalent for the stack) and record CVEs
+- Note outdated packages with known vulnerabilities
+
+### Configuration & Infrastructure
+- Overly permissive CORS
+- Missing security headers (CSP, HSTS, X-Frame-Options)
+- Debug modes or verbose errors enabled in production paths
+- Insecure defaults
+
+### Cryptography
+- Weak algorithms (MD5, SHA1 for passwords, DES)
+- Hardcoded or predictable secrets/salts
+- Improper key management
+
+### OWASP Top 10
+- Check each of the OWASP Top 10 categories systematically
+
+## Output Format
+
+Create or overwrite SECURITY_REVIEW.md in the repo root with:
+
+\`\`\`
+# Security Review — [date]
+
+## Summary
+Total findings: N (X critical, Y high, Z medium, W low)
+
+## Findings
+
+### [SEV] Title
+- **Location**: file.ts:line
+- **Vulnerability**: description of the issue
+- **Impact**: what an attacker could do
+- **Remediation**: concrete fix with code example where possible
+
+[repeat for each finding]
+
+## Dependency Audit
+[output of npm audit or equivalent]
+
+## Recommendations
+[top 3-5 prioritised actions]
+\`\`\`
+
+## When Done
+
+Commit SECURITY_REVIEW.md with message: "security: add security review findings"
+Then output: **DONE: Security review complete — N findings (X critical, Y high, Z medium)**`,
   },
   {
     id: 'system-design-review',
@@ -232,6 +289,12 @@ export async function seedSystemTemplates() {
       await db.execute({
         sql: `INSERT INTO templates (id, project_id, name, content) VALUES (?, 'system', ?, ?)`,
         args: [tpl.id, tpl.name, tpl.content],
+      })
+    } else {
+      // Always keep system templates up to date with latest content
+      await db.execute({
+        sql: `UPDATE templates SET name = ?, content = ? WHERE id = ?`,
+        args: [tpl.name, tpl.content, tpl.id],
       })
     }
   }

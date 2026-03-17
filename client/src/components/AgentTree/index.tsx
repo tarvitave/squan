@@ -161,14 +161,14 @@ export function AgentTree() {
       const res = await apiFetch(`/api/workerbees/${id}`, { method: 'DELETE' })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        addToast(`Failed to kill WorkerBee: ${body.error ?? res.status}`)
+        addToast(`Failed to kill Agent:${body.error ?? res.status}`)
         return
       }
       if (sessionId) removePaneFromAllTabs(sessionId)
       removeAgent(id)
       if (selectedAgentId === id) setSelectedAgent(null)
     } catch (err) {
-      addToast(`Failed to kill WorkerBee: ${(err as Error).message}`)
+      addToast(`Failed to kill Agent:${(err as Error).message}`)
     }
   }
 
@@ -189,7 +189,7 @@ export function AgentTree() {
   if (visibleAgents.length === 0) {
     return (
       <div style={styles.empty}>
-        <span style={styles.emptyText}>No WorkerBees</span>
+        <span style={styles.emptyText}>No Agents</span>
       </div>
     )
   }

@@ -4,20 +4,20 @@ import { broadcastEvent } from '../ws/server.js'
 import type { ReleaseTrain } from '../types/index.js'
 
 export const releaseTrainManager = {
-  async create(name: string, rigId: string, atomicTaskIds: string[] = [], description?: string, userId?: string): Promise<ReleaseTrain> {
+  async create(name: string, rigId: string, atomicTaskIds: string[] = [], description?: string, userId?: string, manual?: boolean): Promise<ReleaseTrain> {
     const db = getDb()
     const id = uuidv4()
     const now = new Date().toISOString()
 
     await db.execute({
-      sql: `INSERT INTO release_trains (id, name, rig_id, atomic_task_ids_json, description, status, user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?)`,
-      args: [id, name, rigId, JSON.stringify(atomicTaskIds), description ?? '', userId ?? null, now, now],
+      sql: `INSERT INTO release_trains (id, name, rig_id, atomic_task_ids_json, description, status, user_id, manual, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`,
+      args: [id, name, rigId, JSON.stringify(atomicTaskIds), description ?? '', userId ?? null, manual ? 1 : 0, now, now],
     })
 
     broadcastEvent({
       id: uuidv4(),
       type: 'releasetrain.created',
-      payload: { releaseTrainId: id, name, rigId, atomicTaskIds, description: description ?? '' },
+      payload: { releaseTrainId: id, name, rigId, atomicTaskIds, description: description ?? '', manual: manual ?? false },
       timestamp: now,
     })
 
@@ -128,6 +128,24 @@ export const releaseTrainManager = {
     return (await this.getById(releaseTrainId))!
   },
 
+  async start(releaseTrainId: string, userId?: string) {
+    const db = getDb()
+    if (userId) {
+      const rt = await this.getById(releaseTrainId)
+      if (rt && rt.userId && rt.userId !== userId) throw new Error('Forbidden')
+    }
+    await db.execute({
+      sql: `UPDATE release_trains SET status = 'in_progress', updated_at = datetime('now') WHERE id = ?`,
+      args: [releaseTrainId],
+    })
+    broadcastEvent({
+      id: uuidv4(),
+      type: 'releasetrain.assigned',
+      payload: { releaseTrainId, workerBeeId: null },
+      timestamp: new Date().toISOString(),
+    })
+  },
+
   async land(releaseTrainId: string, userId?: string) {
     const db = getDb()
     if (userId) {
@@ -163,6 +181,25 @@ export const releaseTrainManager = {
       timestamp: new Date().toISOString(),
     })
   },
+
+  async moveToPrReview(releaseTrainId: string, prUrl: string, prNumber: number, userId?: string): Promise<ReleaseTrain> {
+    const db = getDb()
+    if (userId) {
+      const rt = await this.getById(releaseTrainId)
+      if (rt && rt.userId && rt.userId !== userId) throw new Error('Forbidden')
+    }
+    await db.execute({
+      sql: `UPDATE release_trains SET status = 'pr_review', pr_url = ?, pr_number = ?, updated_at = datetime('now') WHERE id = ?`,
+      args: [prUrl, prNumber, releaseTrainId],
+    })
+    broadcastEvent({
+      id: uuidv4(),
+      type: 'releasetrain.pr_review',
+      payload: { releaseTrainId, prUrl, prNumber },
+      timestamp: new Date().toISOString(),
+    })
+    return (await this.getById(releaseTrainId))!
+  },
 }
 
 interface DbReleaseTrain {
@@ -173,6 +210,9 @@ interface DbReleaseTrain {
   description: string
   assigned_workerbee_id: string | null
   status: ReleaseTrain['status']
+  manual: number | null
+  pr_url: string | null
+  pr_number: number | null
   user_id: string | null
   created_at: string
   updated_at: string
@@ -187,6 +227,9 @@ function toModel(r: DbReleaseTrain): ReleaseTrain {
     atomicTaskIds: JSON.parse(r.atomic_task_ids_json ?? '[]'),
     assignedWorkerBeeId: r.assigned_workerbee_id ?? null,
     status: r.status,
+    manual: r.manual === 1,
+    prUrl: r.pr_url ?? null,
+    prNumber: r.pr_number ?? null,
     userId: r.user_id ?? undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,

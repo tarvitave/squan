@@ -23,7 +23,8 @@ import { templateManager } from './templates/manager.js'
 import { snapshotManager, replayManager, startSnapshotScheduler } from './snapshots/manager.js'
 import { handleMcpCall, handleMcpToolsList } from './mcp/server.js'
 import { getDb, migrate, seedSystemTemplates } from './db/index.js'
-import { register, login, getUserById, updateApiKey, requireAuth } from './auth/index.js'
+import { register, login, getUserById, updateApiKey, requireAuth, updateGithubToken } from './auth/index.js'
+import { parseGithubRepo, detectDefaultBranch, createPullRequest, getPullRequestStatus } from './github/index.js'
 import { preconfigureClaudeAuth, restoreClaudeConfigOnStartup } from './claude-auth.js'
 
 const app = express()
@@ -88,6 +89,16 @@ app.put('/api/auth/api-key', async (req, res) => {
   if (!anthropicApiKey) { res.status(400).json({ error: 'anthropicApiKey required' }); return }
   await updateApiKey(res.locals.userId as string, anthropicApiKey)
   res.json({ ok: true })
+})
+
+app.put('/api/auth/github-token', requireAuth, async (req, res) => {
+  try {
+    const userId = res.locals.userId as string
+    const { githubToken } = req.body
+    if (!githubToken) { res.status(400).json({ error: 'githubToken required' }); return }
+    await updateGithubToken(userId, githubToken)
+    res.json({ ok: true })
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
 // --- Projects (formerly Rigs) ---
@@ -283,7 +294,7 @@ app.post('/api/workerbees/:id/done', async (req, res) => {
   try {
     const userId = res.locals.userId as string
     const bee = await workerBeeManager.getById(req.params.id)
-    if (!bee) return res.status(404).json({ error: 'WorkerBee not found' })
+    if (!bee) return res.status(404).json({ error: 'Agent not found' })
     if (bee.userId && bee.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
     await workerBeeManager.updateStatus(req.params.id, 'done')
     res.json({ ok: true })
@@ -308,7 +319,7 @@ app.patch('/api/workerbees/:id/status', async (req, res) => {
   try {
     const userId = res.locals.userId as string
     const bee = await workerBeeManager.getById(req.params.id)
-    if (!bee) return res.status(404).json({ error: 'WorkerBee not found' })
+    if (!bee) return res.status(404).json({ error: 'Agent not found' })
     if (bee.userId && bee.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
     await workerBeeManager.updateStatus(req.params.id, req.body.status)
     res.json({ ok: true })
@@ -319,7 +330,7 @@ app.patch('/api/workerbees/:id/status', async (req, res) => {
 app.post('/api/workerbees/:id/snapshot', async (req, res) => {
   const userId = res.locals.userId as string
   const bee = await workerBeeManager.getById(req.params.id)
-  if (!bee) return res.status(404).json({ error: 'WorkerBee not found' })
+  if (!bee) return res.status(404).json({ error: 'Agent not found' })
   if (bee.userId && bee.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
   if (!bee?.sessionId) return res.status(400).json({ error: 'No active session' })
   res.json(await snapshotManager.capture(bee.id, bee.sessionId))
@@ -328,7 +339,7 @@ app.post('/api/workerbees/:id/snapshot', async (req, res) => {
 app.get('/api/workerbees/:id/snapshots', async (req, res) => {
   const userId = res.locals.userId as string
   const bee = await workerBeeManager.getById(req.params.id)
-  if (!bee) return res.status(404).json({ error: 'WorkerBee not found' })
+  if (!bee) return res.status(404).json({ error: 'Agent not found' })
   if (bee.userId && bee.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
   res.json(await snapshotManager.listByWorkerBee(req.params.id))
 })
@@ -343,7 +354,7 @@ app.get('/api/snapshots/:id/content', async (req, res) => {
 app.get('/api/workerbees/:id/replay', async (req, res) => {
   const userId = res.locals.userId as string
   const bee = await workerBeeManager.getById(req.params.id)
-  if (!bee) return res.status(404).json({ error: 'WorkerBee not found' })
+  if (!bee) return res.status(404).json({ error: 'Agent not found' })
   if (bee.userId && bee.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
   res.json(await replayManager.listFrames(req.params.id))
 })
@@ -422,6 +433,7 @@ const ReleaseTrainSchema = z.object({
   atomicTaskIds: z.array(z.string()).optional(),
   beadIds: z.array(z.string()).optional(),  // backward compat
   description: z.string().optional(),
+  manual: z.boolean().optional(),
 }).refine((d) => d.projectId || d.rigId, { message: 'projectId or rigId required' })
 
 app.get('/api/release-trains', async (req, res) => {
@@ -440,15 +452,15 @@ app.get('/api/convoys', async (req, res) => {  // backward compat
 app.post('/api/release-trains', async (req, res) => {
   try {
     const userId = res.locals.userId as string
-    const { name, projectId, rigId, atomicTaskIds, beadIds, description } = validate(ReleaseTrainSchema, req.body)
-    res.json(await releaseTrainManager.create(name, (projectId ?? rigId)!, atomicTaskIds ?? beadIds, description, userId))
+    const { name, projectId, rigId, atomicTaskIds, beadIds, description, manual } = validate(ReleaseTrainSchema, req.body)
+    res.json(await releaseTrainManager.create(name, (projectId ?? rigId)!, atomicTaskIds ?? beadIds, description, userId, manual))
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 app.post('/api/convoys', async (req, res) => {  // backward compat
   try {
     const userId = res.locals.userId as string
-    const { name, projectId, rigId, atomicTaskIds, beadIds, description } = validate(ReleaseTrainSchema, req.body)
-    res.json(await releaseTrainManager.create(name, (projectId ?? rigId)!, atomicTaskIds ?? beadIds, description, userId))
+    const { name, projectId, rigId, atomicTaskIds, beadIds, description, manual } = validate(ReleaseTrainSchema, req.body)
+    res.json(await releaseTrainManager.create(name, (projectId ?? rigId)!, atomicTaskIds ?? beadIds, description, userId, manual))
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
@@ -520,6 +532,17 @@ app.delete('/api/convoys/:id/beads', async (req, res) => {  // backward compat
   try {
     const userId = res.locals.userId as string
     res.json(await releaseTrainManager.removeAtomicTasks(req.params.id, req.body.beadIds ?? req.body.atomicTaskIds, userId))
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
+})
+
+app.post('/api/release-trains/:id/start', async (req, res) => {
+  try {
+    const userId = res.locals.userId as string
+    await releaseTrainManager.start(req.params.id, userId)
+    res.json({ ok: true })
   } catch (err) {
     const msg = (err as Error).message
     res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
@@ -615,6 +638,62 @@ app.post('/api/convoys/:id/dispatch', async (req, res) => {  // backward compat
     const bee = await workerBeeManager.spawn(releaseTrain.projectId, taskDescription, userId)
     await releaseTrainManager.assignWorkerBee(releaseTrain.id, bee.id, userId)
     res.json({ bee, convoy: await releaseTrainManager.getById(releaseTrain.id) })
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
+})
+
+app.post('/api/release-trains/:id/create-pr', requireAuth, async (req, res) => {
+  try {
+    const userId = res.locals.userId as string
+    const rt = await releaseTrainManager.getById(req.params.id)
+    if (!rt) { res.status(404).json({ error: 'Not found' }); return }
+
+    const user = await getUserById(userId)
+    const githubToken = user?.githubToken
+    if (!githubToken) { res.status(400).json({ error: 'GitHub token not configured — add it in account settings' }); return }
+
+    const project = await rigManager.getById(rt.projectId)
+    if (!project) { res.status(400).json({ error: 'Project not found' }); return }
+
+    const parsed = parseGithubRepo(project.repoUrl)
+    if (!parsed) { res.status(400).json({ error: 'Could not parse GitHub repo from project URL: ' + project.repoUrl }); return }
+
+    const bee = rt.assignedWorkerBeeId
+      ? (await workerBeeManager.getById(rt.assignedWorkerBeeId))
+      : null
+    const head = bee?.branch ?? req.body.branch
+    if (!head) { res.status(400).json({ error: 'No branch found — Agent must be assigned' }); return }
+
+    const base = detectDefaultBranch(project.localPath)
+    const title = rt.name
+    const body = rt.description || `Created by Squansq Agent`
+
+    const { url, number } = await createPullRequest(githubToken, parsed.owner, parsed.repo, head, base, title, body)
+    const updated = await releaseTrainManager.moveToPrReview(rt.id, url, number, userId)
+    res.json(updated)
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
+})
+
+app.post('/api/release-trains/:id/sync-pr', requireAuth, async (req, res) => {
+  try {
+    const userId = res.locals.userId as string
+    const rt = await releaseTrainManager.getById(req.params.id)
+    if (!rt?.prNumber) { res.status(400).json({ error: 'No PR linked' }); return }
+
+    const user = await getUserById(userId)
+    const githubToken = user?.githubToken
+    if (!githubToken) { res.status(400).json({ error: 'GitHub token not configured' }); return }
+
+    const project = await rigManager.getById(rt.projectId)
+    const parsed = project ? parseGithubRepo(project.repoUrl) : null
+    if (!parsed) { res.status(400).json({ error: 'Cannot determine GitHub repo' }); return }
+
+    const { state, merged } = await getPullRequestStatus(githubToken, parsed.owner, parsed.repo, rt.prNumber)
+    if (merged) {
+      await releaseTrainManager.land(rt.id, userId)
+      res.json({ state, merged, landed: true })
+    } else {
+      res.json({ state, merged, landed: false })
+    }
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
@@ -1037,6 +1116,33 @@ app.post('/api/webhooks/github', express.raw({ type: 'application/json' }), asyn
   } catch (err) {
     res.status(500).json({ error: (err as Error).message })
   }
+})
+
+app.post('/api/github/webhook', async (req, res) => {
+  try {
+    const secret = process.env.GITHUB_WEBHOOK_SECRET
+    if (secret) {
+      const sig = req.headers['x-hub-signature-256'] as string | undefined
+      if (!sig) { res.status(401).json({ error: 'Missing signature' }); return }
+      const { createHmac } = await import('crypto')
+      const expected = 'sha256=' + createHmac('sha256', secret).update(JSON.stringify(req.body)).digest('hex')
+      if (sig !== expected) { res.status(401).json({ error: 'Invalid signature' }); return }
+    }
+
+    const event = req.headers['x-github-event'] as string
+    if (event === 'pull_request' && req.body.action === 'closed' && req.body.pull_request?.merged === true) {
+      const prNumber = req.body.pull_request.number as number
+      const db = getDb()
+      const result = await db.execute({
+        sql: `SELECT id, user_id FROM release_trains WHERE pr_number = ? AND status = 'pr_review'`,
+        args: [prNumber],
+      })
+      for (const row of result.rows) {
+        await releaseTrainManager.land(row.id as string, row.user_id as string | undefined)
+      }
+    }
+    res.json({ ok: true })
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
 // --- Costs ---

@@ -15,6 +15,9 @@ export function RigPanel() {
   const tabs = useStore((s) => s.tabs)
   const activeTownId = useStore((s) => s.activeTownId)
   const addToast = useStore((s) => s.addToast)
+  const addAgent = useStore((s) => s.addAgent)
+  const addReleaseTrain = useStore((s) => s.addReleaseTrain)
+  const setMainView = useStore((s) => s.setMainView)
 
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', repoUrl: '', localPath: '' })
@@ -108,21 +111,45 @@ export function RigPanel() {
   const handleSpawn = async (rig: Rig, taskDescription?: string) => {
     setSpawning(rig.id)
     try {
-      const res = await apiFetch(`/api/projects/${rig.id}/workerbees`, {
+      // Create a Release Train so it appears on the Kanban board
+      const rtRes = await apiFetch('/api/release-trains', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskDescription: taskDescription ?? '' }),
+        body: JSON.stringify({
+          name: `${rig.name} task`,
+          description: taskDescription ?? '',
+          projectId: rig.id,
+        }),
       })
-      const bee = await res.json()
-      if (bee.sessionId) {
+      const rt = await rtRes.json()
+      addReleaseTrain(rt)
+
+      // Dispatch it — spawns the WorkerBee and assigns it to the RT
+      const dispRes = await apiFetch(`/api/release-trains/${rt.id}/dispatch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const data = await dispRes.json()
+      const bee = data.bee ?? data
+      if (bee?.id) {
+        addAgent({
+          ...bee,
+          taskDescription: bee.taskDescription ?? taskDescription ?? '',
+          worktreePath: bee.worktreePath ?? '',
+          branch: bee.branch ?? '',
+        })
+      }
+      if (bee?.sessionId) {
         const hasSession = tabs.some((t) => t.panes.includes(bee.sessionId))
         if (!hasSession) {
           if (activeTabId) addPaneToTab(activeTabId, bee.sessionId)
           else addTab(rig.name, [bee.sessionId])
         }
       }
+      setMainView('terminals')
     } catch (err) {
-      addToast(`Failed to spawn WorkerBee: ${(err as Error).message}`)
+      addToast(`Failed to spawn Agent: ${(err as Error).message}`)
     } finally {
       setSpawning(null)
       setSpawnTask(null)
@@ -242,7 +269,7 @@ export function RigPanel() {
       {spawnTask && (
         <div style={styles.form}>
           <div style={styles.spawnHeader}>
-            Spawn WorkerBee for <strong>{rigs.find((r) => r.id === spawnTask.rigId)?.name}</strong>
+            Spawn Agent for <strong>{rigs.find((r) => r.id === spawnTask.rigId)?.name}</strong>
           </div>
           <textarea
             style={{ ...styles.input, resize: 'vertical', minHeight: 60 }}

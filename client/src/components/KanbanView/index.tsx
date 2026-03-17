@@ -3,13 +3,12 @@ import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
 import type { ReleaseTrainEntry, TemplateEntry } from '../../store/index.js'
 import { ReleaseTrainPanel } from '../ReleaseTrainPanel/index.js'
-import { AtomicTasksPanel } from '../AtomicTasksPanel/index.js'
-
-type KanbanTab = 'board' | 'trains' | 'tasks' | 'standbys'
+type KanbanTab = 'board' | 'trains' | 'standbys'
 
 const COLUMNS: Array<{ status: ReleaseTrainEntry['status']; label: string; color: string }> = [
   { status: 'open', label: 'Open', color: '#569cd6' },
   { status: 'in_progress', label: 'In Progress', color: '#4ec9b0' },
+  { status: 'pr_review', label: 'PR Review', color: '#b5a642' },
   { status: 'landed', label: 'Landed', color: '#608b4e' },
   { status: 'cancelled', label: 'Cancelled', color: '#555' },
 ]
@@ -23,13 +22,11 @@ export function KanbanView() {
         <TabBtn label="Board" active={tab === 'board'} onClick={() => setTab('board')} />
         <TabBtn label="Standbys" active={tab === 'standbys'} onClick={() => setTab('standbys')} />
         <TabBtn label="Release Trains" active={tab === 'trains'} onClick={() => setTab('trains')} />
-        <TabBtn label="Atomic Tasks" active={tab === 'tasks'} onClick={() => setTab('tasks')} />
       </div>
       <div style={styles.body}>
         {tab === 'board' && <Board />}
         {tab === 'standbys' && <StandbysPanel />}
         {tab === 'trains' && <ReleaseTrainPanel />}
-        {tab === 'tasks' && <AtomicTasksPanel />}
       </div>
     </div>
   )
@@ -58,6 +55,7 @@ function Board() {
   const addTab = useStore((s) => s.addTab)
   const activeTabId = useStore((s) => s.activeTabId)
   const tabs = useStore((s) => s.tabs)
+  const addToast = useStore((s) => s.addToast)
 
   const templates = useStore((s) => s.templates)
 
@@ -65,6 +63,9 @@ function Board() {
   const [newForm, setNewForm] = useState({ name: '', description: '', projectId: '' })
   const [creating, setCreating] = useState(false)
   const [autoDispatch, setAutoDispatch] = useState(true)
+  const [isManual, setIsManual] = useState(false)
+  const [creatingPr, setCreatingPr] = useState<string | null>(null)
+  const [syncingPr, setSyncingPr] = useState<string | null>(null)
 
   const agentById = Object.fromEntries(agents.map((a) => [a.id, a]))
   const rigNameById = Object.fromEntries(rigs.map((r) => [r.id, r.name]))
@@ -87,13 +88,64 @@ function Board() {
         body: JSON.stringify({}),
       })
       updateReleaseTrain(releaseTrainId, { status: 'cancelled' })
-    } else {
-      await apiFetch(`/api/release-trains/${releaseTrainId}/${status === 'landed' ? 'land' : 'assign'}`, {
+    } else if (status === 'landed') {
+      await apiFetch(`/api/release-trains/${releaseTrainId}/land`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(status === 'landed' ? {} : { workerBeeId: null }),
+        body: JSON.stringify({}),
       })
-      updateReleaseTrain(releaseTrainId, { status: status as ReleaseTrainEntry['status'] })
+      updateReleaseTrain(releaseTrainId, { status: 'landed' })
+    } else if (status === 'in_progress') {
+      await apiFetch(`/api/release-trains/${releaseTrainId}/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      updateReleaseTrain(releaseTrainId, { status: 'in_progress' })
+    }
+  }
+
+  const handleCreatePr = async (releaseTrainId: string) => {
+    setCreatingPr(releaseTrainId)
+    try {
+      const res = await apiFetch(`/api/release-trains/${releaseTrainId}/create-pr`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string }
+        addToast(err.error ?? 'Failed to create PR')
+        return
+      }
+      const updated = await res.json()
+      updateReleaseTrain(releaseTrainId, { status: 'pr_review', prUrl: updated.prUrl, prNumber: updated.prNumber })
+    } catch (err) {
+      addToast(`Failed to create PR: ${(err as Error).message}`)
+    } finally {
+      setCreatingPr(null)
+    }
+  }
+
+  const handleSyncPr = async (releaseTrainId: string) => {
+    setSyncingPr(releaseTrainId)
+    try {
+      const res = await apiFetch(`/api/release-trains/${releaseTrainId}/sync-pr`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const data = await res.json() as { state?: string; merged?: boolean; landed?: boolean; error?: string }
+      if (data.error) { addToast(data.error); return }
+      if (data.landed) {
+        updateReleaseTrain(releaseTrainId, { status: 'landed' })
+      } else {
+        addToast(`PR is ${data.state} — not merged yet`, 'info')
+      }
+    } catch (err) {
+      addToast(`Sync failed: ${(err as Error).message}`)
+    } finally {
+      setSyncingPr(null)
     }
   }
 
@@ -125,13 +177,13 @@ function Board() {
       const res = await apiFetch('/api/release-trains', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newForm.name.trim(), description: newForm.description.trim(), projectId }),
+        body: JSON.stringify({ name: newForm.name.trim(), description: newForm.description.trim(), projectId, manual: isManual }),
       })
       const created = await res.json()
       addReleaseTrain(created)
       setShowNewForm(false)
       setNewForm({ name: '', description: '', projectId: '' })
-      if (autoDispatch) {
+      if (!isManual && autoDispatch) {
         const dres = await apiFetch(`/api/release-trains/${created.id}/dispatch`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -200,7 +252,7 @@ function Board() {
                 />
                 <textarea
                   style={{ ...styles.formInput, resize: 'vertical' as const, minHeight: 48 }}
-                  placeholder="Description (becomes the WorkerBee's instructions)…"
+                  placeholder={isManual ? 'Description / notes…' : "Description (becomes the Agent's instructions)…"}
                   value={newForm.description}
                   rows={2}
                   onChange={(e) => setNewForm((f) => ({ ...f, description: e.target.value }))}
@@ -214,13 +266,29 @@ function Board() {
                     {rigs.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
                   </select>
                 )}
-                <label style={styles.checkRow}>
-                  <input type="checkbox" checked={autoDispatch} onChange={(e) => setAutoDispatch(e.target.checked)} />
-                  <span style={styles.checkLabel}>auto-dispatch WorkerBee</span>
-                </label>
+                <div style={styles.modeRow}>
+                  <button
+                    style={{ ...styles.modeBtn, ...(isManual ? {} : styles.modeBtnActive) }}
+                    onClick={() => setIsManual(false)}
+                  >
+                    ⚡ AI task
+                  </button>
+                  <button
+                    style={{ ...styles.modeBtn, ...(isManual ? styles.modeBtnManual : {}) }}
+                    onClick={() => setIsManual(true)}
+                  >
+                    ✋ Manual
+                  </button>
+                </div>
+                {!isManual && (
+                  <label style={styles.checkRow}>
+                    <input type="checkbox" checked={autoDispatch} onChange={(e) => setAutoDispatch(e.target.checked)} />
+                    <span style={styles.checkLabel}>auto-dispatch Agent</span>
+                  </label>
+                )}
                 <div style={styles.formActions}>
                   <button style={styles.actionBtn} onClick={handleCreate} disabled={creating || !newForm.name.trim()}>
-                    {creating ? '…' : autoDispatch ? 'Create & Dispatch' : 'Create'}
+                    {creating ? '…' : isManual ? 'Create' : autoDispatch ? 'Create & Dispatch' : 'Create'}
                   </button>
                   <button style={{ ...styles.actionBtn, color: '#555' }} onClick={() => setShowNewForm(false)}>cancel</button>
                 </div>
@@ -231,8 +299,11 @@ function Board() {
                 const assignedBee = releaseTrain.assignedWorkerBeeId ? agentById[releaseTrain.assignedWorkerBeeId] : null
                 const counts = releaseTrainAtomicTaskCounts[releaseTrain.id] ?? { total: 0, done: 0 }
                 return (
-                  <div key={releaseTrain.id} style={styles.card}>
-                    <div style={styles.cardTitle}>{releaseTrain.name}</div>
+                  <div key={releaseTrain.id} style={{ ...styles.card, ...(releaseTrain.manual ? styles.cardManual : {}) }}>
+                    <div style={styles.cardTitleRow}>
+                      <span style={styles.cardTitle}>{releaseTrain.name}</span>
+                      {releaseTrain.manual && <span style={styles.manualBadge}>manual</span>}
+                    </div>
 
                     {releaseTrain.description && (
                       <div style={styles.cardDesc}>{releaseTrain.description}</div>
@@ -247,7 +318,7 @@ function Board() {
                       )}
                     </div>
 
-                    {assignedBee && (
+                    {!releaseTrain.manual && assignedBee && (
                       <div
                         style={styles.cardBee}
                         onClick={() => openBeeTerminal(assignedBee)}
@@ -262,38 +333,111 @@ function Board() {
                     )}
 
                     <div style={styles.cardActions}>
-                      {col.status === 'open' && (
-                        <button
-                          style={styles.actionBtn}
-                          onClick={() => dispatchReleaseTrain(releaseTrain.id)}
-                        >
-                          dispatch
-                        </button>
-                      )}
-                      {col.status === 'in_progress' && !assignedBee && (
-                        <button
-                          style={styles.actionBtn}
-                          onClick={() => dispatchReleaseTrain(releaseTrain.id)}
-                          title="WorkerBee is gone — dispatch a new one"
-                        >
-                          re-dispatch
-                        </button>
-                      )}
-                      {col.status === 'in_progress' && (
-                        <button
-                          style={{ ...styles.actionBtn, color: '#608b4e', borderColor: '#608b4e' }}
-                          onClick={() => moveReleaseTrain(releaseTrain.id, 'landed')}
-                        >
-                          land
-                        </button>
-                      )}
-                      {col.status !== 'open' && col.status !== 'cancelled' && (
-                        <button
-                          style={{ ...styles.actionBtn, color: '#555' }}
-                          onClick={() => moveReleaseTrain(releaseTrain.id, 'cancelled')}
-                        >
-                          cancel
-                        </button>
+                      {releaseTrain.manual ? (
+                        <>
+                          {col.status === 'open' && (
+                            <button
+                              style={{ ...styles.actionBtn, color: '#4ec9b0', borderColor: '#4ec9b0' }}
+                              onClick={() => moveReleaseTrain(releaseTrain.id, 'in_progress')}
+                            >
+                              start
+                            </button>
+                          )}
+                          {(col.status === 'open' || col.status === 'in_progress') && (
+                            <button
+                              style={{ ...styles.actionBtn, color: '#608b4e', borderColor: '#608b4e' }}
+                              onClick={() => moveReleaseTrain(releaseTrain.id, 'landed')}
+                            >
+                              land
+                            </button>
+                          )}
+                          {col.status !== 'open' && col.status !== 'cancelled' && (
+                            <button
+                              style={{ ...styles.actionBtn, color: '#555' }}
+                              onClick={() => moveReleaseTrain(releaseTrain.id, 'cancelled')}
+                            >
+                              cancel
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {col.status === 'open' && (
+                            <button
+                              style={styles.actionBtn}
+                              onClick={() => dispatchReleaseTrain(releaseTrain.id)}
+                            >
+                              dispatch
+                            </button>
+                          )}
+                          {col.status === 'in_progress' && !assignedBee && (
+                            <button
+                              style={styles.actionBtn}
+                              onClick={() => dispatchReleaseTrain(releaseTrain.id)}
+                              title="Agent is gone — dispatch a new one"
+                            >
+                              re-dispatch
+                            </button>
+                          )}
+                          {col.status === 'in_progress' && !releaseTrain.manual && assignedBee && (
+                            <button
+                              style={{ ...styles.actionBtn, color: '#b5a642', borderColor: '#b5a642' }}
+                              onClick={() => handleCreatePr(releaseTrain.id)}
+                              disabled={creatingPr === releaseTrain.id}
+                            >
+                              {creatingPr === releaseTrain.id ? '…' : 'create PR'}
+                            </button>
+                          )}
+                          {col.status === 'in_progress' && (
+                            <button
+                              style={{ ...styles.actionBtn, color: '#608b4e', borderColor: '#608b4e' }}
+                              onClick={() => moveReleaseTrain(releaseTrain.id, 'landed')}
+                            >
+                              land
+                            </button>
+                          )}
+                          {col.status === 'pr_review' && (
+                            <>
+                              {releaseTrain.prUrl && (
+                                <a
+                                  href={releaseTrain.prUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  style={styles.prBadge}
+                                >
+                                  #{releaseTrain.prNumber} ↗
+                                </a>
+                              )}
+                              <button
+                                style={{ ...styles.actionBtn, color: '#b5a642', borderColor: '#b5a642' }}
+                                onClick={() => handleSyncPr(releaseTrain.id)}
+                                disabled={syncingPr === releaseTrain.id}
+                              >
+                                {syncingPr === releaseTrain.id ? '…' : 'sync'}
+                              </button>
+                              <button
+                                style={{ ...styles.actionBtn, color: '#608b4e', borderColor: '#608b4e' }}
+                                onClick={() => moveReleaseTrain(releaseTrain.id, 'landed')}
+                              >
+                                land
+                              </button>
+                              <button
+                                style={{ ...styles.actionBtn, color: '#555' }}
+                                onClick={() => moveReleaseTrain(releaseTrain.id, 'cancelled')}
+                              >
+                                cancel
+                              </button>
+                            </>
+                          )}
+                          {col.status !== 'open' && col.status !== 'cancelled' && col.status !== 'pr_review' && (
+                            <button
+                              style={{ ...styles.actionBtn, color: '#555' }}
+                              onClick={() => moveReleaseTrain(releaseTrain.id, 'cancelled')}
+                            >
+                              cancel
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -406,11 +550,56 @@ const styles = {
     flexDirection: 'column' as const,
     gap: 4,
   },
+  cardManual: {
+    borderColor: '#2a2a1a',
+    background: '#141410',
+  },
+  cardTitleRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+  },
   cardTitle: {
     fontSize: 12,
     color: '#d4d4d4',
     fontFamily: 'monospace',
     lineHeight: 1.3,
+    flex: 1,
+  },
+  manualBadge: {
+    fontSize: 8,
+    color: '#ce9178',
+    fontFamily: 'monospace',
+    background: '#1a1208',
+    border: '1px solid #3a2a10',
+    borderRadius: 2,
+    padding: '1px 4px',
+    flexShrink: 0,
+  },
+  modeRow: {
+    display: 'flex',
+    gap: 4,
+  },
+  modeBtn: {
+    flex: 1,
+    background: 'none',
+    border: '1px solid #2a2a2a',
+    color: '#555',
+    borderRadius: 3,
+    padding: '3px 6px',
+    cursor: 'pointer',
+    fontSize: 10,
+    fontFamily: 'monospace',
+  },
+  modeBtnActive: {
+    background: '#1a2a3a',
+    border: '1px solid #569cd6',
+    color: '#569cd6',
+  },
+  modeBtnManual: {
+    background: '#1a180a',
+    border: '1px solid #ce9178',
+    color: '#ce9178',
   },
   cardDesc: {
     fontSize: 10,
@@ -473,6 +662,17 @@ const styles = {
     fontFamily: 'monospace',
     textAlign: 'center' as const,
     padding: '16px 0',
+  },
+  prBadge: {
+    fontSize: 10,
+    color: '#b5a642',
+    fontFamily: 'monospace',
+    background: '#1a1808',
+    border: '1px solid #3a3010',
+    borderRadius: 2,
+    padding: '2px 6px',
+    textDecoration: 'none',
+    flexShrink: 0 as const,
   },
   newBtn: {
     background: 'none',
@@ -757,7 +957,7 @@ function StandbysPanel() {
       <div style={styles.standbysHeader}>
         <span style={styles.standbysTitle}>Standby Templates</span>
         <span style={{ fontSize: 10, color: '#444', fontFamily: 'monospace' }}>
-          one-click dispatch · Mayor Lee can also trigger these
+          one-click dispatch · Root Agent can also trigger these
         </span>
       </div>
 
@@ -828,7 +1028,7 @@ function StandbysPanel() {
           />
           <textarea
             style={{ ...styles.formInput, resize: 'vertical' as const, minHeight: 100 }}
-            placeholder="Instructions for the WorkerBee…"
+            placeholder="Instructions for the Agent…"
             value={form.content}
             rows={5}
             onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}

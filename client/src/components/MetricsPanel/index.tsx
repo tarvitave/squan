@@ -44,9 +44,9 @@ export function MetricsPanel() {
       </div>
 
       <div style={styles.grid}>
-        {/* WorkerBees */}
+        {/* Agents */}
         <div style={styles.section}>
-          <div style={styles.sectionTitle}>WorkerBees</div>
+          <div style={styles.sectionTitle}>Agents</div>
           <div style={styles.statRow}>
             <StatCard label="Total" value={metrics.workerbees.total} color="#d4d4d4" />
             <StatCard label="Working" value={metrics.workerbees.working ?? 0} color="#4ec9b0" />

@@ -110,7 +110,7 @@ export default function App() {
         <AccountPanel />
         <TownSelector />
         <div style={{ ...styles.sidebarSection, flex: 'none' }}>
-          <div style={styles.sectionTitle}>Mayor Lee</div>
+          <div style={styles.sectionTitle}>Root Agent</div>
           <MayorPanel />
         </div>
         <div style={{ ...styles.sidebarSection, flex: 'none' }}>
@@ -118,7 +118,7 @@ export default function App() {
           <RigPanel />
         </div>
         <div style={styles.sidebarSection}>
-          <div style={styles.sectionTitle}>WorkerBees</div>
+          <div style={styles.sectionTitle}>Agents</div>
           <AgentTree />
         </div>
       </div>

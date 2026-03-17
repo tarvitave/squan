@@ -270,7 +270,7 @@ export function ReleaseTrainPanel() {
                     defaultValue=""
                     onChange={(e) => { if (e.target.value) handleAssign(releaseTrain.id, e.target.value) }}
                   >
-                    <option value="" disabled>assign bee…</option>
+                    <option value="" disabled>assign agent…</option>
                     {idleAgents.map((a) => (
                       <option key={a.id} value={a.id}>{a.name} ({a.status})</option>
                     ))}
@@ -282,7 +282,7 @@ export function ReleaseTrainPanel() {
                   <button
                     style={styles.actionBtn}
                     onClick={() => setAssigning(releaseTrain.id)}
-                    title="Assign existing WorkerBee"
+                    title="Assign existing Agent"
                   >
                     assign
                   </button>
@@ -342,7 +342,7 @@ export function ReleaseTrainPanel() {
                       style={{ ...styles.actionBtn, color: '#4ec9b0', borderColor: '#4ec9b0' }}
                       onClick={() => { setDispatchingWithTemplate(releaseTrain.id); setSelectedTemplateId('') }}
                       disabled={dispatching === releaseTrain.id}
-                      title="Spawn a new WorkerBee and assign"
+                      title="Spawn a new Agent and assign"
                     >
                       {dispatching === releaseTrain.id ? '…' : 'dispatch'}
                     </button>

@@ -87,11 +87,11 @@ export function CostPanel() {
             <div style={styles.keyRow}>
               <span style={styles.keyDot}>●</span>
               <span style={styles.keyMasked}>{data.apiKeyMasked}</span>
-              <span style={styles.keyNote}>WorkerBees bill to this key · pay-as-you-go</span>
+              <span style={styles.keyNote}>Agents bill to this key · pay-as-you-go</span>
             </div>
           ) : (
             <div style={styles.noKey}>
-              No API key configured — WorkerBees are using Claude Pro subscription.
+              No API key configured — Agents are using Claude Pro subscription.
               Add an API key in your account settings to use pay-as-you-go billing.
             </div>
           )}

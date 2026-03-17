@@ -5,6 +5,7 @@ export interface AuthUser {
   id: string
   email: string
   anthropicApiKey: string | null
+  githubToken: string | null
 }
 
 export interface Tab {
@@ -47,6 +48,9 @@ export interface ReleaseTrainEntry {
   status: string
   atomicTaskIds: string[]
   assignedWorkerBeeId: string | null
+  manual?: boolean
+  prUrl?: string
+  prNumber?: number
 }
 
 /** Backward-compat alias */
@@ -194,7 +198,7 @@ export const useStore = create<SquansqState>()(
       mainView: 'terminals' as MainView,
       setMainView: (mainView: MainView) => set({ mainView }),
 
-      tabs: [{ id: 'tab-1', label: 'Mayor', panes: [], layout: 'single' }],
+      tabs: [{ id: 'tab-1', label: 'Root Agent', panes: [], layout: 'single' }],
       activeTabId: 'tab-1',
 
       addTab: (label, panes = []) =>
@@ -207,7 +211,7 @@ export const useStore = create<SquansqState>()(
         set((s) => {
           const tabs = s.tabs.filter((t) => t.id !== id)
           return {
-            tabs: tabs.length ? tabs : [{ id: 'tab-1', label: 'Mayor', panes: [], layout: 'single' }],
+            tabs: tabs.length ? tabs : [{ id: 'tab-1', label: 'Root Agent', panes: [], layout: 'single' }],
             activeTabId: s.activeTabId === id ? (tabs[0]?.id ?? 'tab-1') : s.activeTabId,
           }
         }),

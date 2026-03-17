@@ -18,8 +18,16 @@ const EVENT_COLOR: Record<string, string> = {
   'atomictask.created': '#569cd6',
   'atomictask.assigned': '#4ec9b0',
   'atomictask.done': '#608b4e',
-  'mayorlee.started': '#dcdcaa',
-  'mayorlee.stopped': '#888',
+  'rootagent.started': '#dcdcaa',
+  'rootagent.stopped': '#888',
+  'mayorlee.started': '#dcdcaa',  // legacy alias
+  'mayorlee.stopped': '#888',     // legacy alias
+}
+
+// Display name mapping — normalises legacy event types
+const EVENT_LABEL: Record<string, string> = {
+  'mayorlee.started': 'rootAgent.started',
+  'mayorlee.stopped': 'rootAgent.stopped',
 }
 
 export function EventStream() {
@@ -87,7 +95,7 @@ export function EventStream() {
                 {new Date(ev.timestamp).toLocaleTimeString([], { hour12: false })}
               </span>
               <span style={{ ...styles.type, color: EVENT_COLOR[ev.type] ?? '#888' }}>
-                {ev.type}
+                {EVENT_LABEL[ev.type] ?? ev.type}
               </span>
             </div>
           ))}

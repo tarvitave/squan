@@ -49,7 +49,7 @@ export function MayorPanel() {
     if (activeTabId) {
       addPaneToTab(activeTabId, sessionId)
     } else {
-      addTab('Mayor', [sessionId])
+      addTab('Root Agent', [sessionId])
     }
   }, [tabs, activeTabId, setMainView, setActiveTab, addPaneToTab, addTab])
 
@@ -94,7 +94,7 @@ export function MayorPanel() {
         body: JSON.stringify({ townId: activeTownId ?? 'default', message: message.trim() }),
       })
       setMessage('')
-      // Open terminal so user can see Mayor Lee respond
+      // Open terminal so user can see Root Agent respond
       openMayorTerminal(mayor.sessionId)
     } finally {
       setSending(false)
@@ -108,7 +108,7 @@ export function MayorPanel() {
       <div style={styles.row}>
         <span style={{ ...styles.dot, background: isRunning ? '#4ec9b0' : '#444' }} />
         <span style={styles.label}>
-          Mayor Lee{activeNamespace ? <span style={styles.namespace}> · {activeNamespace.name}</span> : null}
+          Root Agent{activeNamespace ? <span style={styles.namespace}> · {activeNamespace.name}</span> : null}
         </span>
         <span style={{ ...styles.status, color: isRunning ? '#4ec9b0' : '#555' }}>
           {isRunning ? 'running' : 'stopped'}
@@ -135,7 +135,7 @@ export function MayorPanel() {
         <div style={styles.messageBox}>
           <textarea
             style={styles.messageInput}
-            placeholder="Give Mayor Lee a task…"
+            placeholder="Give Root Agent a task…"
             value={message}
             rows={3}
             onChange={(e) => setMessage(e.target.value)}

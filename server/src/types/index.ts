@@ -4,7 +4,7 @@ export type AgentStatus = 'idle' | 'working' | 'stalled' | 'zombie' | 'done'
 
 export type HookStatus = 'created' | 'active' | 'suspended' | 'completed' | 'archived'
 
-export type ReleaseTrainStatus = 'open' | 'in_progress' | 'landed' | 'cancelled'
+export type ReleaseTrainStatus = 'open' | 'in_progress' | 'pr_review' | 'landed' | 'cancelled'
 
 /** Backward-compat alias */
 export type ConvoyStatus = ReleaseTrainStatus
@@ -137,6 +137,9 @@ export interface ReleaseTrain {
   atomicTaskIds: string[]
   assignedWorkerBeeId: string | null
   status: ReleaseTrainStatus
+  manual: boolean
+  prUrl: string | null
+  prNumber: number | null
   userId?: string
   createdAt: string
   updatedAt: string
@@ -168,14 +171,15 @@ export type EventType =
   | 'releasetrain.landed'
   | 'releasetrain.assigned'
   | 'releasetrain.cancelled'
+  | 'releasetrain.pr_review'
   | 'hook.created'
   | 'hook.activated'
   | 'hook.completed'
   | 'atomictask.created'
   | 'atomictask.assigned'
   | 'atomictask.done'
-  | 'mayorlee.started'
-  | 'mayorlee.stopped'
+  | 'rootagent.started'
+  | 'rootagent.stopped'
   | 'terminal.data'
   | 'terminal.resize'
 

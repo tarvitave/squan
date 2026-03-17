@@ -85,7 +85,7 @@ export const mayorLeeManager = {
 
     broadcastEvent({
       id: uuidv4(),
-      type: 'mayorlee.started',
+      type: 'rootagent.started',
       payload: { mayorId: id, townId, sessionId },
       timestamp: now,
     })
@@ -115,7 +115,7 @@ export const mayorLeeManager = {
     })
     broadcastEvent({
       id: uuidv4(),
-      type: 'mayorlee.stopped',
+      type: 'rootagent.stopped',
       payload: { mayorId: row.id, townId },
       timestamp: new Date().toISOString(),
     })
