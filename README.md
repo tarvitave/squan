@@ -9,7 +9,7 @@
 
 ---
 
-## Why Squansq?
+## Why SquansQ?
 
 Building software today means juggling dozens of moving pieces — feature branches, bug fixes, documentation, design tasks, code reviews, and deployments — often across multiple repositories at once. Most tools force you to context-switch constantly: open a terminal here, check a Jira board there, wait for one thing before starting the next.
 
