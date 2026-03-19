@@ -64,8 +64,11 @@ function Board() {
   const [creating, setCreating] = useState(false)
   const [autoDispatch, setAutoDispatch] = useState(true)
   const [isManual, setIsManual] = useState(false)
+  const removeAgent = useStore((s) => s.removeAgent)
+  const removePaneFromAllTabs = useStore((s) => s.removePaneFromAllTabs)
   const [creatingPr, setCreatingPr] = useState<string | null>(null)
   const [syncingPr, setSyncingPr] = useState<string | null>(null)
+  const [restarting, setRestarting] = useState<string | null>(null)
 
   const agentById = Object.fromEntries(agents.map((a) => [a.id, a]))
   const rigNameById = Object.fromEntries(rigs.map((r) => [r.id, r.name]))
@@ -146,6 +149,32 @@ function Board() {
       addToast(`Sync failed: ${(err as Error).message}`)
     } finally {
       setSyncingPr(null)
+    }
+  }
+
+  const handleRestart = async (agentId: string, releaseTrainId: string) => {
+    setRestarting(releaseTrainId)
+    try {
+      const res = await apiFetch(`/api/workerbees/${agentId}/restart`, { method: 'POST' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string }
+        addToast(body.error ?? 'Failed to restart agent')
+        return
+      }
+      const { bee } = await res.json()
+      const oldAgent = agents.find((a) => a.id === agentId)
+      if (oldAgent?.sessionId) removePaneFromAllTabs(oldAgent.sessionId)
+      removeAgent(agentId)
+      addAgent({ ...bee, taskDescription: bee.taskDescription ?? '', worktreePath: bee.worktreePath ?? '', branch: bee.branch ?? '' })
+      updateReleaseTrain(releaseTrainId, { assignedWorkerBeeId: bee.id, status: 'in_progress' })
+      if (bee.sessionId) {
+        if (activeTabId) addPaneToTab(activeTabId, bee.sessionId)
+        else addTab(bee.name, [bee.sessionId])
+      }
+    } catch (err) {
+      addToast(`Restart failed: ${(err as Error).message}`)
+    } finally {
+      setRestarting(null)
     }
   }
 
@@ -319,16 +348,28 @@ function Board() {
                     </div>
 
                     {!releaseTrain.manual && assignedBee && (
-                      <div
-                        style={styles.cardBee}
-                        onClick={() => openBeeTerminal(assignedBee)}
-                        title="Click to open terminal"
-                      >
-                        <span style={{ color: STATUS_COLOR[assignedBee.status] }}>●</span>
-                        <span style={styles.beeName}>{assignedBee.name}</span>
-                        <span style={{ ...styles.beeStatus, color: STATUS_COLOR[assignedBee.status] }}>
-                          {assignedBee.status}
+                      <div style={styles.cardBee}>
+                        <span
+                          style={{ display: 'flex', alignItems: 'center', gap: 5, flex: 1, cursor: assignedBee.sessionId ? 'pointer' : 'default' }}
+                          onClick={() => openBeeTerminal(assignedBee)}
+                          title={assignedBee.sessionId ? 'Click to open terminal' : undefined}
+                        >
+                          <span style={{ color: STATUS_COLOR[assignedBee.status] }}>●</span>
+                          <span style={styles.beeName}>{assignedBee.name}</span>
+                          <span style={{ ...styles.beeStatus, color: STATUS_COLOR[assignedBee.status] }}>
+                            {assignedBee.status}
+                          </span>
                         </span>
+                        {(assignedBee.status === 'zombie' || assignedBee.status === 'stalled') && (
+                          <button
+                            style={styles.restartBeeBtn}
+                            onClick={() => handleRestart(assignedBee.id, releaseTrain.id)}
+                            disabled={restarting === releaseTrain.id}
+                            title="Restart agent"
+                          >
+                            {restarting === releaseTrain.id ? '…' : '↺ restart'}
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -640,6 +681,17 @@ const styles = {
   beeStatus: {
     fontSize: 10,
     fontFamily: 'monospace',
+  },
+  restartBeeBtn: {
+    background: 'none',
+    border: '1px solid #ce9178',
+    color: '#ce9178',
+    borderRadius: 3,
+    padding: '1px 6px',
+    cursor: 'pointer',
+    fontSize: 9,
+    fontFamily: 'monospace',
+    flexShrink: 0,
   },
   cardActions: {
     display: 'flex',

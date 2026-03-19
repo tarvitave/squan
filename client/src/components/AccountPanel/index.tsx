@@ -14,6 +14,7 @@ export function AccountPanel() {
   const [ghToken, setGhToken] = useState('')
   const [savingGh, setSavingGh] = useState(false)
   const [savedGh, setSavedGh] = useState(false)
+  const [savingTheme, setSavingTheme] = useState(false)
 
   const save = async () => {
     if (!apiKey.trim()) return
@@ -29,6 +30,19 @@ export function AccountPanel() {
       setTimeout(() => setSaved(false), 2000)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const saveTheme = async (theme: string) => {
+    setSavingTheme(true)
+    try {
+      await apiFetch('/api/auth/claude-theme', {
+        method: 'PUT',
+        body: JSON.stringify({ theme }),
+      })
+      if (user && token) setAuth(token, { ...user, claudeTheme: theme })
+    } finally {
+      setSavingTheme(false)
     }
   }
 
@@ -109,6 +123,18 @@ export function AccountPanel() {
             <button style={styles.saveBtn} onClick={saveGithubToken} disabled={savingGh || !ghToken.trim()}>
               {savedGh ? '✓' : savingGh ? '…' : 'Save'}
             </button>
+          </div>
+          <div style={styles.keyStatus}>Claude theme</div>
+          <div style={styles.row}>
+            <select
+              style={{ ...styles.input, cursor: 'pointer' }}
+              value={user?.claudeTheme ?? 'dark'}
+              onChange={(e) => saveTheme(e.target.value)}
+              disabled={savingTheme}
+            >
+              <option value="dark">dark</option>
+              <option value="light">light</option>
+            </select>
           </div>
         </div>
       )}

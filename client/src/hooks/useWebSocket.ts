@@ -206,7 +206,7 @@ export function useWebSocket() {
       socket.onclose = null   // prevent reconnect on intentional unmount
       socket.close()
     }
-  }, [pushEvent, addAgent, updateAgent, removeAgent, addReleaseTrain, updateReleaseTrain, addAtomicTask, updateAtomicTask])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Safe send: queues if socket not yet open
   const safeSend = useCallback((msg: object) => {

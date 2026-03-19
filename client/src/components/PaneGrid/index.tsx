@@ -1,7 +1,11 @@
 import { TerminalPane } from '../TerminalPane/index.js'
+import { ConsolePanel } from '../ConsolePanel/index.js'
 import type { Tab } from '../../store/index.js'
 import { useStore } from '../../store/index.js'
 import { apiFetch } from '../../lib/api.js'
+
+let consoleCounter = 0
+function newConsoleId() { return `console:${++consoleCounter}` }
 
 interface Props {
   tab: Tab
@@ -12,25 +16,28 @@ export function PaneGrid({ tab }: Props) {
   const removePaneFromTab = useStore((s) => s.removePaneFromTab)
   const replacePaneInTab = useStore((s) => s.replacePaneInTab)
   const updateTabLayout = useStore((s) => s.updateTabLayout)
+  const agents = useStore((s) => s.agents)
+
+  const addTerminal = async () => {
+    const res = await apiFetch('/api/terminals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cols: 120, rows: 30 }),
+    })
+    const { id } = await res.json()
+    addPaneToTab(tab.id, id)
+  }
+
+  const addConsole = () => addPaneToTab(tab.id, newConsoleId())
 
   if (tab.panes.length === 0) {
     return (
       <div style={styles.empty}>
-        <p style={styles.emptyText}>No terminals open</p>
-        <button
-          style={styles.spawnBtn}
-          onClick={async () => {
-            const res = await apiFetch('/api/terminals', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ cols: 120, rows: 30 }),
-            })
-            const { id } = await res.json()
-            addPaneToTab(tab.id, id)
-          }}
-        >
-          + New Terminal
-        </button>
+        <p style={styles.emptyText}>No panes open</p>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button style={styles.spawnBtn} onClick={addTerminal}>+ Terminal</button>
+          <button style={styles.spawnBtn} onClick={addConsole}>+ Console</button>
+        </div>
       </div>
     )
   }
@@ -50,39 +57,39 @@ export function PaneGrid({ tab }: Props) {
             {LAYOUT_ICONS[l]}
           </button>
         ))}
-        <button
-          style={styles.addBtn}
-          onClick={async () => {
-            const res = await apiFetch('/api/terminals', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ cols: 120, rows: 30 }),
-            })
-            const { id } = await res.json()
-            addPaneToTab(tab.id, id)
-          }}
-        >
-          +
-        </button>
+        <button style={styles.addBtn} onClick={addTerminal} title="New terminal">+ term</button>
+        <button style={styles.addBtn} onClick={addConsole} title="New sq console">+ sq</button>
       </div>
       <div style={gridStyle}>
-        {tab.panes.map((sessionId) => (
-          <TerminalPane
-            key={sessionId}
-            sessionId={sessionId}
-            label={sessionId.slice(0, 8)}
-            onClose={() => removePaneFromTab(tab.id, sessionId)}
-            onReconnect={async () => {
-              const res = await apiFetch('/api/terminals', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cols: 120, rows: 30, args: ['--continue'] }),
-              })
-              const { id } = await res.json()
-              replacePaneInTab(tab.id, sessionId, id)
-            }}
-          />
-        ))}
+        {tab.panes.map((sessionId) => {
+          if (sessionId.startsWith('console:')) {
+            return (
+              <ConsolePane
+                key={sessionId}
+                paneId={sessionId}
+                onClose={() => removePaneFromTab(tab.id, sessionId)}
+              />
+            )
+          }
+          const agentName = agents.find((a) => a.sessionId === sessionId)?.name
+          return (
+            <TerminalPane
+              key={sessionId}
+              sessionId={sessionId}
+              label={agentName ?? sessionId.slice(0, 8)}
+              onClose={() => removePaneFromTab(tab.id, sessionId)}
+              onReconnect={async () => {
+                const res = await apiFetch('/api/terminals', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ cols: 120, rows: 30, args: ['--continue'] }),
+                })
+                const { id } = await res.json()
+                replacePaneInTab(tab.id, sessionId, id)
+              }}
+            />
+          )
+        })}
       </div>
     </div>
   )
@@ -107,6 +114,28 @@ function getGridStyle(layout: Tab['layout'], count: number): React.CSSProperties
     default:
       return { ...base, gridTemplateColumns: '1fr' }
   }
+}
+
+function ConsolePane({ paneId, onClose }: { paneId: string; onClose: () => void }) {
+  const num = paneId.split(':')[1]
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', border: '1px solid #2d2d2d', borderRadius: 4, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', background: '#1a1a1a', borderBottom: '1px solid #2d2d2d', flexShrink: 0 }}>
+        <span style={{ color: '#4ec9b0', fontSize: 12, fontFamily: 'monospace', letterSpacing: '0.05em' }}>
+          sq console {num}
+        </span>
+        <button
+          style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: 12, padding: '0 4px' }}
+          onClick={onClose}
+        >
+          ✕
+        </button>
+      </div>
+      <div style={{ flex: 1, overflow: 'hidden' }}>
+        <ConsolePanel />
+      </div>
+    </div>
+  )
 }
 
 const LAYOUT_ICONS: Record<Tab['layout'], string> = {

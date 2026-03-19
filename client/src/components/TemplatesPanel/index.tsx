@@ -9,10 +9,10 @@ interface Props {
 }
 
 export function TemplatesPanel({ projectId, onSelect }: Props) {
-  const templates = useStore((s) => s.templates.filter((t) => t.projectId === projectId))
-  const setTemplates = useStore((s) => s.setTemplates)
   const allTemplates = useStore((s) => s.templates)
+  const setTemplates = useStore((s) => s.setTemplates)
   const addTemplate = useStore((s) => s.addTemplate)
+  const templates = allTemplates.filter((t) => t.projectId === projectId)
   const removeTemplate = useStore((s) => s.removeTemplate)
 
   const [showForm, setShowForm] = useState(false)

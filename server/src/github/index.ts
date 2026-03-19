@@ -38,8 +38,9 @@ export async function createPullRequest(
     body: JSON.stringify({ title, body, head, base }),
   })
   if (!res.ok) {
-    const err = await res.json().catch(() => ({})) as { message?: string }
-    throw new Error(err.message ?? `GitHub API ${res.status}`)
+    const err = await res.json().catch(() => ({})) as { message?: string; errors?: Array<{ message?: string }> }
+    const detail = err.errors?.map((e) => e.message).filter(Boolean).join('; ')
+    throw new Error(detail ? `${err.message}: ${detail}` : (err.message ?? `GitHub API ${res.status}`))
   }
   const data = await res.json() as { html_url: string; number: number }
   return { url: data.html_url, number: data.number }

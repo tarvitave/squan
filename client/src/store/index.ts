@@ -6,6 +6,7 @@ export interface AuthUser {
   email: string
   anthropicApiKey: string | null
   githubToken: string | null
+  claudeTheme: string
 }
 
 export interface Tab {
@@ -99,7 +100,7 @@ export interface TownEntry {
   createdAt: string
 }
 
-export type MainView = 'terminals' | 'kanban' | 'metrics' | 'events' | 'costs'
+export type MainView = 'terminals' | 'kanban' | 'metrics' | 'events' | 'costs' | 'console' | 'claudecode'
 
 interface SquansqState {
   // Auth
@@ -119,6 +120,7 @@ interface SquansqState {
   removeTab: (id: string) => void
   setActiveTab: (id: string) => void
   updateTabLayout: (id: string, layout: Tab['layout']) => void
+  updateTabLabel: (id: string, label: string) => void
   addPaneToTab: (tabId: string, sessionId: string) => void
   removePaneFromTab: (tabId: string, sessionId: string) => void
   replacePaneInTab: (tabId: string, oldSessionId: string, newSessionId: string) => void
@@ -220,6 +222,9 @@ export const useStore = create<SquansqState>()(
 
       updateTabLayout: (id, layout) =>
         set((s) => ({ tabs: s.tabs.map((t) => (t.id === id ? { ...t, layout } : t)) })),
+
+      updateTabLabel: (id, label) =>
+        set((s) => ({ tabs: s.tabs.map((t) => (t.id === id ? { ...t, label } : t)) })),
 
       addPaneToTab: (tabId, sessionId) =>
         set((s) => ({

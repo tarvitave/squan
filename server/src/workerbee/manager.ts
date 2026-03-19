@@ -1,6 +1,7 @@
 import { execFileSync } from 'child_process'
-import { mkdirSync, writeFileSync } from 'fs'
+import { mkdirSync, writeFileSync, copyFileSync, existsSync } from 'fs'
 import path from 'path'
+import os from 'os'
 import { v4 as uuidv4 } from 'uuid'
 import { getDb } from '../db/index.js'
 import { ptyManager } from './pty.js'
@@ -9,6 +10,8 @@ import { releaseTrainManager } from '../releasetrain/manager.js'
 import { broadcastEvent } from '../ws/server.js'
 import { getUserById } from '../auth/index.js'
 import type { WorkerBee } from '../types/index.js'
+
+const SERVER_URL = `http://127.0.0.1:${process.env.PORT ?? 3001}`
 
 // WorkerBee name pool
 const NAME_POOL = [
@@ -33,9 +36,10 @@ export const workerBeeManager = {
 
     // --- Git worktree isolation ---
     let worktreePath = project?.localPath ?? `/tmp/squansq/${projectId}/${name}`
+    let worktreesBase: string | undefined
 
     if (project?.localPath) {
-      const worktreesBase = path.resolve(project.localPath, '..', '.squansq-worktrees', projectId)
+      worktreesBase = path.resolve(project.localPath, '..', '.squansq-worktrees', projectId)
       const targetPath = path.join(worktreesBase, `${name}-${Date.now()}`)
       try {
         mkdirSync(worktreesBase, { recursive: true })
@@ -47,6 +51,12 @@ export const workerBeeManager = {
       } catch (err) {
         console.warn(`[WorkerBee] git worktree failed, falling back to project root: ${err}`)
         worktreePath = project.localPath
+        // Still create the branch so PR can be pushed later
+        try {
+          execFileSync('git', ['-C', project.localPath, 'branch', branch], { stdio: 'pipe' })
+        } catch {
+          // Branch may already exist — safe to ignore
+        }
       }
     }
 
@@ -64,18 +74,74 @@ export const workerBeeManager = {
       }
     }
 
-    // Inject the user's Anthropic API key so WorkerBees use pay-as-you-go billing.
-    // Use an isolated CLAUDE_CONFIG_DIR (no oauth token) to avoid auth conflicts
-    // when both a claude.ai login and ANTHROPIC_API_KEY are present.
+    // --- Git post-commit hook (propulsion) ---
+    // Each commit by the agent pings the server so the Root Agent can be notified
+    // of progress without polling. The hook fires for every commit in the worktree.
+    if (worktreePath && worktreePath !== project?.localPath) {
+      try {
+        const hooksDir = path.join(worktreePath, '.git', 'hooks')
+        mkdirSync(hooksDir, { recursive: true })
+        const hookScript = [
+          '#!/bin/sh',
+          `curl -s -X POST "${SERVER_URL}/api/workerbees/${id}/commit" \\`,
+          `  -H "Content-Type: application/json" \\`,
+          `  -d "{\\"branch\\":\\"${branch}\\",\\"message\\":\\"$(git log -1 --pretty=%s)\\"}" \\`,
+          '  > /dev/null 2>&1 || true',
+        ].join('\n')
+        writeFileSync(path.join(hooksDir, 'post-commit'), hookScript, { mode: 0o755 })
+        console.log(`[WorkerBee] Installed post-commit hook for ${name}`)
+      } catch (err) {
+        console.warn(`[WorkerBee] Failed to install post-commit hook: ${err}`)
+      }
+    }
+
     const user = userId ? await getUserById(userId) : null
+
+    // Create an isolated CLAUDE_CONFIG_DIR for this agent so session history is
+    // per-agent and "Resume last session" only offers that agent's own sessions.
+    const agentConfigDir = path.join(worktreesBase ?? path.join(os.tmpdir(), 'squansq-configs'), `${name}-config`)
+    mkdirSync(agentConfigDir, { recursive: true })
+
+    // Seed config.json from ~/.claude/ so OAuth credentials carry over (for users
+    // who log in via claude.ai instead of an API key).
+    const homeClaudeDir = path.join(os.homedir(), '.claude')
+    const configSrc = path.join(homeClaudeDir, 'config.json')
+    if (existsSync(configSrc)) {
+      try { copyFileSync(configSrc, path.join(agentConfigDir, 'config.json')) } catch { /* ignore */ }
+    }
+
+    // Copy the statsig evaluations cache so Claude sees the same feature flags / onboarding
+    // state as the user's own sessions and doesn't re-run first-time setup wizards.
+    const statsigSrc = path.join(homeClaudeDir, 'statsig')
+    if (existsSync(statsigSrc)) {
+      try {
+        const { readdirSync } = await import('fs')
+        const statsigDst = path.join(agentConfigDir, 'statsig')
+        mkdirSync(statsigDst, { recursive: true })
+        for (const f of readdirSync(statsigSrc)) {
+          copyFileSync(path.join(statsigSrc, f), path.join(statsigDst, f))
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Write minimal settings — must have skipDangerousModePermissionPrompt to avoid
+    // the permissions wizard, and primaryApiKey if the user has one stored.
+    const agentSettings: Record<string, unknown> = {
+      skipDangerousModePermissionPrompt: true,
+      theme: user?.claudeTheme ?? 'dark',
+    }
+    if (user?.anthropicApiKey) agentSettings.primaryApiKey = user.anthropicApiKey
+    writeFileSync(path.join(agentConfigDir, 'settings.json'), JSON.stringify(agentSettings), 'utf8')
+
     const workerEnv: Record<string, string> = {
       SQUANSQ_WORKERBEE: name,
       SQUANSQ_PROJECT: projectId,
       SQUANSQ_BRANCH: branch,
       SQUANSQ_WORKTREE: worktreePath,
-    }
-    if (user?.anthropicApiKey) {
-      workerEnv.ANTHROPIC_API_KEY = user.anthropicApiKey
+      CLAUDE_CONFIG_DIR: agentConfigDir,
+      // Do NOT set ANTHROPIC_API_KEY here — the key is already in the agent's settings.json
+      // as primaryApiKey. Setting it as an env var causes Claude Code to re-run the login
+      // method selection flow on every fresh config dir because it sees an "unexpected" key.
     }
 
     const sessionId = ptyManager.spawn({
@@ -175,7 +241,6 @@ export const workerBeeManager = {
 
     // Auto-land the assigned release train when the WorkerBee completes
     if (status === 'done') {
-      const db = getDb()
       const rtResult = await db.execute({
         sql: `SELECT id FROM release_trains WHERE assigned_workerbee_id = ? AND status = 'in_progress'`,
         args: [id],
@@ -184,6 +249,9 @@ export const workerBeeManager = {
         await releaseTrainManager.land(row.id as string).catch(() => {})
       }
     }
+
+    // Notify the Root Agent so it knows to proceed without polling
+    notifyRootAgent(id, status, note).catch(() => {})
   },
 
   async sendMessage(id: string, message: string, userId?: string) {
@@ -245,6 +313,38 @@ export const workerBeeManager = {
   },
 }
 
+// --- Root Agent notification ---
+// Push a message into the Root Agent's PTY so it gets notified without polling.
+async function notifyRootAgent(workerBeeId: string, status: WorkerBee['status'], note?: string) {
+  if (status !== 'done' && status !== 'stalled' && status !== 'zombie') return
+  const db = getDb()
+
+  // Find the rig (project) for this WorkerBee, then its town
+  const beeRow = await db.execute({ sql: `SELECT name, rig_id FROM workerbees WHERE id = ?`, args: [workerBeeId] })
+  const bee = beeRow.rows[0] as unknown as { name: string; rig_id: string } | undefined
+  if (!bee) return
+
+  const rigRow = await db.execute({ sql: `SELECT town_id FROM rigs WHERE id = ?`, args: [bee.rig_id] })
+  const rig = rigRow.rows[0] as unknown as { town_id: string } | undefined
+  if (!rig) return
+
+  // Find the running Root Agent for this town
+  const mayorRow = await db.execute({
+    sql: `SELECT session_id FROM mayors WHERE town_id = ? AND session_id IS NOT NULL`,
+    args: [rig.town_id],
+  })
+  const sessionId = (mayorRow.rows[0] as unknown as { session_id: string } | undefined)?.session_id
+  if (!sessionId || !ptyManager.list().includes(sessionId)) return
+
+  const emoji = status === 'done' ? '✅' : status === 'stalled' ? '⚠️' : '💀'
+  const label = status === 'done' ? 'completed' : status === 'stalled' ? 'is blocked' : 'has crashed'
+  const summary = note ? ` — ${note.slice(0, 150)}` : ''
+  const msg = `\n[Squansq] Agent ${bee.name} ${label}${summary}. Call get_status_summary to review and decide next steps. ${emoji}\n`
+
+  ptyManager.write(sessionId, msg)
+  console.log(`[WorkerBee] Notified Root Agent of ${bee.name} → ${status}`)
+}
+
 // --- Completion signal monitor ---
 function attachSignalMonitor(workerBeeId: string, sessionId: string) {
   const monitorId = `monitor-${workerBeeId}`
@@ -253,10 +353,48 @@ function attachSignalMonitor(workerBeeId: string, sessionId: string) {
   let markedWorking = false
   let kicked = false         // whether we've sent the initial kickoff message
   let apiKeyAnswered = false // whether we've responded to the API key confirmation prompt
+  let themeAnswered = false  // whether we've responded to the theme/onboarding prompt
+  let loginAnswered = false  // whether we've responded to the login method selection prompt
 
   ptyManager.subscribe(sessionId, monitorId, (data) => {
     if (fired) return
     tail = (tail + data).slice(-3000)
+
+    // Claude may show a login method selection on first start with a fresh config dir.
+    // Select option 2 (Anthropic Console account · API usage billing) always.
+    if (!loginAnswered && (
+      tail.includes('Select login method') ||
+      tail.includes('login method')
+    )) {
+      loginAnswered = true
+      tail = ''
+      setTimeout(() => {
+        // The menu uses arrow-key navigation; cursor starts on option 1.
+        // Send down arrow to move to option 2 (API usage billing), then Enter to confirm.
+        ptyManager.write(sessionId, '\x1b[B')
+        console.log(`[WorkerBee] ${workerBeeId} auto-selected login method 2 (API usage)`)
+        setTimeout(() => ptyManager.write(sessionId, '\r'), 150)
+      }, 500)
+    }
+
+    // Claude may show a theme/onboarding selection menu on first start with a fresh config dir.
+    // Detect any of the common prompt texts and press Enter to accept the first option (Dark).
+    if (!themeAnswered && (
+      tail.includes('Dark mode') ||
+      tail.includes('dark mode') ||
+      tail.includes('color theme') ||
+      tail.includes('Color theme') ||
+      tail.includes('Choose a theme') ||
+      tail.includes('color scheme') ||
+      tail.includes('Color scheme')
+    )) {
+      themeAnswered = true
+      tail = ''
+      setTimeout(() => {
+        ptyManager.write(sessionId, '\r') // Enter = accept highlighted option
+        console.log(`[WorkerBee] ${workerBeeId} auto-answered theme prompt`)
+      }, 300)
+    }
 
     // Claude may ask "Do you want to use this API key?" when ANTHROPIC_API_KEY is in env.
     // Auto-answer "1" (Yes) so the key is used and we continue to the real ready prompt.

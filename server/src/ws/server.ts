@@ -66,7 +66,7 @@ export function setupWsServer(httpServer: Server) {
     ws.on('message', (raw) => {
       try {
         const msg: WsMessage = JSON.parse(raw.toString())
-        handleMessage(clientId, ws, msg)
+        handleMessage(clientId, ws, msg).catch(() => {})
       } catch {
         send(ws, { type: 'error', payload: { message: 'Invalid JSON' } })
       }
@@ -87,7 +87,7 @@ export function setupWsServer(httpServer: Server) {
   return wss
 }
 
-function handleMessage(clientId: string, ws: WebSocket, msg: WsMessage) {
+async function handleMessage(clientId: string, ws: WebSocket, msg: WsMessage) {
   const userId = clientUserIds.get(clientId)
   if (!userId) {
     send(ws, { type: 'error', payload: { message: 'Unauthorized' } })
@@ -99,6 +99,19 @@ function handleMessage(clientId: string, ws: WebSocket, msg: WsMessage) {
       const sessionId = msg.payload?.sessionId as string
       if (!sessionId) return
       if (!ptyManager.list().includes(sessionId)) {
+        // Try to replay the last known output for this session before marking it dead
+        try {
+          const db = getDb()
+          const beeRow = await db.execute({ sql: `SELECT id FROM workerbees WHERE session_id = ? LIMIT 1`, args: [sessionId] })
+          const beeId = beeRow.rows[0]?.id as string | undefined
+          if (beeId) {
+            const frameRow = await db.execute({ sql: `SELECT content FROM replay_frames WHERE workerbee_id = ? ORDER BY frame_at DESC LIMIT 1`, args: [beeId] })
+            const content = frameRow.rows[0]?.content as string | undefined
+            if (content) {
+              send(ws, { type: 'event', id: sessionId, payload: { type: 'terminal.data', data: '\r\n\x1b[90m[— replaying last known output —]\x1b[0m\r\n' + content } })
+            }
+          }
+        } catch { /* ignore — best-effort history */ }
         send(ws, { type: 'session.not_found', payload: { sessionId } })
         return
       }

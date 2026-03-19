@@ -31,6 +31,7 @@ export function RigPanel() {
   const [spawnTask, setSpawnTask] = useState<{ rigId: string; taskDescription: string } | null>(null)
   const [expandedRig, setExpandedRig] = useState<string | null>(null)
   const [runtimeEdit, setRuntimeEdit] = useState<{ rigId: string; command: string; provider: string } | null>(null)
+  const [repoUrlEdit, setRepoUrlEdit] = useState<{ rigId: string; value: string } | null>(null)
 
   useEffect(() => {
     const url = activeTownId ? `/api/rigs?townId=${activeTownId}` : '/api/rigs'
@@ -38,7 +39,7 @@ export function RigPanel() {
       .then((r) => r.json())
       .then(setRigs)
       .catch(() => {})
-  }, [setRigs, activeTownId])
+  }, [activeTownId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const openForm = () => {
     setShowForm(true)
@@ -163,9 +164,23 @@ export function RigPanel() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ command: runtimeEdit.command, provider: runtimeEdit.provider }),
     })
-    const updated = await apiFetch('/api/rigs').then((r) => r.json())
+    const url = activeTownId ? `/api/rigs?townId=${activeTownId}` : '/api/rigs'
+    const updated = await apiFetch(url).then((r) => r.json())
     setRigs(updated)
     setRuntimeEdit(null)
+  }
+
+  const handleSaveRepoUrl = async (rigId: string) => {
+    if (!repoUrlEdit) return
+    await apiFetch(`/api/projects/${rigId}/repo-url`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repoUrl: repoUrlEdit.value.trim() }),
+    })
+    const url = activeTownId ? `/api/rigs?townId=${activeTownId}` : '/api/rigs'
+    const updated = await apiFetch(url).then((r) => r.json())
+    setRigs(updated)
+    setRepoUrlEdit(null)
   }
 
   const handleDelete = async (id: string) => {
@@ -198,6 +213,39 @@ export function RigPanel() {
 
           {expandedRig === rig.id && (
             <div style={styles.expanded}>
+              {/* Repo URL */}
+              <div style={styles.expandSection}>
+                <div style={styles.expandTitle}>GitHub Repo URL</div>
+                {repoUrlEdit?.rigId === rig.id ? (
+                  <div style={styles.runtimeForm}>
+                    <input
+                      style={{ ...styles.runtimeInput, width: '100%', boxSizing: 'border-box' as const }}
+                      value={repoUrlEdit.value}
+                      placeholder="https://github.com/owner/repo"
+                      autoFocus
+                      onChange={(e) => setRepoUrlEdit((r) => r ? { ...r, value: e.target.value } : null)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSaveRepoUrl(rig.id) }}
+                    />
+                    <div style={styles.runtimeBtns}>
+                      <button style={styles.saveBtn} onClick={() => handleSaveRepoUrl(rig.id)}>Save</button>
+                      <button style={styles.cancelSmBtn} onClick={() => setRepoUrlEdit(null)}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={styles.runtimeDisplay}>
+                    <span style={{ ...styles.runtimeValue, color: rig.repoUrl ? '#569cd6' : '#555' }}>
+                      {rig.repoUrl || 'not set'}
+                    </span>
+                    <button
+                      style={styles.editBtn}
+                      onClick={() => setRepoUrlEdit({ rigId: rig.id, value: rig.repoUrl ?? '' })}
+                    >
+                      edit
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Runtime config */}
               <div style={styles.expandSection}>
                 <div style={styles.expandTitle}>Runtime</div>

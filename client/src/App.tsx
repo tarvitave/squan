@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, Component } from 'react'
+import type { ReactNode, ErrorInfo } from 'react'
 import { apiFetch } from './lib/api.js'
 import { TabBar } from './components/TabBar/index.js'
 import { PaneGrid } from './components/PaneGrid/index.js'
@@ -9,12 +10,39 @@ import { RigPanel } from './components/RigPanel/index.js'
 import { AuthPage } from './components/AuthPage/index.js'
 import { AccountPanel } from './components/AccountPanel/index.js'
 import { KanbanView } from './components/KanbanView/index.js'
+import { ConsolePanel } from './components/ConsolePanel/index.js'
+import { ClaudeCodePanel } from './components/ClaudeCodePanel/index.js'
 import { MetricsPanel } from './components/MetricsPanel/index.js'
 import { CostPanel } from './components/CostPanel/index.js'
 import { ToastContainer } from './components/Toast/index.js'
 import { TownSelector } from './components/TownSelector/index.js'
 import { useStore } from './store/index.js'
 import { useWebSocket } from './hooks/useWebSocket.js'
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
+  state = { error: null }
+  componentDidCatch(err: Error, info: ErrorInfo) {
+    console.error('React render error:', err, info)
+    this.setState({ error: err.message })
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 24, color: '#f44747', fontFamily: 'monospace', fontSize: 12 }}>
+          <div style={{ marginBottom: 8, color: '#888' }}>Render error — check browser console for details</div>
+          <pre style={{ whiteSpace: 'pre-wrap', color: '#f44747' }}>{this.state.error}</pre>
+          <button
+            style={{ marginTop: 12, background: 'none', border: '1px solid #444', color: '#888', padding: '4px 10px', cursor: 'pointer', fontFamily: 'monospace', fontSize: 11 }}
+            onClick={() => this.setState({ error: null })}
+          >
+            dismiss
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 export default function App() {
   const token = useStore((s) => s.token)
@@ -106,6 +134,7 @@ export default function App() {
         <div style={styles.offlineBanner}>⚠ reconnecting…</div>
       )}
       {/* Left sidebar */}
+      <ErrorBoundary>
       <div style={{ ...styles.sidebar, width: sidebarWidth }}>
         <AccountPanel />
         <TownSelector />
@@ -122,6 +151,7 @@ export default function App() {
           <AgentTree />
         </div>
       </div>
+      </ErrorBoundary>
 
       {/* Resize handle */}
       <div style={styles.resizeHandle} onMouseDown={handleDragStart} />
@@ -135,6 +165,8 @@ export default function App() {
           <ViewBtn label="Metrics" view="metrics" active={mainView === 'metrics'} onClick={setMainView} />
           <ViewBtn label="Events" view="events" active={mainView === 'events'} onClick={setMainView} />
           <ViewBtn label="Costs" view="costs" active={mainView === 'costs'} onClick={setMainView} />
+          <ViewBtn label="Console" view="console" active={mainView === 'console'} onClick={setMainView} />
+          <ViewBtn label="Claude Code" view="claudecode" active={mainView === 'claudecode'} onClick={setMainView} />
         </div>
 
         <div style={styles.content}>
@@ -160,6 +192,10 @@ export default function App() {
               <EventStream />
             </div>
           )}
+
+          {mainView === 'console' && <ConsolePanel />}
+
+          {mainView === 'claudecode' && <ClaudeCodePanel />}
         </div>
       </div>
     </div>
@@ -170,7 +206,7 @@ function ViewBtn({
   label, view, active, onClick
 }: {
   label: string
-  view: 'terminals' | 'kanban' | 'metrics' | 'events' | 'costs'
+  view: 'terminals' | 'kanban' | 'metrics' | 'events' | 'costs' | 'console' | 'claudecode'
   active: boolean
   onClick: (v: typeof view) => void
 }) {

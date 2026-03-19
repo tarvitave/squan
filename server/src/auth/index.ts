@@ -12,6 +12,7 @@ interface DbUser {
   password_hash: string
   anthropic_api_key: string | null
   github_token: string | null
+  claude_theme: string | null
   created_at: string
 }
 
@@ -20,6 +21,17 @@ export interface AuthUser {
   email: string
   anthropicApiKey: string | null
   githubToken: string | null
+  claudeTheme: string
+}
+
+function toAuthUser(row: DbUser): AuthUser {
+  return {
+    id: row.id,
+    email: row.email,
+    anthropicApiKey: row.anthropic_api_key,
+    githubToken: row.github_token ?? null,
+    claudeTheme: row.claude_theme ?? 'dark',
+  }
 }
 
 export async function register(email: string, password: string, anthropicApiKey?: string): Promise<{ token: string; user: AuthUser }> {
@@ -36,7 +48,7 @@ export async function register(email: string, password: string, anthropicApiKey?
     args: [id, email.toLowerCase(), passwordHash, anthropicApiKey ?? null, now],
   })
 
-  const user: AuthUser = { id, email: email.toLowerCase(), anthropicApiKey: anthropicApiKey ?? null, githubToken: null }
+  const user: AuthUser = { id, email: email.toLowerCase(), anthropicApiKey: anthropicApiKey ?? null, githubToken: null, claudeTheme: 'dark' }
   const token = jwt.sign({ userId: id }, JWT_SECRET, { expiresIn: '30d' })
   return { token, user }
 }
@@ -50,9 +62,8 @@ export async function login(email: string, password: string): Promise<{ token: s
   const valid = await bcrypt.compare(password, row.password_hash)
   if (!valid) throw new Error('Invalid email or password')
 
-  const user: AuthUser = { id: row.id, email: row.email, anthropicApiKey: row.anthropic_api_key, githubToken: row.github_token ?? null }
   const token = jwt.sign({ userId: row.id }, JWT_SECRET, { expiresIn: '30d' })
-  return { token, user }
+  return { token, user: toAuthUser(row) }
 }
 
 export async function getUserById(id: string): Promise<AuthUser | null> {
@@ -60,17 +71,19 @@ export async function getUserById(id: string): Promise<AuthUser | null> {
   const result = await db.execute({ sql: 'SELECT * FROM users WHERE id = ?', args: [id] })
   const row = result.rows[0] as unknown as DbUser | undefined
   if (!row) return null
-  return { id: row.id, email: row.email, anthropicApiKey: row.anthropic_api_key, githubToken: row.github_token ?? null }
+  return toAuthUser(row)
 }
 
 export async function updateApiKey(userId: string, apiKey: string): Promise<void> {
-  const db = getDb()
-  await db.execute({ sql: 'UPDATE users SET anthropic_api_key = ? WHERE id = ?', args: [apiKey, userId] })
+  await getDb().execute({ sql: 'UPDATE users SET anthropic_api_key = ? WHERE id = ?', args: [apiKey, userId] })
 }
 
 export async function updateGithubToken(userId: string, githubToken: string): Promise<void> {
-  const db = getDb()
-  await db.execute({ sql: 'UPDATE users SET github_token = ? WHERE id = ?', args: [githubToken, userId] })
+  await getDb().execute({ sql: 'UPDATE users SET github_token = ? WHERE id = ?', args: [githubToken, userId] })
+}
+
+export async function updateClaudeTheme(userId: string, theme: string): Promise<void> {
+  await getDb().execute({ sql: 'UPDATE users SET claude_theme = ? WHERE id = ?', args: [theme, userId] })
 }
 
 // Stores userId in res.locals (avoids extending Request type, which causes strict-mode errors)

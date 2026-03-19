@@ -23,9 +23,10 @@ import { templateManager } from './templates/manager.js'
 import { snapshotManager, replayManager, startSnapshotScheduler } from './snapshots/manager.js'
 import { handleMcpCall, handleMcpToolsList } from './mcp/server.js'
 import { getDb, migrate, seedSystemTemplates } from './db/index.js'
-import { register, login, getUserById, updateApiKey, requireAuth, updateGithubToken } from './auth/index.js'
+import { register, login, getUserById, updateApiKey, requireAuth, updateGithubToken, updateClaudeTheme } from './auth/index.js'
 import { parseGithubRepo, detectDefaultBranch, createPullRequest, getPullRequestStatus } from './github/index.js'
 import { preconfigureClaudeAuth, restoreClaudeConfigOnStartup } from './claude-auth.js'
+import { listSessions, parseSession, handleHook, configureHooks } from './claudecode/index.js'
 
 const app = express()
 app.use(express.json())
@@ -73,6 +74,29 @@ app.get('/api/health', (_req, res) => {
 app.get('/api/mcp/tools', handleMcpToolsList)
 app.post('/api/mcp', handleMcpCall)
 
+// ── Claude Code integration ───────────────────────────────────────────────────
+
+app.get('/api/claude-code/sessions', requireAuth, (_req, res) => {
+  res.json(listSessions())
+})
+
+app.get('/api/claude-code/messages', requireAuth, (req, res) => {
+  const { file, after } = req.query as { file?: string; after?: string }
+  if (!file) { res.status(400).json({ error: 'file required' }); return }
+  const afterLine = after ? parseInt(after, 10) : 0
+  res.json(parseSession(file, afterLine))
+})
+
+app.post('/api/claude-code/hook', handleHook)
+
+app.post('/api/claude-code/configure-hooks', requireAuth, (_req, res) => {
+  try {
+    res.json(configureHooks())
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message })
+  }
+})
+
 // --- Auth middleware for all routes below ---
 app.use('/api', requireAuth)
 
@@ -97,6 +121,15 @@ app.put('/api/auth/github-token', requireAuth, async (req, res) => {
     const { githubToken } = req.body
     if (!githubToken) { res.status(400).json({ error: 'githubToken required' }); return }
     await updateGithubToken(userId, githubToken)
+    res.json({ ok: true })
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
+})
+
+app.put('/api/auth/claude-theme', requireAuth, async (req, res) => {
+  try {
+    const { theme } = req.body as { theme: string }
+    if (!['dark', 'light'].includes(theme)) { res.status(400).json({ error: 'theme must be dark or light' }); return }
+    await updateClaudeTheme(res.locals.userId as string, theme)
     res.json({ ok: true })
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
@@ -219,6 +252,20 @@ app.patch('/api/projects/:id/runtime', async (req, res) => {
   }
 })
 
+app.patch('/api/projects/:id/repo-url', async (req, res) => {
+  try {
+    const userId = res.locals.userId as string
+    const { repoUrl } = req.body as { repoUrl: string }
+    await getDb().execute({
+      sql: `UPDATE rigs SET repo_url = ? WHERE id = ? AND (user_id = ? OR user_id IS NULL)`,
+      args: [repoUrl, req.params.id, userId],
+    })
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message })
+  }
+})
+
 app.delete('/api/projects/:id', async (req, res) => {
   try {
     const userId = res.locals.userId as string
@@ -312,6 +359,71 @@ app.delete('/api/workerbees/:id', async (req, res) => {
     const msg = (err as Error).message
     console.error(`[DELETE] workerbee ${req.params.id} FAILED: ${msg}`)
     res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
+})
+
+app.post('/api/workerbees/:id/restart', requireAuth, async (req, res) => {
+  try {
+    const userId = res.locals.userId as string
+    const bee = await workerBeeManager.getById(req.params.id)
+    if (!bee) { res.status(404).json({ error: 'Agent not found' }); return }
+
+    const { projectId, taskDescription } = bee
+
+    // Find any release train assigned to this bee
+    const db = getDb()
+    const rtRow = await db.execute({
+      sql: `SELECT id FROM release_trains WHERE assigned_workerbee_id = ? LIMIT 1`,
+      args: [bee.id],
+    })
+    const releaseTrainId = rtRow.rows[0]?.id as string | undefined
+
+    // Kill the old agent
+    await workerBeeManager.nuke(bee.id, userId)
+
+    // Spawn a new one
+    const newBee = await workerBeeManager.spawn(projectId, taskDescription, userId)
+
+    // Re-assign to the release train if there was one
+    if (releaseTrainId) {
+      await releaseTrainManager.assignWorkerBee(releaseTrainId, newBee.id)
+    }
+
+    res.json({ bee: newBee, releaseTrainId })
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message })
+  }
+})
+
+async function notifyRootAgentOfCommit(bee: Awaited<ReturnType<typeof workerBeeManager.getById>>, message: string) {
+  if (!bee) return
+  const db = getDb()
+  const rigRow = await db.execute({ sql: `SELECT town_id FROM rigs WHERE id = ?`, args: [bee.projectId] })
+  const townId = (rigRow.rows[0] as unknown as { town_id: string } | undefined)?.town_id
+  if (!townId) return
+  const mayorRow = await db.execute({
+    sql: `SELECT session_id FROM mayors WHERE town_id = ? AND session_id IS NOT NULL`,
+    args: [townId],
+  })
+  const sessionId = (mayorRow.rows[0] as unknown as { session_id: string } | undefined)?.session_id
+  if (!sessionId || !ptyManager.list().includes(sessionId)) return
+  const msg = `\n[Squansq] Agent ${bee.name} committed: "${message.slice(0, 100)}". Use get_status_summary to track progress. 📝\n`
+  ptyManager.write(sessionId, msg)
+}
+
+// Git post-commit hook fires this — no auth required (called from agent's shell)
+app.post('/api/workerbees/:id/commit', async (req, res) => {
+  try {
+    const bee = await workerBeeManager.getById(req.params.id)
+    if (!bee) { res.status(404).json({ error: 'Not found' }); return }
+    const { branch, message } = req.body as { branch?: string; message?: string }
+    console.log(`[Commit hook] ${bee.name} committed on ${branch}: ${message}`)
+
+    // Notify the Root Agent so it stays updated without polling
+    await notifyRootAgentOfCommit(bee, message ?? '')
+    res.json({ ok: true })
+  } catch {
+    res.status(400).json({ error: 'failed' })
   }
 })
 
@@ -654,8 +766,9 @@ app.post('/api/release-trains/:id/create-pr', requireAuth, async (req, res) => {
     const project = await rigManager.getById(rt.projectId)
     if (!project) { res.status(400).json({ error: 'Project not found' }); return }
 
+    if (!project.repoUrl) { res.status(400).json({ error: 'No GitHub repo URL set for this project — edit the project in the sidebar to add one' }); return }
     const parsed = parseGithubRepo(project.repoUrl)
-    if (!parsed) { res.status(400).json({ error: 'Could not parse GitHub repo from project URL: ' + project.repoUrl }); return }
+    if (!parsed) { res.status(400).json({ error: 'Could not parse GitHub repo from URL: ' + project.repoUrl + ' — expected format: https://github.com/owner/repo' }); return }
 
     const bee = rt.assignedWorkerBeeId
       ? (await workerBeeManager.getById(rt.assignedWorkerBeeId))
@@ -666,6 +779,24 @@ app.post('/api/release-trains/:id/create-pr', requireAuth, async (req, res) => {
     const base = detectDefaultBranch(project.localPath)
     const title = rt.name
     const body = rt.description || `Created by Squansq Agent`
+
+    // Verify branch exists locally before trying to push
+    const { execFileSync } = await import('child_process')
+    try {
+      execFileSync('git', ['-C', project.localPath, 'rev-parse', '--verify', head], { stdio: 'pipe' })
+    } catch {
+      throw new Error(`Branch '${head}' does not exist locally — the agent may not have committed any work yet`)
+    }
+
+    // Push the branch to origin — always push from the main repo root (worktree may be gone)
+    try {
+      execFileSync('git', ['-C', project.localPath, 'push', '--set-upstream', 'origin', head], { stdio: 'pipe' })
+    } catch (pushErr) {
+      const msg = (pushErr as { stderr?: Buffer }).stderr?.toString() ?? ''
+      if (!msg.includes('Everything up-to-date') && !msg.includes('up-to-date')) {
+        throw new Error(`Failed to push branch '${head}': ${msg || (pushErr as Error).message}`)
+      }
+    }
 
     const { url, number } = await createPullRequest(githubToken, parsed.owner, parsed.repo, head, base, title, body)
     const updated = await releaseTrainManager.moveToPrReview(rt.id, url, number, userId)

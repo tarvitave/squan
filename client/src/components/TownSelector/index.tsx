@@ -28,7 +28,7 @@ export function TownSelector() {
         }
       })
       .catch(() => {})
-  }, [setTowns, setActiveTownId, activeTownId])
+  }, [activeTownId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSwitch = (id: string) => {
     setActiveTownId(id)

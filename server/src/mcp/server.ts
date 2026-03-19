@@ -111,13 +111,48 @@ const TOOLS = [
     description: 'Get a high-level summary of the current orchestration state',
     inputSchema: { type: 'object', properties: {} },
   },
+  {
+    name: 'get_release_train',
+    description: 'Get full details of a release train including its atomic tasks and assigned agent',
+    inputSchema: { type: 'object', required: ['releaseTrainId'], properties: { releaseTrainId: { type: 'string' } } },
+  },
+  {
+    name: 'update_atomic_task',
+    description: 'Update the status of an atomic task. Use this to track progress as work is completed.',
+    inputSchema: {
+      type: 'object',
+      required: ['atomicTaskId', 'status'],
+      properties: {
+        atomicTaskId: { type: 'string' },
+        status: { type: 'string', description: 'One of: open, in_progress, done, blocked' },
+      },
+    },
+  },
+  {
+    name: 'update_release_train',
+    description: 'Update the description of a release train (e.g. to add context or refine the task before dispatching)',
+    inputSchema: {
+      type: 'object',
+      required: ['releaseTrainId', 'description'],
+      properties: {
+        releaseTrainId: { type: 'string' },
+        description: { type: 'string' },
+      },
+    },
+  },
 ]
 
-async function callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+async function callTool(name: string, args: Record<string, unknown>, townId?: string): Promise<unknown> {
   switch (name) {
     case 'list_workerbees': {
       const all = await workerBeeManager.listAll()
-      return args.projectId ? all.filter((b) => b.projectId === args.projectId) : all
+      if (args.projectId) return all.filter((b) => b.projectId === args.projectId)
+      if (townId) {
+        const townProjects = await rigManager.listByTown(townId)
+        const projectIds = new Set(townProjects.map((p) => p.id))
+        return all.filter((b) => projectIds.has(b.projectId))
+      }
+      return all
     }
     case 'spawn_workerbee': {
       return workerBeeManager.spawn(args.projectId as string, args.taskDescription as string | undefined)
@@ -132,7 +167,8 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
       return { ok: true }
     }
     case 'list_projects': {
-      return rigManager.listAll()
+      const all = await rigManager.listAll()
+      return townId ? all.filter((r) => r.townId === townId) : all
     }
     case 'list_release_trains': {
       const all = await releaseTrainManager.listAll()
@@ -174,24 +210,66 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
       return hookManager.listAll()
     }
     case 'get_status_summary': {
-      const [bees, releaseTrains, atomicTasks] = await Promise.all([
+      const allProjects = townId ? await rigManager.listByTown(townId) : await rigManager.listAll()
+      const projectIds = new Set(allProjects.map((p) => p.id))
+      const [allBees, allReleaseTrains, allAtomicTasks] = await Promise.all([
         workerBeeManager.listAll(),
         releaseTrainManager.listAll(),
         atomicTaskManager.listAll(),
       ])
-      const beesByStatus = bees.reduce<Record<string, number>>((acc, b) => {
-        acc[b.status] = (acc[b.status] ?? 0) + 1
-        return acc
-      }, {})
-      const releaseTrainsByStatus = releaseTrains.reduce<Record<string, number>>((acc, c) => {
-        acc[c.status] = (acc[c.status] ?? 0) + 1
-        return acc
-      }, {})
-      const atomicTasksByStatus = atomicTasks.reduce<Record<string, number>>((acc, b) => {
-        acc[b.status] = (acc[b.status] ?? 0) + 1
-        return acc
-      }, {})
-      return { workerbees: beesByStatus, releaseTrains: releaseTrainsByStatus, atomictasks: atomicTasksByStatus }
+      const bees = allBees.filter((b) => projectIds.has(b.projectId))
+      const releaseTrains = allReleaseTrains.filter((rt) => projectIds.has(rt.projectId))
+      const atomicTasks = allAtomicTasks.filter((t) => projectIds.has(t.projectId))
+
+      // Build release train lookup for bee → train name
+      const trainByBeeId = Object.fromEntries(
+        releaseTrains.filter((rt) => rt.assignedWorkerBeeId).map((rt) => [rt.assignedWorkerBeeId!, rt])
+      )
+
+      return {
+        projects: allProjects.map((p) => ({ id: p.id, name: p.name, localPath: p.localPath })),
+        workerbees: bees.map((b) => ({
+          id: b.id,
+          name: b.name,
+          status: b.status,
+          taskDescription: b.taskDescription?.slice(0, 120) ?? '',
+          branch: b.branch,
+          releaseTrain: trainByBeeId[b.id] ? { id: trainByBeeId[b.id].id, name: trainByBeeId[b.id].name } : null,
+          completionNote: b.completionNote?.slice(0, 120) ?? '',
+        })),
+        releaseTrains: releaseTrains.map((rt) => {
+          const rtTasks = atomicTasks.filter((t) => t.releaseTrainId === rt.id)
+          return {
+            id: rt.id,
+            name: rt.name,
+            status: rt.status,
+            assignedBee: rt.assignedWorkerBeeId ? (bees.find((b) => b.id === rt.assignedWorkerBeeId)?.name ?? rt.assignedWorkerBeeId) : null,
+            atomicTasks: rtTasks.map((t) => ({ id: t.id, title: t.title, status: t.status })),
+          }
+        }),
+        unassignedAtomicTasks: atomicTasks
+          .filter((t) => !t.releaseTrainId)
+          .map((t) => ({ id: t.id, title: t.title, status: t.status })),
+      }
+    }
+    case 'get_release_train': {
+      const rt = await releaseTrainManager.getById(args.releaseTrainId as string)
+      if (!rt) throw new Error(`ReleaseTrain ${args.releaseTrainId} not found`)
+      const tasks = await atomicTaskManager.listByConvoy(rt.id)
+      const bee = rt.assignedWorkerBeeId ? await workerBeeManager.getById(rt.assignedWorkerBeeId) : null
+      return {
+        ...rt,
+        atomicTasks: tasks,
+        assignedBee: bee ? { id: bee.id, name: bee.name, status: bee.status, completionNote: bee.completionNote } : null,
+      }
+    }
+    case 'update_atomic_task': {
+      const task = await atomicTaskManager.setStatus(args.atomicTaskId as string, args.status as 'open' | 'in_progress' | 'done' | 'blocked')
+      return task
+    }
+    case 'update_release_train': {
+      const rt = await releaseTrainManager.updateDescription(args.releaseTrainId as string, args.description as string)
+      return rt
     }
     default:
       throw new Error(`Unknown tool: ${name}`)
@@ -203,6 +281,7 @@ export function handleMcpToolsList(_req: Request, res: Response) {
 }
 
 export async function handleMcpCall(req: Request, res: Response) {
+  const townId = req.query.townId as string | undefined
   const { jsonrpc, method, params, id } = req.body
 
   if (jsonrpc !== '2.0') {
@@ -232,7 +311,7 @@ export async function handleMcpCall(req: Request, res: Response) {
   if (method === 'tools/call') {
     const { name, arguments: toolArgs = {} } = params ?? {}
     try {
-      const result = await callTool(name, toolArgs)
+      const result = await callTool(name, toolArgs, townId)
       return res.json({ jsonrpc: '2.0', result: { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }, id })
     } catch (err) {
       return res.json({

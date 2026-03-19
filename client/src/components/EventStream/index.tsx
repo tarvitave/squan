@@ -48,7 +48,7 @@ export function EventStream() {
         }
       })
       .catch(() => {})
-  }, [pushEvent])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLoadMore = () => {
     apiFetch(`/api/events?limit=50&offset=${offset}`)

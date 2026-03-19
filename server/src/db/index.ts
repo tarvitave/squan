@@ -168,6 +168,7 @@ export async function migrate() {
     `ALTER TABLE release_trains ADD COLUMN pr_url TEXT`,
     `ALTER TABLE release_trains ADD COLUMN pr_number INTEGER`,
     `ALTER TABLE users ADD COLUMN github_token TEXT`,
+    `ALTER TABLE users ADD COLUMN claude_theme TEXT NOT NULL DEFAULT 'dark'`,
   ]
   for (const sql of alterStatements) {
     try {
