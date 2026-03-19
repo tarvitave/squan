@@ -5,25 +5,48 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-18.x-61DAFB?logo=react)](https://react.dev/)
 
-**Browser-based multi-agent orchestration for Claude Code.**
-
-Squansq lets you spawn multiple Claude Code "WorkerBee" agents — each in their own isolated git worktree — coordinated by a Root Agent called Mayor Lee. Monitor progress in a real-time dashboard, manage work via a kanban board, view live terminals, track costs, and control everything from the browser or the `sq` CLI.
-
-Live at [squansq.com](https://squansq.com)
+**The command center for AI-powered software development across multiple projects.**
 
 ---
 
-## Features
+## Why Squansq?
 
-- **Multi-agent orchestration** — dispatch parallel Claude Code agents, each isolated in their own git worktree
-- **Release Trains & Atomic Tasks** — organize work into feature areas and discrete deliverables
-- **Real-time dashboard** — WebSocket-powered updates, event stream, cost/token tracking
-- **Multiple terminal panes** — split layouts (single, split-h, split-v, quad) with tabs, like iTerm2
-- **Kanban board** — visualize task status across all agents and trains
-- **`sq` CLI** — full command-line control of agents, trains, and tasks
-- **Browser Console** — run `sq` commands directly in the dashboard alongside terminals
-- **Claude Code session viewer** — browse `~/.claude/projects/` JSONL conversations with live hook events
-- **PR creation** — push agent branches and open GitHub PRs from the UI
+Building software today means juggling dozens of moving pieces — feature branches, bug fixes, documentation, design tasks, code reviews, and deployments — often across multiple repositories at once. Most tools force you to context-switch constantly: open a terminal here, check a Jira board there, wait for one thing before starting the next.
+
+Squansq changes that entirely.
+
+It gives you a **single unified interface** where you can spin up multiple AI coding agents (powered by Claude Code), each working independently in their own isolated environment, while you stay in control of the bigger picture. You direct the work at a high level. The agents execute. You watch it happen in real time.
+
+### What makes it different
+
+**You can work on multiple projects simultaneously.** Register as many git repositories as you want. Each project gets its own pool of agents. Agents work in isolated git worktrees — they never step on each other, and their branches never conflict. Ten agents can commit to the same repository at the same time with zero friction.
+
+**Coding and non-coding tasks live in the same place.** Software delivery isn't just code. It's planning, coordination, tracking, review, and communication. Squansq's kanban board tracks all your work — atomic tasks, release trains, agent status — so you always know what's in progress, what's blocked, and what's done. No separate project management tool required.
+
+**You stay in control without being in the weeds.** The Root Agent acts as your orchestrator. Give it a high-level goal — "add authentication to the API" — and it breaks the work into release trains, creates atomic tasks, and dispatches specialized agents to each work stream. Meanwhile, you monitor progress through live terminals, the kanban board, or the `sq` CLI, and step in only when needed.
+
+**Everything is live.** The dashboard updates in real time over WebSockets. You see agent output as it happens, token costs as they accrue, events as they fire. When an agent commits code, a post-commit hook pings the Root Agent immediately — no polling, no delays.
+
+**It meets you where you are.** Use the browser dashboard for visual oversight. Drop into the `sq` CLI when you want speed. Open a Console pane alongside your terminals to run commands without switching context. Watch your Claude Code sessions replay in the Claude Code viewer.
+
+This is what it looks like to bring an application to life with AI — not one agent in one chat window, but a coordinated team of agents working in parallel, tracked and managed from a single pane of glass.
+
+---
+
+## Features at a Glance
+
+- **Multi-agent orchestration** — parallel Claude Code agents, each in an isolated git worktree on its own branch
+- **Root Agent coordination** — an orchestrator with MCP tools to plan, dispatch, and monitor the full agent fleet
+- **Release Trains & Atomic Tasks** — structured work breakdown from feature area down to individual deliverable
+- **Native Kanban board** — visualize all tasks and agents in one board without leaving the app
+- **Live terminals** — xterm.js terminals with split layouts (single, split-h, split-v, quad) in named tabs
+- **Real-time dashboard** — WebSocket-powered updates, event stream, cost/token tracking, metrics panel
+- **`sq` CLI** — full command-line control of agents, trains, tasks, and projects
+- **Browser Console** — run `sq` commands directly in the dashboard alongside your terminals
+- **Claude Code viewer** — browse `~/.claude/projects/` conversations with live real-time hook events
+- **Multi-project support** — register multiple git repos and dispatch agents across all of them
+- **PR creation** — push branches and open GitHub pull requests from the UI
+- **Isolated agent environments** — per-agent config dirs, CLAUDE.md injection, post-commit hook propulsion
 
 ---
 
@@ -60,7 +83,7 @@ squansq/
 │   └── src/
 │       ├── index.ts          # Main server entry point and API routes
 │       ├── workerbee/        # Agent spawning and PTY management
-│       ├── mayor/            # Root agent (Mayor Lee) management
+│       ├── mayor/            # Root agent management
 │       ├── mcp/              # MCP server (JSON-RPC 2.0 over HTTP)
 │       ├── claudecode/       # Claude Code JSONL reader + hook receiver
 │       ├── ws/               # WebSocket broadcast server
@@ -85,7 +108,7 @@ squansq/
     └── sq.mjs       # sq CLI tool
 ```
 
-**Stack at a glance:**
+**Stack:**
 
 | Layer | Technology |
 |-------|-----------|
@@ -101,32 +124,32 @@ squansq/
 
 ## Key Concepts
 
-### Root Agent (Mayor Lee)
+### Root Agent
 
-The orchestrator Claude Code instance. It has access to MCP tools to inspect state, create work items, and dispatch agents. Its terminal is always accessible from the Left Sidebar.
+The orchestrator — a Claude Code instance with access to all MCP tools. You give it a high-level goal. It calls `get_status_summary` to understand the current state, breaks the work into Release Trains and Atomic Tasks, and dispatches specialized agents to each work stream. It monitors progress via post-commit hooks and re-dispatches stalled agents automatically. Its terminal is always accessible from the left sidebar.
 
 ### WorkerBee
 
-A Claude Code agent instance working on a specific task. Each WorkerBee:
+A Claude Code agent working on a specific task. Each WorkerBee:
 
 - Lives in its own git worktree on an isolated branch
 - Receives a `CLAUDE.md` injected with its task description
 - Runs as a PTY process managed by the server
-- Reports progress back to Mayor Lee via git post-commit hooks
+- Reports progress back to the Root Agent via git post-commit hooks
 
-Agents move through states: `idle` → `working` → `stalled` → `zombie` → `done`
+Agents progress through states: `idle` → `working` → `stalled` → `zombie` → `done`
 
 ### Release Train
 
-A unit of work corresponding to a feature area or work stream. Has a name, description, and status (`open`, `in_progress`, `landed`, `cancelled`). Mayor Lee creates Release Trains, then dispatches a WorkerBee to each. The Release Train description becomes that WorkerBee's `CLAUDE.md`.
+A unit of work corresponding to a feature area or work stream. Has a name, description, and status (`open`, `in_progress`, `landed`, `cancelled`). The Root Agent creates Release Trains, then dispatches a WorkerBee to each one. The Release Train description becomes that WorkerBee's `CLAUDE.md` — the full briefing it receives before starting work.
 
 ### Atomic Task
 
-A granular, discrete work item within a Release Train (e.g., "write the API endpoint", "add unit tests"). Atomic Tasks have a status (`open`, `in_progress`, `done`, `blocked`) and are updated as work progresses.
+A granular, discrete deliverable within a Release Train (e.g., "implement `/login` endpoint", "add refresh token rotation", "write integration tests"). Atomic Tasks have a status (`open`, `in_progress`, `done`, `blocked`) and are updated as work progresses. They power the Kanban board.
 
 ### Project (Rig)
 
-A git repository registered with Squansq. Each Project has a filesystem path, an optional remote repo URL, and an optional runtime command.
+A git repository registered with Squansq. Each Project has a filesystem path, an optional remote repo URL, and an optional runtime command. Agents create worktrees off the Project root.
 
 ---
 
@@ -215,7 +238,7 @@ docker compose up -d
 ### `sq` CLI Setup
 
 ```bash
-# Install globally
+# Install globally from the repo root
 npm install -g .
 
 # Or run directly without installing
@@ -240,16 +263,17 @@ export SQUANSQ_TOKEN=your-jwt-token
 
 ### Quick Start
 
-1. Add a project (git repo) in the **Projects** panel
-2. Open the **Mayor Lee** panel and give it a high-level task
-3. Mayor Lee breaks the work into Release Trains and dispatches WorkerBees
-4. Monitor progress in the **Kanban** view or with `sq status`
-5. Watch agents work live in the **Terminals** view
+1. Add a project (git repo) in the **Projects** panel in the left sidebar
+2. Open the **Root Agent** panel and give it a high-level task
+3. The Root Agent plans, creates Release Trains and Atomic Tasks, and dispatches WorkerBees
+4. Watch agents work in live terminals in the **Terminals** view
+5. Monitor overall progress in the **Kanban** view or with `sq status`
+6. When agents complete their trains, the Root Agent lands them and summarizes
 
 ### Working with Agents
 
 ```bash
-# See everything at a glance
+# See everything at a glance — agents, trains, tasks
 sq status
 
 # Spawn an agent directly with a task
@@ -277,20 +301,23 @@ sq dispatch <train-id>
 # Check its status and atomic tasks
 sq train <train-id>
 
-# Mark it complete when done
+# Mark a task done
+sq done <task-id> "Endpoint tested and passing"
+
+# Land the train when all work is complete
 sq land <train-id>
 ```
 
 ### Claude Code Integration
 
-The **Claude Code** view in the dashboard reads your existing `~/.claude/projects/` JSONL conversation files and shows user/assistant messages, tool use, and thinking blocks.
+The **Claude Code** view in the dashboard reads your existing `~/.claude/projects/` JSONL conversation files and renders user/assistant messages, tool use blocks, and thinking blocks exactly as they occurred.
 
 1. Click the **Claude Code** view in the dashboard
-2. Select a session from the dropdown
-3. Click **"⚡ enable live hooks"** to receive real-time tool-use events
-4. The conversation panel polls for new messages every 2 seconds with incremental cursor
+2. Select a session from the dropdown (auto-sorted by most recent)
+3. Click **"⚡ enable live hooks"** to receive real-time tool-use events as they happen
+4. The panel polls for new messages every 2 seconds with an incremental cursor
 
-Hook configuration is written automatically to `~/.claude/settings.local.json`. Events arrive via `POST /api/claude-code/hook`.
+Hook configuration is written automatically to `~/.claude/settings.local.json`. Events arrive via `POST /api/claude-code/hook` and stream into the sidebar in real time.
 
 ### Tab and Pane System
 
@@ -299,50 +326,50 @@ Hook configuration is written automatically to `~/.claude/settings.local.json`. 
 | `single` | One full-screen pane |
 | `split-h` | Two panes side by side |
 | `split-v` | Two panes top and bottom |
-| `quad` | 2x2 grid of four panes |
+| `quad` | 2×2 grid of four panes |
 
-Each pane can be a **terminal** (live xterm.js connected to an agent) or a **console** (interactive `sq` command panel). Mix and match freely.
+Each pane can be a **terminal** (live xterm.js connected to an agent) or a **console** (interactive `sq` command panel). Mix and match freely within a tab.
 
 **Tab management:**
-- Click `+` to create a new tab (you'll be prompted for a name)
-- Double-click a tab label to rename it
+- Click `+` to create a new tab — you'll be prompted for a name
+- Double-click a tab label to rename it inline
 - Multiple console panes can be open simultaneously alongside terminal panes
 
 ---
 
 ## The `sq` CLI
 
-Run with `sq <command>` (after global install) or `node scripts/sq.mjs <command>`.
+Run with `sq <command>` after global install, or `node scripts/sq.mjs <command>` directly.
 
 IDs accept full UUIDs, 8-character prefixes, or agent names like `bee-alpha`.
 
 | Command | Description |
 |---------|-------------|
 | `sq login` | Save server URL and token to `~/.squansq` |
-| `sq status` | Full overview: agents, trains, tasks |
-| `sq agents` | List all WorkerBees |
-| `sq projects` | List all projects (git repos) |
+| `sq status` | Full overview: agents, trains, and tasks |
+| `sq agents` | List all WorkerBees and their status |
+| `sq projects` | List all registered projects (git repos) |
 | `sq trains` | List all release trains |
 | `sq train <id>` | Show release train details with atomic tasks |
 | `sq dispatch <train-id> [project-id]` | Spawn an agent for a release train |
 | `sq kill <agent-id>` | Kill an agent |
 | `sq restart <agent-id>` | Kill and respawn with the same task |
-| `sq spawn <project-id> "<task>"` | Spawn an agent with a task |
+| `sq spawn <project-id> "<task>"` | Spawn an agent with a task description |
 | `sq create-train "<name>" "<desc>" [project-id]` | Create a release train |
 | `sq land <train-id>` | Mark a release train as complete |
-| `sq tasks [train-id]` | List atomic tasks (optionally filtered by train) |
+| `sq tasks [train-id]` | List atomic tasks, optionally filtered by train |
 | `sq task <id>` | Show task details |
 | `sq done <task-id> [note]` | Mark an atomic task as done |
 | `sq send <agent-id> "<message>"` | Send a message to a running agent |
-| `sq help` | Show help |
+| `sq help` | Show all commands |
 
-The same commands are available in the **Console** panel inside the browser UI.
+The same commands are available in the **Console** panel inside the browser dashboard.
 
 ---
 
 ## Root Agent Workflow
 
-Mayor Lee follows a structured five-step workflow when given a task:
+The Root Agent follows a structured five-step workflow for every task:
 
 ### Step 1 — Orient
 
@@ -362,6 +389,7 @@ create_release_train → "Auth Refactor"
 create_release_train → "Email Notifications"
   create_atomic_task → "Set up nodemailer"
   create_atomic_task → "Write email templates"
+  create_atomic_task → "Add queue for retry logic"
 ```
 
 ### Step 3 — Dispatch
@@ -373,35 +401,35 @@ dispatch_release_train(train_id_1)  →  spawns bee-alpha
 dispatch_release_train(train_id_2)  →  spawns bee-bravo
 ```
 
-The Release Train description becomes that WorkerBee's `CLAUDE.md`.
+The Release Train description becomes that WorkerBee's `CLAUDE.md` — its complete briefing.
 
 ### Step 4 — Monitor
 
-As agents commit code, post-commit hooks notify the Root Agent. It updates progress, marks tasks done, and re-dispatches stalled or zombie agents as needed.
+As agents commit code, post-commit hooks notify the Root Agent immediately. It calls `update_atomic_task` to mark tasks done, checks for stalled or zombie agents, and re-dispatches as needed.
 
 ### Step 5 — Complete
 
-When all Atomic Tasks are done:
+When all Atomic Tasks for a train are done:
 
 ```
 land_release_train(train_id)
 ```
 
-Mayor Lee summarizes what was accomplished once all trains are landed.
+The Root Agent summarizes what was accomplished once all trains are landed.
 
 ---
 
 ## Agent Isolation
 
-Every WorkerBee is fully isolated:
+Every WorkerBee is fully isolated from all others:
 
 | Mechanism | Detail |
 |-----------|--------|
-| Git worktree | Each agent checks out its own worktree at a unique path — never sharing the working tree with other agents |
+| Git worktree | Each agent checks out its own worktree at a unique path — never sharing the working tree |
 | Git branch | A dedicated branch is created per worktree so commits never collide |
 | `CLAUDE_CONFIG_DIR` | Each agent gets its own Claude config directory, isolating sessions, history, and settings |
-| `CLAUDE.md` injection | The Release Train description is written into `CLAUDE.md` at the worktree root |
-| Post-commit hook | A `git post-commit` hook pings the Root Agent after every commit for real-time progress tracking |
+| `CLAUDE.md` injection | The Release Train description is written into `CLAUDE.md` at the worktree root — the agent's full briefing |
+| Post-commit hook | A `git post-commit` hook in each worktree pings the Root Agent after every commit |
 
 Ten agents can commit to the same repository simultaneously with zero conflicts.
 
@@ -409,7 +437,7 @@ Ten agents can commit to the same repository simultaneously with zero conflicts.
 
 ## MCP Tools Reference
 
-Mayor Lee coordinates agents using the Squansq MCP server (HTTP JSON-RPC 2.0):
+The Root Agent coordinates via the Squansq MCP server (HTTP JSON-RPC 2.0 at `/api/mcp`):
 
 | Tool | Description |
 |------|-------------|
@@ -434,16 +462,14 @@ Mayor Lee coordinates agents using the Squansq MCP server (HTTP JSON-RPC 2.0):
 
 ## Environment Variables
 
-All environment variables are set on the server container or process:
-
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `3001` | HTTP port the server listens on |
 | `DB_URL` | `file:./squansq.db` | SQLite database path |
 | `SQUANSQ_REPO_PATH` | _(required)_ | Filesystem path for git worktrees |
-| `JWT_SECRET` | _(required)_ | Secret used to sign authentication JWTs — change in production |
+| `JWT_SECRET` | _(required)_ | Secret used to sign authentication JWTs |
 | `ANTHROPIC_API_KEY` | _(optional)_ | Anthropic API key — can be set here or per-user in the UI |
-| `GITHUB_TOKEN` | _(optional)_ | GitHub personal access token for PR creation (`repo` scope required) |
+| `GITHUB_TOKEN` | _(optional)_ | GitHub personal access token for PR creation (`repo` scope) |
 | `MAYOR_COMMAND` | `claude` | Command used to launch the Root Agent |
 
 ---
