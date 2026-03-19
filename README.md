@@ -147,7 +147,7 @@ A unit of work corresponding to a feature area or work stream. Has a name, descr
 
 A granular, discrete deliverable within a Release Train (e.g., "implement `/login` endpoint", "add refresh token rotation", "write integration tests"). Atomic Tasks have a status (`open`, `in_progress`, `done`, `blocked`) and are updated as work progresses. They power the Kanban board.
 
-### Project (Rig)
+### Project 
 
 A git repository registered with Squansq. Each Project has a filesystem path, an optional remote repo URL, and an optional runtime command. Agents create worktrees off the Project root.
 
