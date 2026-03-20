@@ -57,6 +57,7 @@ export default function App() {
   const addToast = useStore((s) => s.addToast)
   const clearAllPanes = useStore((s) => s.clearAllPanes)
 
+  const activeTownId = useStore((s) => s.activeTownId)
   const { connected, serverRestarted, clearServerRestarted } = useWebSocket()
 
   const loadData = () => {
@@ -86,12 +87,12 @@ export default function App() {
     apiFetch('/api/templates').then((r) => r.json()).then(setTemplates).catch(() => {})
   }
 
-  // Initial load on login
+  // Load on login and whenever the active town changes
   useEffect(() => {
     if (!token) return
     loadData()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token])
+  }, [token, activeTownId])
 
   // Reload when server restarts (detected via boot ID change in WS ack)
   useEffect(() => {
