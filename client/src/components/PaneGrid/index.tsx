@@ -1,22 +1,46 @@
+import { useState, useEffect } from 'react'
 import { TerminalPane } from '../TerminalPane/index.js'
 import { ConsolePanel } from '../ConsolePanel/index.js'
-import type { Tab } from '../../store/index.js'
+import type { Tab, Agent } from '../../store/index.js'
 import { useStore } from '../../store/index.js'
 import { apiFetch } from '../../lib/api.js'
 
 let consoleCounter = 0
 function newConsoleId() { return `console:${++consoleCounter}` }
 
-interface Props {
-  tab: Tab
+const STATUS_COLOR: Record<Agent['status'], string> = {
+  idle: '#666',
+  working: '#4ec9b0',
+  stalled: '#ce9178',
+  zombie: '#f44747',
+  done: '#608b4e',
 }
+const STATUS_DOT: Record<Agent['status'], string> = {
+  idle: '○', working: '●', stalled: '◐', zombie: '✕', done: '✓',
+}
+
+interface Props { tab: Tab }
 
 export function PaneGrid({ tab }: Props) {
   const addPaneToTab = useStore((s) => s.addPaneToTab)
   const removePaneFromTab = useStore((s) => s.removePaneFromTab)
   const replacePaneInTab = useStore((s) => s.replacePaneInTab)
-  const updateTabLayout = useStore((s) => s.updateTabLayout)
   const agents = useStore((s) => s.agents)
+
+  // Track which pane is focused (index into tab.panes)
+  const [focusedIdx, setFocusedIdx] = useState(0)
+  // Whether to show multiple panes (split mode) vs single focused pane
+  const [splitMode, setSplitMode] = useState(false)
+
+  // When a new pane is added, auto-focus it
+  useEffect(() => {
+    if (tab.panes.length > 0) {
+      setFocusedIdx(tab.panes.length - 1)
+    }
+  }, [tab.panes.length])
+
+  // Clamp focused index if panes shrink
+  const safeFocusedIdx = Math.min(focusedIdx, Math.max(0, tab.panes.length - 1))
 
   const addTerminal = async () => {
     const res = await apiFetch('/api/terminals', {
@@ -42,26 +66,83 @@ export function PaneGrid({ tab }: Props) {
     )
   }
 
-  const gridStyle = getGridStyle(tab.layout, tab.panes.length)
+  // Panes to render in split mode: all, single mode: just the focused one
+  const visiblePanes = splitMode ? tab.panes : [tab.panes[safeFocusedIdx]]
+
+  const gridStyle: React.CSSProperties = splitMode
+    ? {
+        flex: 1,
+        display: 'grid',
+        gap: 4,
+        padding: 4,
+        overflow: 'hidden',
+        gridTemplateColumns: tab.panes.length === 1 ? '1fr' : tab.panes.length === 2 ? '1fr 1fr' : `repeat(${Math.ceil(tab.panes.length / 2)}, 1fr)`,
+        gridTemplateRows: tab.panes.length > 2 ? '1fr 1fr' : '1fr',
+      }
+    : {
+        flex: 1,
+        display: 'grid',
+        gridTemplateColumns: '1fr',
+        overflow: 'hidden',
+        padding: 4,
+      }
 
   return (
     <div style={styles.wrapper}>
-      <div style={styles.layoutBar}>
-        {(['single', 'split-h', 'split-v', 'quad'] as Tab['layout'][]).map((l) => (
+      {/* Agent switcher bar */}
+      <div style={styles.switcherBar}>
+        <div style={styles.switcherTabs}>
+          {tab.panes.map((sessionId, i) => {
+            const agent = agents.find((a) => a.sessionId === sessionId)
+            const isConsole = sessionId.startsWith('console:')
+            const label = isConsole
+              ? `sq ${sessionId.split(':')[1]}`
+              : (agent?.name ?? sessionId.slice(0, 8))
+            const status = agent?.status
+            const isFocused = i === safeFocusedIdx
+
+            return (
+              <div
+                key={sessionId}
+                style={{ ...styles.switcherTab, ...(isFocused && !splitMode ? styles.switcherTabActive : {}) }}
+                onClick={() => { setFocusedIdx(i); setSplitMode(false) }}
+              >
+                {status && (
+                  <span style={{ color: STATUS_COLOR[status], fontSize: 9, flexShrink: 0 }}>
+                    {STATUS_DOT[status]}
+                  </span>
+                )}
+                {isConsole && <span style={{ color: '#4ec9b0', fontSize: 9, flexShrink: 0 }}>▸</span>}
+                <span style={styles.switcherLabel}>{label}</span>
+                <button
+                  style={styles.switcherClose}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    removePaneFromTab(tab.id, sessionId)
+                  }}
+                  title="Close"
+                >✕</button>
+              </div>
+            )
+          })}
+        </div>
+
+        <div style={styles.switcherActions}>
           <button
-            key={l}
-            style={{ ...styles.layoutBtn, ...(tab.layout === l ? styles.layoutBtnActive : {}) }}
-            onClick={() => updateTabLayout(tab.id, l)}
-            title={l}
+            style={{ ...styles.actionBtn, ...(splitMode ? styles.actionBtnActive : {}) }}
+            onClick={() => setSplitMode((s) => !s)}
+            title={splitMode ? 'Focus mode' : 'Split mode — show all panes'}
           >
-            {LAYOUT_ICONS[l]}
+            {splitMode ? '▣' : '⊞'}
           </button>
-        ))}
-        <button style={styles.addBtn} onClick={addTerminal} title="New terminal">+ term</button>
-        <button style={styles.addBtn} onClick={addConsole} title="New sq console">+ sq</button>
+          <button style={styles.actionBtn} onClick={addTerminal} title="New terminal">+ term</button>
+          <button style={styles.actionBtn} onClick={addConsole} title="New sq console">+ sq</button>
+        </div>
       </div>
+
+      {/* Pane area */}
       <div style={gridStyle}>
-        {tab.panes.map((sessionId) => {
+        {visiblePanes.map((sessionId) => {
           if (sessionId.startsWith('console:')) {
             return (
               <ConsolePane
@@ -95,27 +176,6 @@ export function PaneGrid({ tab }: Props) {
   )
 }
 
-function getGridStyle(layout: Tab['layout'], count: number): React.CSSProperties {
-  const base: React.CSSProperties = {
-    flex: 1,
-    display: 'grid',
-    gap: 4,
-    padding: 4,
-    overflow: 'hidden',
-  }
-
-  switch (layout) {
-    case 'split-h':
-      return { ...base, gridTemplateColumns: `repeat(${Math.min(count, 2)}, 1fr)` }
-    case 'split-v':
-      return { ...base, gridTemplateRows: `repeat(${Math.min(count, 2)}, 1fr)` }
-    case 'quad':
-      return { ...base, gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr' }
-    default:
-      return { ...base, gridTemplateColumns: '1fr' }
-  }
-}
-
 function ConsolePane({ paneId, onClose }: { paneId: string; onClose: () => void }) {
   const num = paneId.split(':')[1]
   return (
@@ -127,9 +187,7 @@ function ConsolePane({ paneId, onClose }: { paneId: string; onClose: () => void 
         <button
           style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: 12, padding: '0 4px' }}
           onClick={onClose}
-        >
-          ✕
-        </button>
+        >✕</button>
       </div>
       <div style={{ flex: 1, overflow: 'hidden' }}>
         <ConsolePanel />
@@ -138,56 +196,92 @@ function ConsolePane({ paneId, onClose }: { paneId: string; onClose: () => void 
   )
 }
 
-const LAYOUT_ICONS: Record<Tab['layout'], string> = {
-  single: '▣',
-  'split-h': '⬛⬛',
-  'split-v': '⬜',
-  quad: '⊞',
-}
-
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   wrapper: {
     display: 'flex',
-    flexDirection: 'column' as const,
+    flexDirection: 'column',
     height: '100%',
     overflow: 'hidden',
   },
-  layoutBar: {
+  switcherBar: {
     display: 'flex',
     alignItems: 'center',
-    gap: 4,
-    padding: '4px 8px',
     background: '#111',
     borderBottom: '1px solid #2d2d2d',
     flexShrink: 0,
+    minHeight: 34,
+    overflow: 'hidden',
   },
-  layoutBtn: {
-    background: 'none',
-    border: '1px solid #333',
-    color: '#888',
-    borderRadius: 3,
-    padding: '2px 6px',
+  switcherTabs: {
+    display: 'flex',
+    flex: 1,
+    overflowX: 'auto',
+    alignItems: 'stretch',
+    minHeight: 34,
+  },
+  switcherTab: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    padding: '0 10px',
     cursor: 'pointer',
-    fontSize: 12,
+    borderRight: '1px solid #222',
+    color: '#555',
+    fontSize: 11,
+    fontFamily: 'monospace',
+    whiteSpace: 'nowrap',
+    userSelect: 'none',
+    minWidth: 80,
+    flexShrink: 0,
   },
-  layoutBtnActive: {
-    borderColor: '#4ec9b0',
-    color: '#4ec9b0',
+  switcherTabActive: {
+    color: '#d4d4d4',
+    background: '#0d0d0d',
+    borderBottom: '2px solid #4ec9b0',
   },
-  addBtn: {
+  switcherLabel: {
+    flex: 1,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  switcherClose: {
+    background: 'none',
+    border: 'none',
+    color: '#444',
+    cursor: 'pointer',
+    fontSize: 9,
+    padding: '0 2px',
+    flexShrink: 0,
+    lineHeight: 1,
+  },
+  switcherActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    padding: '0 8px',
+    borderLeft: '1px solid #2d2d2d',
+    flexShrink: 0,
+  },
+  actionBtn: {
     background: 'none',
     border: '1px solid #333',
     color: '#4ec9b0',
     borderRadius: 3,
     padding: '2px 8px',
     cursor: 'pointer',
-    fontSize: 14,
-    marginLeft: 'auto',
+    fontSize: 11,
+    fontFamily: 'monospace',
+    whiteSpace: 'nowrap',
+  },
+  actionBtnActive: {
+    borderColor: '#4ec9b0',
+    background: '#0a1a14',
   },
   empty: {
     flex: 1,
     display: 'flex',
-    flexDirection: 'column' as const,
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 16,
