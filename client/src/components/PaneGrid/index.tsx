@@ -43,15 +43,21 @@ export function PaneGrid({ tab }: Props) {
   const safeFocusedIdx = Math.min(focusedIdx, Math.max(0, tab.panes.length - 1))
 
   const addTerminal = async () => {
-    const res = await apiFetch('/api/terminals', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cols: 120, rows: 30 }),
-    })
-    const { id } = await res.json()
-    addPaneToTab(tab.id, id)
+    try {
+      const res = await apiFetch('/api/terminals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cols: 120, rows: 30, shell: 'bash' }),
+      })
+      const body = await res.json()
+      if (!res.ok) { addToast(`Failed to open terminal: ${body.error ?? res.status}`); return }
+      addPaneToTab(tab.id, body.id)
+    } catch (err) {
+      addToast(`Failed to open terminal: ${(err as Error).message}`)
+    }
   }
 
+  const addToast = useStore((s) => s.addToast)
   const addConsole = () => addPaneToTab(tab.id, newConsoleId())
 
   if (tab.panes.length === 0) {
@@ -160,13 +166,18 @@ export function PaneGrid({ tab }: Props) {
               label={agentName ?? sessionId.slice(0, 8)}
               onClose={() => removePaneFromTab(tab.id, sessionId)}
               onReconnect={async () => {
-                const res = await apiFetch('/api/terminals', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ cols: 120, rows: 30, args: ['--continue'] }),
-                })
-                const { id } = await res.json()
-                replacePaneInTab(tab.id, sessionId, id)
+                try {
+                  const res = await apiFetch('/api/terminals', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cols: 120, rows: 30, shell: 'bash' }),
+                  })
+                  const body = await res.json()
+                  if (!res.ok) { addToast(`Reconnect failed: ${body.error ?? res.status}`); return }
+                  replacePaneInTab(tab.id, sessionId, body.id)
+                } catch (err) {
+                  addToast(`Reconnect failed: ${(err as Error).message}`)
+                }
               }}
             />
           )
