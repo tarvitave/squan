@@ -65,6 +65,10 @@ export const mayorLeeManager = {
       env,
       ownerUserId: userId,
     })
+
+    // Auto-answer startup prompts (same as WorkerBee signal monitor)
+    attachRootAgentMonitor(sessionId)
+
     ptyManager.onSessionExit(sessionId, (exitCode) => {
       console.log(`[Mayor Lee] PTY exited with code ${exitCode} (sessionId=${sessionId})`)
       db.execute({ sql: `UPDATE mayors SET session_id = NULL WHERE session_id = ?`, args: [sessionId] }).catch(() => {})
@@ -312,6 +316,53 @@ When all ReleaseTrains are landed, summarize what was accomplished.
 - Agents log decisions to DECISIONS.md — read it to understand prior choices
 - Use \`get_status_summary\` as your primary health check tool
 `
+}
+
+// Auto-answer Claude Code startup prompts so the Root Agent never hangs
+function attachRootAgentMonitor(sessionId: string) {
+  const monitorId = `root-monitor-${sessionId}`
+  let tail = ''
+  let loginAnswered = false
+  let themeAnswered = false
+  let apiKeyAnswered = false
+
+  ptyManager.subscribe(sessionId, monitorId, (data) => {
+    tail = (tail + data).slice(-3000)
+
+    if (!loginAnswered && (tail.includes('Select login method') || tail.includes('login method'))) {
+      loginAnswered = true; tail = ''
+      setTimeout(() => {
+        ptyManager.write(sessionId, '\x1b[B')
+        setTimeout(() => ptyManager.write(sessionId, '\r'), 150)
+        console.log('[Root Agent] Auto-selected login method 2 (API usage)')
+      }, 500)
+    }
+
+    if (!themeAnswered && (
+      tail.includes('Dark mode') || tail.includes('dark mode') ||
+      tail.includes('color theme') || tail.includes('Color theme') ||
+      tail.includes('Choose a theme') || tail.includes('color scheme')
+    )) {
+      themeAnswered = true; tail = ''
+      setTimeout(() => {
+        ptyManager.write(sessionId, '\r')
+        console.log('[Root Agent] Auto-answered theme prompt')
+      }, 300)
+    }
+
+    if (!apiKeyAnswered && tail.includes('Do you want to use this API key')) {
+      apiKeyAnswered = true; tail = ''
+      setTimeout(() => {
+        ptyManager.write(sessionId, '1\r')
+        console.log('[Root Agent] Accepted API key prompt')
+      }, 300)
+    }
+  })
+
+  // Stop monitoring once the session exits
+  ptyManager.onSessionExit(sessionId, () => {
+    ptyManager.unsubscribe(sessionId, monitorId)
+  })
 }
 
 interface DbRow {
