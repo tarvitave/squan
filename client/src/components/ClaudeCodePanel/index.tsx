@@ -144,9 +144,9 @@ export function ClaudeCodePanel() {
             if (msg.type === 'tool_use') return (
               <div key={i} style={styles.toolUse}>
                 <span style={styles.toolBadge}>{msg.toolName}</span>
-                {msg.toolInput && (
+                {msg.toolInput != null && (
                   <pre style={styles.toolPre}>
-                    {JSON.stringify(msg.toolInput, null, 2).slice(0, 400)}
+                    {JSON.stringify(msg.toolInput as Record<string, unknown>, null, 2).slice(0, 400)}
                   </pre>
                 )}
               </div>

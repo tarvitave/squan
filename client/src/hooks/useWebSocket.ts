@@ -101,6 +101,7 @@ export function useWebSocket() {
                 id: p.workerBeeId as string,
                 name: p.name as string,
                 projectId: p.projectId as string,
+                role: (p.role as string) ?? 'coder',
                 status: 'idle',
                 sessionId: p.sessionId as string | null,
                 taskDescription: (p.taskDescription as string) ?? '',

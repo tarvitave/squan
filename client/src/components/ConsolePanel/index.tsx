@@ -109,12 +109,12 @@ async function runCommand(input: string, activeTownId: string | null): Promise<S
   const [cmd, ...args] = parts
   const output: SpanLine[] = []
 
-  const teal  = (t: string) => mk(t, '#4ec9b0')
-  const blue  = (t: string) => mk(t, '#569cd6')
-  const gray  = (t: string) => mk(t, '#555')
-  const dim   = (t: string) => mk(t, '#888')
-  const red   = (t: string) => mk(t, '#f44747')
-  const bold  = (t: string) => mk(t, undefined, true)
+  const teal  = (t: string): SpanLine => mk(t, '#4ec9b0')
+  const blue  = (t: string): SpanLine => mk(t, '#569cd6')
+  const gray  = (t: string): SpanLine => mk(t, '#555')
+  const dim   = (t: string): SpanLine => mk(t, '#888')
+  const red   = (t: string): SpanLine => mk(t, '#f44747')
+  const bold  = (t: string): SpanLine => mk(t, undefined, true)
 
   const push = (...parts: SpanLine[]) => output.push(line(...parts))
 
@@ -132,8 +132,7 @@ async function runCommand(input: string, activeTownId: string | null): Promise<S
         const status = b.status as string
         const task = ((b.taskDescription as string) ?? '').slice(0, 55)
         const rt = b.releaseTrain as { name: string } | null
-        const trainPart = rt ? gray(`  [${rt.name}]`) : []
-        push(...[teal(pad(name, 20)), statusSpan(status), ...trainPart, gray('  ' + task)])
+        push(teal(pad(name, 20)), statusSpan(status), ...(rt ? [gray(`  [${rt.name}]`)] : []), gray('  ' + task))
       }
       push(mk('── Release Trains ', '#569cd6', true))
       const releaseTrains = (s.releaseTrains as Array<Record<string, unknown>>) ?? []
@@ -144,9 +143,7 @@ async function runCommand(input: string, activeTownId: string | null): Promise<S
         const assignedBee = rt.assignedBee as string | null
         const tasks = (rt.atomicTasks as Array<{ status: string; title: string }>) ?? []
         const done = tasks.filter((t) => t.status === 'done').length
-        const beePart = assignedBee ? gray(` -> ${assignedBee}`) : []
-        const taskPart = tasks.length ? gray(`  (${done}/${tasks.length} tasks)`) : []
-        push(...[blue(pad(rtName, 28)), statusSpan(rtStatus), ...beePart, ...taskPart])
+        push(blue(pad(rtName, 28)), statusSpan(rtStatus), ...(assignedBee ? [gray(` -> ${assignedBee}`)] : []), ...(tasks.length ? [gray(`  (${done}/${tasks.length} tasks)`)] : []))
         for (const t of tasks) {
           push(...[gray('  . '), statusSpan(t.status), gray('  ' + t.title)])
         }
@@ -194,11 +191,11 @@ async function runCommand(input: string, activeTownId: string | null): Promise<S
     case 'train': {
       if (!args[0]) { push(...[red('Usage: sq train <id>')]); break }
       const rt = await mcpCall('get_release_train', { releaseTrainId: await resolveTrainId(args[0]) }) as Record<string, unknown>
-      push(...[mk(rt.name as string, undefined, true), ...statusSpan(rt.status as string)])
+      push(mk(rt.name as string, undefined, true), statusSpan(rt.status as string))
       push(...[gray('id: '), dim(rt.id as string)])
       const bee = rt.assignedBee as Record<string, unknown> | null
       if (bee) {
-        push(...[gray('agent: '), teal(bee.name as string), ...statusSpan(bee.status as string)])
+        push(gray('agent: '), teal(bee.name as string), statusSpan(bee.status as string))
         if (bee.completionNote) push(...[gray('note: '), dim(bee.completionNote as string)])
       }
       if (rt.description) push(...[gray((rt.description as string).slice(0, 200))])
