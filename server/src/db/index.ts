@@ -139,6 +139,36 @@ export async function migrate() {
   `)
 
   // Additive column migrations — safe to run repeatedly (errors mean column already exists)
+  // New tables for agent roles, charters, and routing
+  await db.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS charters (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(project_id, role)
+    );
+
+    CREATE TABLE IF NOT EXISTS routing_rules (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      pattern TEXT NOT NULL,
+      role TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS token_usage (
+      id TEXT PRIMARY KEY,
+      workerbee_id TEXT,
+      project_id TEXT,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      cost_usd REAL NOT NULL DEFAULT 0,
+      recorded_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `)
+
   const alterStatements = [
     `ALTER TABLE polecats RENAME TO workerbees`,
     `ALTER TABLE beads RENAME TO atomic_tasks`,
@@ -169,6 +199,7 @@ export async function migrate() {
     `ALTER TABLE release_trains ADD COLUMN pr_number INTEGER`,
     `ALTER TABLE users ADD COLUMN github_token TEXT`,
     `ALTER TABLE users ADD COLUMN claude_theme TEXT NOT NULL DEFAULT 'dark'`,
+    `ALTER TABLE workerbees ADD COLUMN role TEXT NOT NULL DEFAULT 'coder'`,
   ]
   for (const sql of alterStatements) {
     try {

@@ -2,6 +2,14 @@ import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
 import type { Agent } from '../../store/index.js'
 
+const ROLE_COLOR: Record<string, string> = {
+  coder:    '#569cd6',
+  tester:   '#4ec9b0',
+  reviewer: '#dcdcaa',
+  devops:   '#ce9178',
+  lead:     '#c586c0',
+}
+
 const STATUS_COLOR: Record<Agent['status'], string> = {
   idle: '#666',
   working: '#4ec9b0',
@@ -82,7 +90,7 @@ export function AgentTree() {
       const { bee, releaseTrainId } = await res.json()
       if (agent.sessionId) removePaneFromAllTabs(agent.sessionId)
       removeAgent(agent.id)
-      addAgent({ ...bee, taskDescription: bee.taskDescription ?? '', worktreePath: bee.worktreePath ?? '', branch: bee.branch ?? '' })
+      addAgent({ ...bee, role: bee.role ?? 'coder', taskDescription: bee.taskDescription ?? '', worktreePath: bee.worktreePath ?? '', branch: bee.branch ?? '' })
       if (releaseTrainId) updateReleaseTrain(releaseTrainId, { assignedWorkerBeeId: bee.id, status: 'in_progress' })
       if (bee.sessionId) {
         if (activeTabId) addPaneToTab(activeTabId, bee.sessionId)
@@ -162,6 +170,11 @@ function AgentRow({ agent, onOpenTerminal, onKill, onRestart }: {
       >
         {agent.name}
       </span>
+      {agent.role && agent.role !== 'coder' && (
+        <span style={{ fontSize: 9, color: ROLE_COLOR[agent.role] ?? '#666', flexShrink: 0, fontFamily: 'monospace' }}>
+          {agent.role}
+        </span>
+      )}
       <span style={{ ...styles.agentStatus, color: STATUS_COLOR[agent.status] }}>{agent.status}</span>
       {agent.completionNote ? (
         <span style={{ ...styles.noteHint, color: agent.status === 'done' ? '#608b4e' : '#ce9178' }}

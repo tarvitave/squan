@@ -21,11 +21,12 @@ const NAME_POOL = [
 ]
 
 // Signal patterns written to the instructions in CLAUDE.md
-const DONE_RE    = /\bDONE:\s*(.{1,300})/i
-const BLOCKED_RE = /\bBLOCKED:\s*(.{1,300})/i
+const DONE_RE      = /\bDONE:\s*(.{1,300})/i
+const BLOCKED_RE   = /\bBLOCKED:\s*(.{1,300})/i
+const LEARNINGS_RE = /LEARNINGS:\s*([\s\S]{10,800}?)(?:\n\n|\nDONE:|\nBLOCKED:|$)/i
 
 export const workerBeeManager = {
-  async spawn(projectId: string, taskDescription?: string, userId?: string): Promise<WorkerBee> {
+  async spawn(projectId: string, taskDescription?: string, userId?: string, role: string = 'coder'): Promise<WorkerBee> {
     const db = getDb()
     const id = uuidv4()
     const name = await allocateName(projectId)
@@ -63,12 +64,13 @@ export const workerBeeManager = {
     // --- CLAUDE.md task injection ---
     if (taskDescription) {
       try {
+        const charter = await getCharter(projectId, role)
         writeFileSync(
           path.join(worktreePath, 'CLAUDE.md'),
-          buildClaudeMd(name, taskDescription),
+          buildClaudeMd(name, taskDescription, role, charter),
           'utf8'
         )
-        console.log(`[WorkerBee] Injected CLAUDE.md for ${name}`)
+        console.log(`[WorkerBee] Injected CLAUDE.md for ${name} (role: ${role})`)
       } catch (err) {
         console.warn(`[WorkerBee] Failed to write CLAUDE.md: ${err}`)
       }
@@ -154,9 +156,9 @@ export const workerBeeManager = {
 
     const now = new Date().toISOString()
     await db.execute({
-      sql: `INSERT INTO workerbees (id, rig_id, name, branch, worktree_path, task_description, completion_note, status, hook_id, session_id, user_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, '', 'idle', NULL, ?, ?, ?, ?)`,
-      args: [id, projectId, name, branch, worktreePath, taskDescription ?? '', sessionId, userId ?? null, now, now],
+      sql: `INSERT INTO workerbees (id, rig_id, name, branch, worktree_path, task_description, completion_note, role, status, hook_id, session_id, user_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, '', ?, 'idle', NULL, ?, ?, ?, ?)`,
+      args: [id, projectId, name, branch, worktreePath, taskDescription ?? '', role, sessionId, userId ?? null, now, now],
     })
 
     // --- Completion signal monitor ---
@@ -439,6 +441,15 @@ function attachSignalMonitor(workerBeeId: string, sessionId: string) {
       }).catch(() => {})
     }
 
+    // Capture LEARNINGS before marking done — auto-update the project charter
+    const learningsMatch = tail.match(LEARNINGS_RE)
+    if (learningsMatch) {
+      const learnings = learningsMatch[1].trim()
+      workerBeeManager.getById(workerBeeId).then(async (bee) => {
+        if (bee) await saveChapterLearnings(bee.projectId, bee.role ?? 'coder', learnings)
+      }).catch(() => {})
+    }
+
     const doneMatch = tail.match(DONE_RE)
     if (doneMatch) {
       fired = true
@@ -479,20 +490,169 @@ async function allocateName(projectId: string): Promise<string> {
   return NAME_POOL.find((n) => !used.has(n)) ?? `bee-${Date.now()}`
 }
 
-function buildClaudeMd(name: string, task: string): string {
-  return `# WorkerBee: ${name}
+function buildClaudeMd(name: string, task: string, role: string = 'coder', charter?: string): string {
+  const roleGuide: Record<string, string> = {
+    coder:    'You are a **coder** agent. Focus on implementing features, fixing bugs, and writing clean code.',
+    tester:   'You are a **tester** agent. Focus on writing tests, identifying edge cases, and ensuring correctness.',
+    reviewer: 'You are a **reviewer** agent. Focus on code quality, security, and design issues. Suggest concrete improvements.',
+    devops:   'You are a **devops** agent. Focus on CI/CD, infrastructure, deployment scripts, and reliability.',
+    lead:     'You are a **lead** agent. Focus on architecture decisions, coordinating sub-tasks, and ensuring consistency.',
+  }
+  const roleDesc = roleGuide[role] ?? `You are a **${role}** agent.`
+
+  const charterSection = charter
+    ? `\n## Prior Knowledge (Charter)\n\nYour accumulated knowledge from previous sessions on this project:\n\n${charter}\n`
+    : ''
+
+  return `# Agent: ${name} (${role})
+
+## Role
+
+${roleDesc}
 
 ## Your Task
 
 ${task}
-
+${charterSection}
 ## Instructions
 
 - Complete the task described above
 - Make commits as you work with clear commit messages
+- Log important decisions to \`DECISIONS.md\` in the project root (format: \`## [YYYY-MM-DD] Title\\n<rationale>\`)
+- Before finishing, summarize key learnings as:
+  **LEARNINGS:**
+  <bullet points of what you discovered — conventions, gotchas, architecture details>
 - When done, output: **DONE: <brief summary of what was completed>**
 - If blocked, output: **BLOCKED: <what is preventing progress>**
 `
+}
+
+// --- Charter helpers ---
+
+async function getCharter(projectId: string, role: string): Promise<string | undefined> {
+  try {
+    const db = getDb()
+    const result = await db.execute({
+      sql: 'SELECT content FROM charters WHERE project_id = ? AND role = ?',
+      args: [projectId, role],
+    })
+    return result.rows[0]?.content as string | undefined
+  } catch { return undefined }
+}
+
+async function saveChapterLearnings(projectId: string, role: string, learnings: string) {
+  try {
+    const db = getDb()
+    const existing = await db.execute({
+      sql: 'SELECT id, content FROM charters WHERE project_id = ? AND role = ?',
+      args: [projectId, role],
+    })
+    if (existing.rows.length > 0) {
+      const prev = (existing.rows[0].content as string) ?? ''
+      const combined = `${prev}\n\n---\n${new Date().toISOString().slice(0, 10)}\n${learnings}`.slice(-4000)
+      await db.execute({
+        sql: `UPDATE charters SET content = ?, updated_at = datetime('now') WHERE project_id = ? AND role = ?`,
+        args: [combined, projectId, role],
+      })
+    } else {
+      const { v4 } = await import('uuid')
+      await db.execute({
+        sql: `INSERT INTO charters (id, project_id, role, content) VALUES (?, ?, ?, ?)`,
+        args: [v4(), projectId, role, learnings],
+      })
+    }
+    console.log(`[Charter] Saved learnings for ${role} on project ${projectId}`)
+  } catch (err) {
+    console.warn(`[Charter] Failed to save learnings: ${err}`)
+  }
+}
+
+export const charterManager = {
+  async get(projectId: string, role: string) {
+    const db = getDb()
+    const result = await db.execute({
+      sql: 'SELECT * FROM charters WHERE project_id = ? AND role = ?',
+      args: [projectId, role],
+    })
+    return result.rows[0] ?? null
+  },
+  async list(projectId: string) {
+    const db = getDb()
+    const result = await db.execute({
+      sql: 'SELECT * FROM charters WHERE project_id = ?',
+      args: [projectId],
+    })
+    return result.rows
+  },
+  async upsert(projectId: string, role: string, content: string) {
+    const db = getDb()
+    const existing = await db.execute({
+      sql: 'SELECT id FROM charters WHERE project_id = ? AND role = ?',
+      args: [projectId, role],
+    })
+    if (existing.rows.length > 0) {
+      await db.execute({
+        sql: `UPDATE charters SET content = ?, updated_at = datetime('now') WHERE project_id = ? AND role = ?`,
+        args: [content, projectId, role],
+      })
+    } else {
+      const { v4 } = await import('uuid')
+      await db.execute({
+        sql: `INSERT INTO charters (id, project_id, role, content) VALUES (?, ?, ?, ?)`,
+        args: [v4(), projectId, role, content],
+      })
+    }
+    return this.get(projectId, role)
+  },
+}
+
+export const routingManager = {
+  async list(projectId: string) {
+    const db = getDb()
+    const result = await db.execute({
+      sql: 'SELECT * FROM routing_rules WHERE project_id = ? ORDER BY created_at',
+      args: [projectId],
+    })
+    return result.rows
+  },
+  async set(projectId: string, pattern: string, role: string) {
+    const db = getDb()
+    // Upsert by pattern
+    const existing = await db.execute({
+      sql: 'SELECT id FROM routing_rules WHERE project_id = ? AND pattern = ?',
+      args: [projectId, pattern],
+    })
+    if (existing.rows.length > 0) {
+      await db.execute({
+        sql: 'UPDATE routing_rules SET role = ? WHERE project_id = ? AND pattern = ?',
+        args: [role, projectId, pattern],
+      })
+    } else {
+      const { v4 } = await import('uuid')
+      await db.execute({
+        sql: 'INSERT INTO routing_rules (id, project_id, pattern, role) VALUES (?, ?, ?, ?)',
+        args: [v4(), projectId, pattern, role],
+      })
+    }
+    return this.list(projectId)
+  },
+  async delete(id: string) {
+    const db = getDb()
+    await db.execute({ sql: 'DELETE FROM routing_rules WHERE id = ?', args: [id] })
+  },
+  // Given a task description, suggest a role based on keyword matching
+  suggest(task: string, rules: Array<{ pattern: string; role: string }>): string {
+    const lower = task.toLowerCase()
+    for (const rule of rules) {
+      if (lower.includes(rule.pattern.toLowerCase())) return rule.role
+    }
+    // Fallback heuristics
+    if (/test|spec|coverage|jest|vitest|cypress/.test(lower)) return 'tester'
+    if (/review|audit|security|quality|refactor/.test(lower)) return 'reviewer'
+    if (/deploy|docker|ci|cd|pipeline|infra|nginx/.test(lower)) return 'devops'
+    if (/architect|design|plan|coordinate|structure/.test(lower)) return 'lead'
+    return 'coder'
+  },
 }
 
 interface DbRow {
@@ -503,6 +663,7 @@ interface DbRow {
   worktree_path: string
   task_description: string
   completion_note: string
+  role: string
   status: WorkerBee['status']
   hook_id: string | null
   session_id: string | null
@@ -520,6 +681,7 @@ function toModel(r: DbRow): WorkerBee {
     worktreePath: r.worktree_path,
     taskDescription: r.task_description ?? '',
     completionNote: r.completion_note ?? '',
+    role: r.role ?? 'coder',
     status: r.status,
     hookId: r.hook_id,
     sessionId: r.session_id,

@@ -12,7 +12,7 @@ import { z } from 'zod'
 import { setupWsServer } from './ws/server.js'
 import { startWitness } from './witness/index.js'
 import { ptyManager } from './workerbee/pty.js'
-import { workerBeeManager } from './workerbee/manager.js'
+import { workerBeeManager, charterManager, routingManager } from './workerbee/manager.js'
 import { mayorLeeManager } from './mayor/manager.js'
 import { rigManager } from './rig/manager.js'
 import { releaseTrainManager } from './releasetrain/manager.js'
@@ -1363,6 +1363,93 @@ app.get('/api/metrics', async (req, res) => {
     atomictasks: { total: atomicTasks.length, ...atomicTasksByStatus },
     zombieRate: Math.round(zombieRate * 100),
   })
+})
+
+// --- Charters ---
+app.get('/api/charters', async (req, res) => {
+  const { projectId } = req.query as Record<string, string>
+  if (!projectId) { res.status(400).json({ error: 'projectId required' }); return }
+  res.json(await charterManager.list(projectId))
+})
+
+app.get('/api/charters/:projectId/:role', async (req, res) => {
+  const { projectId, role } = req.params
+  const charter = await charterManager.get(projectId, role)
+  res.json(charter ?? { content: '' })
+})
+
+app.put('/api/charters/:projectId/:role', async (req, res) => {
+  const { projectId, role } = req.params
+  const { content } = req.body as { content: string }
+  if (!content) { res.status(400).json({ error: 'content required' }); return }
+  res.json(await charterManager.upsert(projectId, role, content))
+})
+
+// --- Routing rules ---
+app.get('/api/routing-rules', async (req, res) => {
+  const { projectId } = req.query as Record<string, string>
+  if (!projectId) { res.status(400).json({ error: 'projectId required' }); return }
+  res.json(await routingManager.list(projectId))
+})
+
+app.post('/api/routing-rules', async (req, res) => {
+  const { projectId, pattern, role } = req.body as { projectId: string; pattern: string; role: string }
+  if (!projectId || !pattern || !role) { res.status(400).json({ error: 'projectId, pattern, role required' }); return }
+  res.json(await routingManager.set(projectId, pattern, role))
+})
+
+app.delete('/api/routing-rules/:id', async (req, res) => {
+  await routingManager.delete(req.params.id)
+  res.json({ ok: true })
+})
+
+// --- Decisions log ---
+app.get('/api/decisions', async (req, res) => {
+  const { projectId } = req.query as Record<string, string>
+  if (!projectId) { res.status(400).json({ error: 'projectId required' }); return }
+  try {
+    const project = await rigManager.getById(projectId)
+    if (!project) { res.status(404).json({ error: 'project not found' }); return }
+    const decisionsPath = require('path').join(project.localPath, 'DECISIONS.md')
+    const { existsSync, readFileSync } = require('fs')
+    const content = existsSync(decisionsPath) ? readFileSync(decisionsPath, 'utf8') : ''
+    res.json({ content, path: decisionsPath })
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message })
+  }
+})
+
+// --- Token budget / circuit breaker ---
+const TOKEN_BUDGET_USD = parseFloat(process.env.MAX_HOURLY_COST_USD ?? '0') // 0 = unlimited
+
+app.get('/api/budget', async (_req, res) => {
+  const db = getDb()
+  const result = await db.execute({
+    sql: `SELECT COALESCE(SUM(cost_usd), 0) as total FROM token_usage WHERE recorded_at >= datetime('now', '-1 hour')`,
+    args: [],
+  })
+  const spent = Number((result.rows[0] as unknown as { total: number }).total ?? 0)
+  const limit = TOKEN_BUDGET_USD
+  res.json({
+    spentLastHour: spent,
+    limitPerHour: limit,
+    unlimited: limit === 0,
+    percentUsed: limit > 0 ? Math.round((spent / limit) * 100) : 0,
+    blocked: limit > 0 && spent >= limit,
+  })
+})
+
+app.post('/api/token-usage', async (req, res) => {
+  const { workerBeeId, projectId, inputTokens, outputTokens, costUsd } = req.body as {
+    workerBeeId?: string; projectId?: string; inputTokens: number; outputTokens: number; costUsd: number
+  }
+  const db = getDb()
+  const { v4 } = await import('uuid')
+  await db.execute({
+    sql: `INSERT INTO token_usage (id, workerbee_id, project_id, input_tokens, output_tokens, cost_usd) VALUES (?, ?, ?, ?, ?, ?)`,
+    args: [v4(), workerBeeId ?? null, projectId ?? null, inputTokens ?? 0, outputTokens ?? 0, costUsd ?? 0],
+  })
+  res.json({ ok: true })
 })
 
 const PORT = process.env.PORT ?? 3001

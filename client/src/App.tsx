@@ -60,11 +60,21 @@ export default function App() {
   const activeTownId = useStore((s) => s.activeTownId)
   const { connected, serverRestarted, clearServerRestarted } = useWebSocket()
 
+  const [budget, setBudget] = useState<{ percentUsed: number; blocked: boolean; spentLastHour: number; limitPerHour: number; unlimited: boolean } | null>(null)
+
+  useEffect(() => {
+    if (!token) return
+    const check = () => apiFetch('/api/budget').then((r) => r.json()).then(setBudget).catch(() => {})
+    check()
+    const t = setInterval(check, 30000)
+    return () => clearInterval(t)
+  }, [token])
+
   const loadData = () => {
     apiFetch('/api/workerbees')
       .then((r) => r.json())
       .then((data: Array<{
-        id: string; name: string; projectId: string; status: string;
+        id: string; name: string; projectId: string; role?: string; status: string;
         sessionId: string | null; taskDescription?: string;
         completionNote?: string; worktreePath?: string; branch?: string
       }>) =>
@@ -72,6 +82,7 @@ export default function App() {
           id: p.id,
           name: p.name,
           projectId: p.projectId,
+          role: p.role ?? 'coder',
           status: p.status as 'idle' | 'working' | 'stalled' | 'zombie' | 'done',
           sessionId: p.sessionId,
           taskDescription: p.taskDescription ?? '',
@@ -133,6 +144,17 @@ export default function App() {
       <ToastContainer />
       {!connected && (
         <div style={styles.offlineBanner}>⚠ reconnecting…</div>
+      )}
+      {budget && !budget.unlimited && budget.percentUsed >= 80 && (
+        <div style={{
+          ...styles.offlineBanner,
+          background: budget.blocked ? '#4a1010' : '#3a2a00',
+          color: budget.blocked ? '#f44747' : '#dcdcaa',
+        }}>
+          {budget.blocked
+            ? `⛔ Hourly budget exceeded ($${budget.spentLastHour.toFixed(3)} / $${budget.limitPerHour}) — new agent dispatches are blocked`
+            : `⚠ ${budget.percentUsed}% of hourly budget used ($${budget.spentLastHour.toFixed(3)} / $${budget.limitPerHour})`}
+        </div>
       )}
       {/* Left sidebar */}
       <ErrorBoundary>

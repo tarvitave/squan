@@ -41,6 +41,8 @@ export interface RuntimeConfig {
   promptMode: 'none' | 'auto'
 }
 
+export type AgentRole = 'coder' | 'tester' | 'reviewer' | 'devops' | 'lead'
+
 // --- WorkerBee (ephemeral worker agent, was "Polecat") ---
 export interface WorkerBee {
   id: string
@@ -50,6 +52,7 @@ export interface WorkerBee {
   worktreePath: string
   taskDescription: string
   completionNote: string
+  role: AgentRole | string
   status: AgentStatus
   hookId: string | null
   sessionId: string | null

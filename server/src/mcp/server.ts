@@ -7,7 +7,7 @@
  */
 
 import type { Request, Response } from 'express'
-import { workerBeeManager } from '../workerbee/manager.js'
+import { workerBeeManager, charterManager, routingManager } from '../workerbee/manager.js'
 import { releaseTrainManager } from '../releasetrain/manager.js'
 import { atomicTaskManager } from '../beads/manager.js'
 import { rigManager } from '../rig/manager.js'
@@ -140,6 +140,65 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: 'get_charter',
+    description: 'Get the accumulated knowledge charter for a role on a project. Charters grow as agents complete work and log LEARNINGS.',
+    inputSchema: {
+      type: 'object',
+      required: ['projectId', 'role'],
+      properties: {
+        projectId: { type: 'string' },
+        role: { type: 'string', description: 'Agent role: coder, tester, reviewer, devops, lead' },
+      },
+    },
+  },
+  {
+    name: 'update_charter',
+    description: 'Update or create the knowledge charter for a role on a project.',
+    inputSchema: {
+      type: 'object',
+      required: ['projectId', 'role', 'content'],
+      properties: {
+        projectId: { type: 'string' },
+        role: { type: 'string' },
+        content: { type: 'string', description: 'Charter content — accumulated knowledge, conventions, and lessons learned' },
+      },
+    },
+  },
+  {
+    name: 'list_routing_rules',
+    description: 'List domain routing rules for a project. Rules map task keyword patterns to agent roles.',
+    inputSchema: {
+      type: 'object',
+      required: ['projectId'],
+      properties: { projectId: { type: 'string' } },
+    },
+  },
+  {
+    name: 'set_routing_rule',
+    description: 'Set a routing rule: when a task description contains this pattern, assign the given role.',
+    inputSchema: {
+      type: 'object',
+      required: ['projectId', 'pattern', 'role'],
+      properties: {
+        projectId: { type: 'string' },
+        pattern: { type: 'string', description: 'Keyword or phrase to match in task descriptions (case-insensitive)' },
+        role: { type: 'string', description: 'Role to assign: coder, tester, reviewer, devops, lead' },
+      },
+    },
+  },
+  {
+    name: 'suggest_role',
+    description: 'Given a task description, suggest the best agent role based on routing rules and built-in heuristics.',
+    inputSchema: {
+      type: 'object',
+      required: ['projectId', 'taskDescription'],
+      properties: {
+        projectId: { type: 'string' },
+        taskDescription: { type: 'string' },
+      },
+    },
+  },
 ]
 
 async function callTool(name: string, args: Record<string, unknown>, townId?: string): Promise<unknown> {
@@ -155,7 +214,11 @@ async function callTool(name: string, args: Record<string, unknown>, townId?: st
       return all
     }
     case 'spawn_workerbee': {
-      return workerBeeManager.spawn(args.projectId as string, args.taskDescription as string | undefined)
+      const role = (args.role as string | undefined) ?? (() => {
+        // Auto-suggest role if not provided
+        return routingManager.suggest(args.taskDescription as string ?? '', [])
+      })()
+      return workerBeeManager.spawn(args.projectId as string, args.taskDescription as string | undefined, undefined, role)
     }
     case 'get_workerbee': {
       const bee = await workerBeeManager.getById(args.workerBeeId as string)
@@ -181,7 +244,10 @@ async function callTool(name: string, args: Record<string, unknown>, townId?: st
       const releaseTrain = await releaseTrainManager.getById(args.releaseTrainId as string)
       if (!releaseTrain) throw new Error(`ReleaseTrain ${args.releaseTrainId} not found`)
       const task = releaseTrain.description || releaseTrain.name
-      const bee = await workerBeeManager.spawn(releaseTrain.projectId, task)
+      // Auto-suggest role from routing rules + heuristics if not explicitly provided
+      const rules = await routingManager.list(releaseTrain.projectId) as Array<{ pattern: string; role: string }>
+      const role = (args.role as string | undefined) ?? routingManager.suggest(task, rules)
+      const bee = await workerBeeManager.spawn(releaseTrain.projectId, task, undefined, role)
       await releaseTrainManager.assignWorkerBee(releaseTrain.id, bee.id)
       return { bee, releaseTrain: await releaseTrainManager.getById(releaseTrain.id) }
     }
@@ -231,6 +297,7 @@ async function callTool(name: string, args: Record<string, unknown>, townId?: st
         workerbees: bees.map((b) => ({
           id: b.id,
           name: b.name,
+          role: b.role ?? 'coder',
           status: b.status,
           taskDescription: b.taskDescription?.slice(0, 120) ?? '',
           branch: b.branch,
@@ -270,6 +337,24 @@ async function callTool(name: string, args: Record<string, unknown>, townId?: st
     case 'update_release_train': {
       const rt = await releaseTrainManager.updateDescription(args.releaseTrainId as string, args.description as string)
       return rt
+    }
+    case 'get_charter': {
+      const charter = await charterManager.get(args.projectId as string, args.role as string)
+      return charter ?? { content: '', message: 'No charter yet — one will be created after the first agent completes work.' }
+    }
+    case 'update_charter': {
+      return charterManager.upsert(args.projectId as string, args.role as string, args.content as string)
+    }
+    case 'list_routing_rules': {
+      return routingManager.list(args.projectId as string)
+    }
+    case 'set_routing_rule': {
+      return routingManager.set(args.projectId as string, args.pattern as string, args.role as string)
+    }
+    case 'suggest_role': {
+      const rules = await routingManager.list(args.projectId as string) as Array<{ pattern: string; role: string }>
+      const role = routingManager.suggest(args.taskDescription as string, rules)
+      return { role, reason: `Matched routing rules or heuristics for: "${args.taskDescription}"` }
     }
     default:
       throw new Error(`Unknown tool: ${name}`)

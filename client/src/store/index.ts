@@ -20,6 +20,7 @@ export interface Agent {
   id: string
   name: string
   projectId: string
+  role: string
   status: 'idle' | 'working' | 'stalled' | 'zombie' | 'done'
   sessionId: string | null
   taskDescription: string
