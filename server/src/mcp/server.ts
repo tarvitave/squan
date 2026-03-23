@@ -245,7 +245,7 @@ async function callTool(name: string, args: Record<string, unknown>, townId?: st
       if (!releaseTrain) throw new Error(`ReleaseTrain ${args.releaseTrainId} not found`)
       const task = releaseTrain.description || releaseTrain.name
       // Auto-suggest role from routing rules + heuristics if not explicitly provided
-      const rules = await routingManager.list(releaseTrain.projectId) as Array<{ pattern: string; role: string }>
+      const rules = (await routingManager.list(releaseTrain.projectId)) as unknown as Array<{ pattern: string; role: string }>
       const role = (args.role as string | undefined) ?? routingManager.suggest(task, rules)
       const bee = await workerBeeManager.spawn(releaseTrain.projectId, task, undefined, role)
       await releaseTrainManager.assignWorkerBee(releaseTrain.id, bee.id)
@@ -352,7 +352,7 @@ async function callTool(name: string, args: Record<string, unknown>, townId?: st
       return routingManager.set(args.projectId as string, args.pattern as string, args.role as string)
     }
     case 'suggest_role': {
-      const rules = await routingManager.list(args.projectId as string) as Array<{ pattern: string; role: string }>
+      const rules = (await routingManager.list(args.projectId as string)) as unknown as Array<{ pattern: string; role: string }>
       const role = routingManager.suggest(args.taskDescription as string, rules)
       return { role, reason: `Matched routing rules or heuristics for: "${args.taskDescription}"` }
     }

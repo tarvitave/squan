@@ -162,7 +162,7 @@ export function handleHook(req: Request, res: Response) {
 
     broadcastEvent({
       id: uuidv4(),
-      type: `claude_code.${eventType.toLowerCase().replace(/\s+/g, '_')}`,
+      type: `claude_code.${eventType.toLowerCase().replace(/\s+/g, '_')}` as import('../types/index.js').EventType,
       payload: {
         sessionId,
         toolName: payload.tool_name,
