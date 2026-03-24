@@ -358,53 +358,49 @@ function attachRootAgentMonitor(sessionId: string) {
     tail = (tail + data).slice(-4000)
   })
 
-  const STARTUP_KEYWORDS = [
-    'login method', 'Select login method',
-    'Dark mode', 'dark mode', 'color theme', 'Color theme', 'Choose a theme', 'color scheme',
-    'Do you want to use this API key',
-    'MCP server', 'trust this', 'Trust this', 'Allow MCP',
-    '(y/N)', '(Y/n)', '(yes/no)',
-    'onboarding', 'Welcome to Claude',
-  ]
-
   const watchdog = setInterval(() => {
-    // Strip ANSI codes to get readable text
-    const plain = tail.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\r/g, '')
+    // Strip ANSI codes, then look only at the last ~10 lines (current screen state).
+    // We must NOT look at the full history — startup banner text like "Welcome to Claude"
+    // stays in the buffer forever and would cause false positives after Claude is ready.
+    const allPlain = tail.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\r/g, '')
+    const lines = allPlain.split('\n').filter((l) => l.trim())
+    const screen = lines.slice(-10).join('\n')
 
-    // Log what we see so we can diagnose hangs
-    if (plain.trim()) {
-      const snippet = plain.replace(/\n+/g, ' ').trim().slice(-200)
-      console.log(`[Root Agent] Watchdog sees: ${snippet}`)
-    }
+    if (!screen) return
 
-    // If no ❯ anywhere yet — Claude hasn't even started, do nothing
-    if (!plain.includes('❯')) return
+    console.log(`[Root Agent] Watchdog screen: ${screen.replace(/\n/g, ' | ').slice(-300)}`)
 
-    // Check if any startup keyword is present alongside the ❯
-    const hasStartupPrompt = STARTUP_KEYWORDS.some((kw) => plain.includes(kw))
+    // Interactive menus that require input — keywords that ONLY appear in prompts, not banners
+    const isLoginPrompt   = screen.includes('Select login method') || screen.includes('login method')
+    const isThemePrompt   = screen.includes('Dark mode') || screen.includes('Choose a theme') || screen.includes('color theme')
+    const isApiKeyPrompt  = screen.includes('Do you want to use this API key')
+    const isYesNoPrompt   = screen.includes('(y/N)') || screen.includes('(Y/n)') || screen.includes('(yes/no)')
+    const isMcpPrompt     = /trust.*MCP|allow.*MCP|MCP.*trust|MCP.*allow/i.test(screen)
 
-    if (!hasStartupPrompt) {
-      // ❯ is visible with no startup keywords → Claude is at its ready prompt
-      console.log('[Root Agent] Watchdog: ready prompt detected, stopping')
+    const hasPrompt = isLoginPrompt || isThemePrompt || isApiKeyPrompt || isYesNoPrompt || isMcpPrompt
+
+    if (!hasPrompt && screen.includes('❯')) {
+      // Bare ❯ with no interactive prompt text → Claude is at its input prompt, we're done
+      console.log('[Root Agent] Watchdog: ready, stopping')
       clearInterval(watchdog)
       return
     }
 
-    // Still in startup — figure out which prompt and respond
-    console.log('[Root Agent] Watchdog: startup prompt detected, dismissing...')
-    tail = '' // reset so we can detect the next prompt freshly
+    if (!hasPrompt) return  // No ❯ and no prompt yet — still loading
 
-    if (plain.includes('login method') || plain.includes('Select login method')) {
-      // Select option 2 (API usage billing)
-      ptyManager.write(sessionId, '\x1b[B')
+    // There's an interactive prompt — dismiss it
+    console.log('[Root Agent] Watchdog: dismissing prompt...')
+    tail = ''
+
+    if (isLoginPrompt) {
+      ptyManager.write(sessionId, '\x1b[B') // down arrow → option 2
       setTimeout(() => ptyManager.write(sessionId, '\r'), 150)
-    } else if (plain.includes('Do you want to use this API key')) {
+    } else if (isApiKeyPrompt) {
       ptyManager.write(sessionId, '1\r')
-    } else if (plain.includes('(y/N)') || plain.includes('(Y/n)') || plain.includes('(yes/no)')) {
+    } else if (isYesNoPrompt) {
       ptyManager.write(sessionId, 'y\r')
     } else {
-      // Theme, MCP trust, onboarding, or anything else — accept default
-      ptyManager.write(sessionId, '\r')
+      ptyManager.write(sessionId, '\r') // accept default for theme / MCP trust / anything else
     }
   }, 1500)
 
