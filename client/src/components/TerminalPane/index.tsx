@@ -56,6 +56,29 @@ export function TerminalPane({ sessionId, label, onClose, onReconnect }: Props) 
     // Forward keyboard input to server
     term.onData((data) => sendInput(sessionId, data))
 
+    // Ctrl+C: copy selection if any, otherwise send ^C (SIGINT)
+    // Ctrl+V: paste from clipboard
+    term.attachCustomKeyEventHandler((event) => {
+      if (event.type !== 'keydown') return true
+
+      if (event.ctrlKey && event.key === 'c') {
+        if (term.hasSelection()) {
+          navigator.clipboard.writeText(term.getSelection()).catch(() => {})
+          return false
+        }
+        return true // send ^C
+      }
+
+      if (event.ctrlKey && event.key === 'v') {
+        navigator.clipboard.readText().then((text) => {
+          if (text) sendInput(sessionId, text)
+        }).catch(() => {})
+        return false
+      }
+
+      return true
+    })
+
     // Handle resize
     const ro = new ResizeObserver(() => {
       fit.fit()

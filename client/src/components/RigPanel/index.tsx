@@ -76,8 +76,10 @@ export function RigPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, localPath: path, townId: activeTownId ?? undefined }),
       })
-      const rig = await res.json()
-      setRigs([...rigs, rig])
+      await res.json()
+      const url = activeTownId ? `/api/rigs?townId=${activeTownId}` : '/api/rigs'
+      const updated = await apiFetch(url).then((r) => r.json())
+      setRigs(updated)
       setForm({ name: '', repoUrl: '', localPath: '' })
       closeForm()
     } catch (err) {

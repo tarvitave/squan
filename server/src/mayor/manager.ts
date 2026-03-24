@@ -1,5 +1,6 @@
-import { mkdirSync, writeFileSync } from 'fs'
+import { mkdirSync, writeFileSync, copyFileSync, existsSync } from 'fs'
 import path from 'path'
+import os from 'os'
 import { v4 as uuidv4 } from 'uuid'
 import { getDb } from '../db/index.js'
 import { ptyManager } from '../workerbee/pty.js'
@@ -48,10 +49,38 @@ export const mayorLeeManager = {
     // Bootstrap Mayor Lee's environment
     bootstrapMayorEnv(repoPath)
 
+    // Create an isolated CLAUDE_CONFIG_DIR so the root agent skips all onboarding prompts
+    const mayorConfigDir = path.join(os.tmpdir(), 'squansq-mayor-config', townId)
+    mkdirSync(mayorConfigDir, { recursive: true })
+
+    // Seed credentials from ~/.claude/ so OAuth/API key carries over
+    const homeClaudeDir = path.join(os.homedir(), '.claude')
+    const configSrc = path.join(homeClaudeDir, 'config.json')
+    if (existsSync(configSrc)) {
+      try { copyFileSync(configSrc, path.join(mayorConfigDir, 'config.json')) } catch { /* ignore */ }
+    }
+    const statsigSrc = path.join(homeClaudeDir, 'statsig')
+    if (existsSync(statsigSrc)) {
+      try {
+        const { readdirSync } = await import('fs')
+        const statsigDst = path.join(mayorConfigDir, 'statsig')
+        mkdirSync(statsigDst, { recursive: true })
+        for (const f of readdirSync(statsigSrc)) {
+          copyFileSync(path.join(statsigSrc, f), path.join(statsigDst, f))
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Write settings — skip all prompts
+    const mayorSettings: Record<string, unknown> = { skipDangerousModePermissionPrompt: true, theme: 'dark' }
+    if (apiKey) mayorSettings.primaryApiKey = apiKey
+    writeFileSync(path.join(mayorConfigDir, 'settings.json'), JSON.stringify(mayorSettings), 'utf8')
+
     const env: Record<string, string> = {
       SQUANSQ_ROLE: 'mayor-lee',
       SQUANSQ_TOWN: townId,
       SQUANSQ_MCP_URL: `${SERVER_URL}/api/mcp?townId=${townId}`,
+      CLAUDE_CONFIG_DIR: mayorConfigDir,
     }
     if (apiKey) env.ANTHROPIC_API_KEY = apiKey
 
@@ -318,49 +347,72 @@ When all ReleaseTrains are landed, summarize what was accomplished.
 `
 }
 
-// Auto-answer Claude Code startup prompts so the Root Agent never hangs
+// Auto-answer Claude Code startup prompts so the Root Agent never hangs.
+// Strategy: poll every 1.5s and dismiss whatever prompt is on screen.
+// Stop only when we see the bare ❯ prompt with no startup keywords around it.
 function attachRootAgentMonitor(sessionId: string) {
   const monitorId = `root-monitor-${sessionId}`
   let tail = ''
-  let loginAnswered = false
-  let themeAnswered = false
-  let apiKeyAnswered = false
 
   ptyManager.subscribe(sessionId, monitorId, (data) => {
-    tail = (tail + data).slice(-3000)
-
-    if (!loginAnswered && (tail.includes('Select login method') || tail.includes('login method'))) {
-      loginAnswered = true; tail = ''
-      setTimeout(() => {
-        ptyManager.write(sessionId, '\x1b[B')
-        setTimeout(() => ptyManager.write(sessionId, '\r'), 150)
-        console.log('[Root Agent] Auto-selected login method 2 (API usage)')
-      }, 500)
-    }
-
-    if (!themeAnswered && (
-      tail.includes('Dark mode') || tail.includes('dark mode') ||
-      tail.includes('color theme') || tail.includes('Color theme') ||
-      tail.includes('Choose a theme') || tail.includes('color scheme')
-    )) {
-      themeAnswered = true; tail = ''
-      setTimeout(() => {
-        ptyManager.write(sessionId, '\r')
-        console.log('[Root Agent] Auto-answered theme prompt')
-      }, 300)
-    }
-
-    if (!apiKeyAnswered && tail.includes('Do you want to use this API key')) {
-      apiKeyAnswered = true; tail = ''
-      setTimeout(() => {
-        ptyManager.write(sessionId, '1\r')
-        console.log('[Root Agent] Accepted API key prompt')
-      }, 300)
-    }
+    tail = (tail + data).slice(-4000)
   })
 
-  // Stop monitoring once the session exits
+  const STARTUP_KEYWORDS = [
+    'login method', 'Select login method',
+    'Dark mode', 'dark mode', 'color theme', 'Color theme', 'Choose a theme', 'color scheme',
+    'Do you want to use this API key',
+    'MCP server', 'trust this', 'Trust this', 'Allow MCP',
+    '(y/N)', '(Y/n)', '(yes/no)',
+    'onboarding', 'Welcome to Claude',
+  ]
+
+  const watchdog = setInterval(() => {
+    // Strip ANSI codes to get readable text
+    const plain = tail.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\r/g, '')
+
+    // Log what we see so we can diagnose hangs
+    if (plain.trim()) {
+      const snippet = plain.replace(/\n+/g, ' ').trim().slice(-200)
+      console.log(`[Root Agent] Watchdog sees: ${snippet}`)
+    }
+
+    // If no ❯ anywhere yet — Claude hasn't even started, do nothing
+    if (!plain.includes('❯')) return
+
+    // Check if any startup keyword is present alongside the ❯
+    const hasStartupPrompt = STARTUP_KEYWORDS.some((kw) => plain.includes(kw))
+
+    if (!hasStartupPrompt) {
+      // ❯ is visible with no startup keywords → Claude is at its ready prompt
+      console.log('[Root Agent] Watchdog: ready prompt detected, stopping')
+      clearInterval(watchdog)
+      return
+    }
+
+    // Still in startup — figure out which prompt and respond
+    console.log('[Root Agent] Watchdog: startup prompt detected, dismissing...')
+    tail = '' // reset so we can detect the next prompt freshly
+
+    if (plain.includes('login method') || plain.includes('Select login method')) {
+      // Select option 2 (API usage billing)
+      ptyManager.write(sessionId, '\x1b[B')
+      setTimeout(() => ptyManager.write(sessionId, '\r'), 150)
+    } else if (plain.includes('Do you want to use this API key')) {
+      ptyManager.write(sessionId, '1\r')
+    } else if (plain.includes('(y/N)') || plain.includes('(Y/n)') || plain.includes('(yes/no)')) {
+      ptyManager.write(sessionId, 'y\r')
+    } else {
+      // Theme, MCP trust, onboarding, or anything else — accept default
+      ptyManager.write(sessionId, '\r')
+    }
+  }, 1500)
+
+  // Stop after 90s regardless
+  setTimeout(() => clearInterval(watchdog), 90_000)
+
   ptyManager.onSessionExit(sessionId, () => {
+    clearInterval(watchdog)
     ptyManager.unsubscribe(sessionId, monitorId)
   })
 }

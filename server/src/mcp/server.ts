@@ -373,6 +373,8 @@ export async function handleMcpCall(req: Request, res: Response) {
     return res.status(400).json({ jsonrpc: '2.0', error: { code: -32600, message: 'Invalid Request' }, id: null })
   }
 
+  console.log(`[MCP] ${method} townId=${townId ?? 'none'} id=${id}`)
+
   if (method === 'initialize') {
     return res.json({
       jsonrpc: '2.0',

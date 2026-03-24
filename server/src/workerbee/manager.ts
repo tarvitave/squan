@@ -162,7 +162,7 @@ export const workerBeeManager = {
     })
 
     // --- Completion signal monitor ---
-    attachSignalMonitor(id, sessionId)
+    attachSignalMonitor(id, sessionId, taskDescription)
 
     // --- Auto-status on clean PTY exit (non-zero exits handled by signal monitor with note) ---
     ptyManager.onSessionExit(sessionId, (exitCode) => {
@@ -348,7 +348,7 @@ async function notifyRootAgent(workerBeeId: string, status: WorkerBee['status'],
 }
 
 // --- Completion signal monitor ---
-function attachSignalMonitor(workerBeeId: string, sessionId: string) {
+function attachSignalMonitor(workerBeeId: string, sessionId: string, taskDescription?: string) {
   const monitorId = `monitor-${workerBeeId}`
   let tail = ''
   let fired = false
@@ -415,7 +415,10 @@ function attachSignalMonitor(workerBeeId: string, sessionId: string) {
     if (!kicked && tail.includes('\u276f')) {
       kicked = true
       setTimeout(() => {
-        ptyManager.write(sessionId, 'Please begin your assigned task as described in CLAUDE.md\r')
+        const kickoff = taskDescription?.trim()
+          ? taskDescription.trim()
+          : 'Please begin your assigned task as described in CLAUDE.md'
+        ptyManager.write(sessionId, kickoff + '\r')
         console.log(`[WorkerBee] ${workerBeeId} kickoff message sent`)
       }, 500)
     }
