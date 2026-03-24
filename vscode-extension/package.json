@@ -1,0 +1,51 @@
+{
+  "name": "squansq",
+  "displayName": "Squansq",
+  "description": "Multi-agent Claude Code orchestration",
+  "version": "0.1.0",
+  "publisher": "squansq",
+  "engines": { "vscode": "^1.87.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [{ "id": "squansq", "title": "Squansq", "icon": "media/icon.svg" }]
+    },
+    "views": {
+      "squansq": [
+        { "id": "squansq.agentTree", "name": "Agents" },
+        { "id": "squansq.projectTree", "name": "Projects" }
+      ]
+    },
+    "commands": [
+      { "command": "squansq.openKanban", "title": "Squansq: Open Kanban Board" },
+      { "command": "squansq.startRootAgent", "title": "Squansq: Start Root Agent" },
+      { "command": "squansq.addProject", "title": "Squansq: Add Project" },
+      { "command": "squansq.copyMcpUrl", "title": "Squansq: Copy MCP URL" },
+      { "command": "squansq.killAgent", "title": "Kill Agent", "icon": "$(trash)" }
+    ],
+    "menus": {
+      "view/item/context": [
+        { "command": "squansq.killAgent", "when": "viewItem == agent", "group": "inline" }
+      ]
+    },
+    "configuration": {
+      "title": "Squansq",
+      "properties": {
+        "squansq.claudeCommand": { "type": "string", "default": "claude", "description": "Path to the claude CLI" }
+      }
+    }
+  },
+  "dependencies": {
+    "@libsql/client": "^0.14.0",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/uuid": "^10.0.0",
+    "@types/vscode": "^1.87.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.5.4"
+  }
+}
