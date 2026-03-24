@@ -57,22 +57,13 @@ export function TerminalPane({ sessionId, label, onClose, onReconnect }: Props) 
     term.onData((data) => sendInput(sessionId, data))
 
     // Ctrl+C: copy selection if any, otherwise send ^C (SIGINT)
-    // Ctrl+V: paste from clipboard
+    // Ctrl+V: do NOT intercept — xterm.js handles paste natively via the paste event,
+    // so intercepting here would cause the text to be sent twice.
     term.attachCustomKeyEventHandler((event) => {
       if (event.type !== 'keydown') return true
 
-      if (event.ctrlKey && event.key === 'c') {
-        if (term.hasSelection()) {
-          navigator.clipboard.writeText(term.getSelection()).catch(() => {})
-          return false
-        }
-        return true // send ^C
-      }
-
-      if (event.ctrlKey && event.key === 'v') {
-        navigator.clipboard.readText().then((text) => {
-          if (text) sendInput(sessionId, text)
-        }).catch(() => {})
+      if (event.ctrlKey && event.key === 'c' && term.hasSelection()) {
+        navigator.clipboard.writeText(term.getSelection()).catch(() => {})
         return false
       }
 
