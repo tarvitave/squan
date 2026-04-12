@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, Component } from 'react'
+import { Bot, Terminal as TerminalIcon } from 'lucide-react'
 import type { ReactNode, ErrorInfo } from 'react'
 import { apiFetch } from './lib/api.js'
 import { TabBar } from './components/TabBar/index.js'
@@ -14,6 +15,7 @@ import { ToastContainer } from './components/Toast/index.js'
 import { Sidebar } from './components/Sidebar/index.js'
 import { CommandPalette } from './components/CommandPalette/index.js'
 import { PreferencesPanel } from './components/PreferencesPanel/index.js'
+import { AgentChat } from './components/AgentChat/index.js'
 import { cn } from './lib/utils.js'
 import { useStore } from './store/index.js'
 import { useWebSocket } from './hooks/useWebSocket.js'
@@ -49,6 +51,95 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: string |
     )
     return this.props.children
   }
+}
+
+// ── Agent Dashboard ─────────────────────────────────────
+
+function AgentDashboard({ activeTab }: { activeTab: any }) {
+  const agents = useStore((s) => s.agents)
+  const activeProjectId = useStore((s) => s.activeProjectId)
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
+
+  const projectAgents = activeProjectId
+    ? agents.filter((a) => a.projectId === activeProjectId)
+    : agents
+
+  const workingAgents = projectAgents.filter((a) => ['working', 'idle', 'stalled'].includes(a.status))
+  const doneAgents = projectAgents.filter((a) => a.status === 'done').slice(0, 5)
+  const allVisible = [...workingAgents, ...doneAgents]
+
+  // Auto-select first working agent
+  useEffect(() => {
+    if (!selectedAgentId && workingAgents.length > 0) {
+      setSelectedAgentId(workingAgents[0].id)
+    }
+  }, [workingAgents.length])
+
+  if (allVisible.length === 0) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 text-text-tertiary">
+        <Bot className="w-10 h-10" />
+        <p className="text-lg">No active agents</p>
+        <p className="text-sm">Dispatch an agent from the Kanban board or Console</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Agent tabs */}
+      <div className="flex items-center gap-1 px-3 py-2 border-b border-border-primary bg-bg-secondary overflow-x-auto shrink-0">
+        {allVisible.map((agent) => (
+          <button
+            key={agent.id}
+            onClick={() => setSelectedAgentId(agent.id)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors shrink-0 ${
+              selectedAgentId === agent.id
+                ? 'bg-bg-primary text-text-primary shadow-sm'
+                : 'text-text-secondary hover:text-text-primary hover:bg-bg-primary/50'
+            }`}
+          >
+            <span className={`w-2 h-2 rounded-full ${
+              agent.status === 'working' ? 'bg-block-teal' :
+              agent.status === 'done' ? 'bg-green-500' :
+              agent.status === 'stalled' ? 'bg-yellow-500' : 'bg-text-disabled'
+            }`} />
+            {agent.name}
+          </button>
+        ))}
+        {/* Fallback to terminal tab */}
+        {activeTab && (
+          <button
+            onClick={() => setSelectedAgentId(null)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors shrink-0 ${
+              selectedAgentId === null
+                ? 'bg-bg-primary text-text-primary shadow-sm'
+                : 'text-text-secondary hover:text-text-primary hover:bg-bg-primary/50'
+            }`}
+          >
+            <TerminalIcon className="w-3 h-3" />
+            Terminal
+          </button>
+        )}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-hidden">
+        {selectedAgentId ? (
+          <AgentChat
+            workerbeeId={selectedAgentId}
+            taskDescription={allVisible.find((a) => a.id === selectedAgentId)?.taskDescription}
+          />
+        ) : activeTab ? (
+          <PaneGrid tab={activeTab} />
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-text-tertiary">
+            <p>Select an agent above</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 // ── App ─────────────────────────────────────────────────
@@ -175,15 +266,7 @@ export default function App() {
         <div className="flex-1 flex flex-col overflow-hidden bg-bg-primary rounded-t-lg min-w-0 relative">
           <div className="flex-1 overflow-hidden flex flex-col">
             {mainView === 'terminals' && (
-              <>
-                <TabBar />
-                {activeTab ? <PaneGrid tab={activeTab} /> : (
-                  <div className="flex-1 flex flex-col items-center justify-center gap-3 text-text-tertiary">
-                    <p className="text-lg">No active terminal</p>
-                    <p className="text-sm">Select a tab or create a new one</p>
-                  </div>
-                )}
-              </>
+              <AgentDashboard activeTab={activeTab} />
             )}
             {mainView === 'kanban' && <KanbanView />}
             {mainView === 'metrics' && <MetricsPanel />}

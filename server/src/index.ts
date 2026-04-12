@@ -1140,25 +1140,79 @@ app.post('/api/convoys/:id/assign', async (req, res) => {  // backward compat
 app.post('/api/release-trains/:id/dispatch', async (req, res) => {
   try {
     const userId = res.locals.userId as string
+    const mode = (req.body?.mode as string) || 'structured'
     const releaseTrain = await releaseTrainManager.getById(req.params.id)
     if (!releaseTrain) return res.status(404).json({ error: 'ReleaseTrain not found' })
     if (releaseTrain.userId && releaseTrain.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
     const taskDescription = releaseTrain.description || releaseTrain.name
-    const bee = await workerBeeManager.spawn(releaseTrain.projectId, taskDescription, userId)
-    await releaseTrainManager.assignWorkerBee(releaseTrain.id, bee.id, userId)
-    res.json({ bee, releaseTrain: await releaseTrainManager.getById(releaseTrain.id) })
+
+    if (mode === 'structured') {
+      // Structured mode (default) — Goose-style chat UI
+      const project = await rigManager.getById(releaseTrain.projectId)
+      if (!project) return res.status(404).json({ error: 'Project not found' })
+
+      const bee = await workerBeeManager.spawn(releaseTrain.projectId, taskDescription, userId)
+      await releaseTrainManager.assignWorkerBee(releaseTrain.id, bee.id, userId)
+
+      const runner = new StructuredRunner({
+        cwd: project.localPath,
+        task: taskDescription,
+        model: req.body?.model,
+        maxBudgetUsd: req.body?.maxBudgetUsd,
+      })
+      structuredRunners.set(bee.id, runner)
+
+      runner.on('message', (msg: AgentMessage) => {
+        broadcastEvent({
+          id: randomUUID(), type: 'workerbee.working',
+          payload: { workerbeeId: bee.id, workerbeeName: bee.name, agentMessage: msg },
+          timestamp: new Date().toISOString(),
+        })
+      })
+      runner.on('status', (status: string) => {
+        const evType = status === 'done' ? 'workerbee.done' : status === 'error' ? 'workerbee.zombie' : 'workerbee.working'
+        broadcastEvent({
+          id: randomUUID(), type: evType as any,
+          payload: { id: bee.id, name: bee.name, result: runner.result, cost: runner.totalCost },
+          timestamp: new Date().toISOString(),
+        })
+      })
+      runner.on('exit', () => {
+        setTimeout(() => structuredRunners.delete(bee.id), 30 * 60 * 1000)
+      })
+      runner.start()
+
+      res.json({ bee, releaseTrain: await releaseTrainManager.getById(releaseTrain.id), mode: 'structured' })
+    } else {
+      // Legacy terminal mode
+      const bee = await workerBeeManager.spawn(releaseTrain.projectId, taskDescription, userId)
+      await releaseTrainManager.assignWorkerBee(releaseTrain.id, bee.id, userId)
+      res.json({ bee, releaseTrain: await releaseTrainManager.getById(releaseTrain.id), mode: 'terminal' })
+    }
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
-app.post('/api/convoys/:id/dispatch', async (req, res) => {  // backward compat
+// backward compat — redirects to new dispatch
+app.post('/api/convoys/:id/dispatch', async (req, res) => {
+  req.params.id = req.params.id
+  // Reuse the main dispatch handler by forwarding
   try {
     const userId = res.locals.userId as string
     const releaseTrain = await releaseTrainManager.getById(req.params.id)
     if (!releaseTrain) return res.status(404).json({ error: 'ReleaseTrain not found' })
     if (releaseTrain.userId && releaseTrain.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
     const taskDescription = releaseTrain.description || releaseTrain.name
+    const project = await rigManager.getById(releaseTrain.projectId)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
     const bee = await workerBeeManager.spawn(releaseTrain.projectId, taskDescription, userId)
     await releaseTrainManager.assignWorkerBee(releaseTrain.id, bee.id, userId)
-    res.json({ bee, convoy: await releaseTrainManager.getById(releaseTrain.id) })
+    const runner = new StructuredRunner({ cwd: project.localPath, task: taskDescription })
+    structuredRunners.set(bee.id, runner)
+    runner.on('message', (msg: AgentMessage) => {
+      broadcastEvent({ id: randomUUID(), type: 'workerbee.working', payload: { workerbeeId: bee.id, workerbeeName: bee.name, agentMessage: msg }, timestamp: new Date().toISOString() })
+    })
+    runner.on('exit', () => setTimeout(() => structuredRunners.delete(bee.id), 30 * 60 * 1000))
+    runner.start()
+    res.json({ bee, convoy: await releaseTrainManager.getById(releaseTrain.id), mode: 'structured' })
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
