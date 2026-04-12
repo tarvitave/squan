@@ -20,8 +20,45 @@ import { DirectRunner } from './workerbee/direct-runner.js'
 import { setupAgentSpawn, updateSessionId } from './workerbee/spawn-setup.js'
 import { broadcastEvent } from './ws/server.js'
 
-// Store structured runners by workerbee ID
-const structuredRunners = new Map<string, StructuredRunner>()
+// Store runners by workerbee ID (DirectRunner or StructuredRunner)
+const structuredRunners = new Map<string, DirectRunner | StructuredRunner>()
+
+// Helper: spawn an agent using DirectRunner (API calls, no CLI)
+async function spawnDirectAgent(projectId: string, taskDescription: string, userId: string): Promise<any> {
+  const user = await getUserById(userId)
+  if (!user?.anthropicApiKey) throw new Error('No Anthropic API key configured. Add one in Settings.')
+
+  const setup = await setupAgentSpawn(projectId, taskDescription, userId)
+
+  const runner = new DirectRunner({
+    cwd: setup.worktreePath,
+    task: taskDescription,
+    apiKey: user.anthropicApiKey,
+  })
+  structuredRunners.set(setup.id, runner)
+
+  runner.on('message', (msg: any) => {
+    broadcastEvent({
+      id: randomUUID(), type: 'workerbee.working',
+      payload: { workerbeeId: setup.id, workerbeeName: setup.name, agentMessage: msg },
+      timestamp: new Date().toISOString(),
+    })
+  })
+  runner.on('status', async (status: string) => {
+    const newStatus = status === 'done' ? 'done' : status === 'error' ? 'zombie' : 'working'
+    await workerBeeManager.updateStatus(setup.id, newStatus as any, runner.result ?? undefined).catch(() => {})
+    broadcastEvent({
+      id: randomUUID(),
+      type: status === 'done' ? 'workerbee.done' : status === 'error' ? 'workerbee.zombie' : 'workerbee.working',
+      payload: { id: setup.id, name: setup.name, result: runner.result, cost: runner.totalCost },
+      timestamp: new Date().toISOString(),
+    })
+  })
+
+  runner.start().catch((err) => console.error(`[direct-runner] Failed:`, err))
+
+  return await workerBeeManager.getById(setup.id)
+}
 import { mayorLeeManager } from './mayor/manager.js'
 import { rigManager } from './rig/manager.js'
 import { releaseTrainManager } from './releasetrain/manager.js'
@@ -633,14 +670,12 @@ app.get('/api/projects/:projectId/workerbees', async (req, res) => {
 app.post('/api/projects/:projectId/workerbees', async (req, res) => {
   try {
     const userId = res.locals.userId as string
-    // Verify project belongs to this user
     const project = await rigManager.getById(req.params.projectId)
     if (!project) return res.status(404).json({ error: 'Project not found' })
     if (project.userId && project.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
     const { taskDescription, task } = validate(SpawnSchema, req.body)
-    const user = await getUserById(userId)
-    if (user?.anthropicApiKey) preconfigureClaudeAuth(user.anthropicApiKey)
-    res.json(await workerBeeManager.spawn(req.params.projectId, taskDescription ?? task, userId))
+    const bee = await spawnDirectAgent(req.params.projectId, (taskDescription ?? task) || 'No task specified', userId)
+    res.json(bee)
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 app.post('/api/rigs/:rigId/polecats', async (req, res) => {  // backwards compat
@@ -650,9 +685,8 @@ app.post('/api/rigs/:rigId/polecats', async (req, res) => {  // backwards compat
     if (!project) return res.status(404).json({ error: 'Project not found' })
     if (project.userId && project.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
     const { taskDescription, task } = validate(SpawnSchema, req.body)
-    const user = await getUserById(userId)
-    if (user?.anthropicApiKey) preconfigureClaudeAuth(user.anthropicApiKey)
-    res.json(await workerBeeManager.spawn(req.params.rigId, taskDescription ?? task, userId))
+    const bee = await spawnDirectAgent(req.params.rigId, (taskDescription ?? task) || 'No task specified', userId)
+    res.json(bee)
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
@@ -678,40 +712,9 @@ app.get('/api/workerbees/:id/messages', requireAuth, async (req, res) => {
 app.post('/api/projects/:projectId/workerbees/structured', requireAuth, async (req, res) => {
   try {
     const userId = res.locals.userId as string
-    const { taskDescription, model, maxBudgetUsd } = req.body
+    const { taskDescription } = req.body
     if (!taskDescription) return res.status(400).json({ error: 'taskDescription required' })
-
-    const user = await getUserById(userId)
-    if (!user?.anthropicApiKey) {
-      return res.status(400).json({ error: 'No Anthropic API key configured. Add one in Settings.' })
-    }
-
-    const setup = await setupAgentSpawn(req.params.projectId, taskDescription, userId)
-
-    const runner = new DirectRunner({
-      cwd: setup.worktreePath,
-      task: taskDescription,
-      apiKey: user.anthropicApiKey,
-      model,
-      maxBudgetUsd: maxBudgetUsd ?? undefined,
-    })
-    structuredRunners.set(setup.id, runner as any)
-
-    runner.on('message', (msg: any) => {
-      broadcastEvent({
-        id: randomUUID(), type: 'workerbee.working',
-        payload: { workerbeeId: setup.id, workerbeeName: setup.name, agentMessage: msg },
-        timestamp: new Date().toISOString(),
-      })
-    })
-    runner.on('status', async (status: string) => {
-      const newStatus = status === 'done' ? 'done' : status === 'error' ? 'zombie' : 'working'
-      await workerBeeManager.updateStatus(setup.id, newStatus as any, runner.result ?? undefined).catch(() => {})
-    })
-
-    runner.start().catch((err) => console.error(`[spawn] DirectRunner failed:`, err))
-
-    const bee = await workerBeeManager.getById(setup.id)
+    const bee = await spawnDirectAgent(req.params.projectId, taskDescription, userId)
     res.json({ ...bee, mode: 'direct' })
   } catch (err) {
     res.status(400).json({ error: (err as Error).message })
@@ -773,8 +776,8 @@ app.post('/api/workerbees/:id/restart', requireAuth, async (req, res) => {
     // Kill the old agent
     await workerBeeManager.nuke(bee.id, userId)
 
-    // Spawn a new one
-    const newBee = await workerBeeManager.spawn(projectId, taskDescription, userId)
+    // Spawn a new one using DirectRunner (no CLI)
+    const newBee = await spawnDirectAgent(projectId, taskDescription, userId)
 
     // Re-assign to the release train if there was one
     if (releaseTrainId) {
@@ -1129,61 +1132,16 @@ app.post('/api/release-trains/:id/dispatch', async (req, res) => {
     if (releaseTrain.userId && releaseTrain.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
     const taskDescription = releaseTrain.description || releaseTrain.name
 
-    if (mode === 'structured' || mode === 'direct') {
-      // Direct API mode (default) — calls Anthropic API directly like Goose
+    {
+      // Direct API mode — calls Anthropic API directly like Goose
       // No Claude Code CLI, no OAuth, no terminal
-      const setup = await setupAgentSpawn(releaseTrain.projectId, taskDescription, userId)
-      await releaseTrainManager.assignWorkerBee(releaseTrain.id, setup.id, userId)
-
-      // Get user's API key
-      const user = await getUserById(userId)
-      if (!user?.anthropicApiKey) {
-        return res.status(400).json({ error: 'No Anthropic API key configured. Add one in Settings.' })
-      }
-
-      const runner = new DirectRunner({
-        cwd: setup.worktreePath,
-        task: taskDescription,
-        apiKey: user.anthropicApiKey,
-        model: req.body?.model,
-        maxBudgetUsd: req.body?.maxBudgetUsd,
-      })
-      structuredRunners.set(setup.id, runner as any)
-
-      runner.on('message', (msg: any) => {
-        broadcastEvent({
-          id: randomUUID(), type: 'workerbee.working',
-          payload: { workerbeeId: setup.id, workerbeeName: setup.name, agentMessage: msg },
-          timestamp: new Date().toISOString(),
-        })
-      })
-      runner.on('status', async (status: string) => {
-        const newStatus = status === 'done' ? 'done' : status === 'error' ? 'zombie' : 'working'
-        await workerBeeManager.updateStatus(setup.id, newStatus as any, runner.result ?? undefined).catch(() => {})
-        broadcastEvent({
-          id: randomUUID(),
-          type: status === 'done' ? 'workerbee.done' : status === 'error' ? 'workerbee.zombie' : 'workerbee.working',
-          payload: { id: setup.id, name: setup.name, result: runner.result, cost: runner.totalCost },
-          timestamp: new Date().toISOString(),
-        })
-      })
-
-      // Start the runner (async — runs in background)
-      runner.start().catch((err) => {
-        console.error(`[dispatch] DirectRunner failed:`, err)
-      })
-
-      const bee = await workerBeeManager.getById(setup.id)
-      res.json({ bee, releaseTrain: await releaseTrainManager.getById(releaseTrain.id), mode: 'direct' })
-    } else {
-      // Legacy terminal mode — spawns PTY
-      const bee = await workerBeeManager.spawn(releaseTrain.projectId, taskDescription, userId)
+      const bee = await spawnDirectAgent(releaseTrain.projectId, taskDescription, userId)
       await releaseTrainManager.assignWorkerBee(releaseTrain.id, bee.id, userId)
-      res.json({ bee, releaseTrain: await releaseTrainManager.getById(releaseTrain.id), mode: 'terminal' })
+      res.json({ bee, releaseTrain: await releaseTrainManager.getById(releaseTrain.id), mode: 'direct' })
     }
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
-// backward compat — uses direct API runner
+// backward compat
 app.post('/api/convoys/:id/dispatch', async (req, res) => {
   try {
     const userId = res.locals.userId as string
@@ -1191,24 +1149,8 @@ app.post('/api/convoys/:id/dispatch', async (req, res) => {
     if (!releaseTrain) return res.status(404).json({ error: 'ReleaseTrain not found' })
     if (releaseTrain.userId && releaseTrain.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
     const taskDescription = releaseTrain.description || releaseTrain.name
-
-    const user = await getUserById(userId)
-    if (!user?.anthropicApiKey) return res.status(400).json({ error: 'No Anthropic API key' })
-
-    const setup = await setupAgentSpawn(releaseTrain.projectId, taskDescription, userId)
-    await releaseTrainManager.assignWorkerBee(releaseTrain.id, setup.id, userId)
-
-    const runner = new DirectRunner({
-      cwd: setup.worktreePath, task: taskDescription, apiKey: user.anthropicApiKey,
-    })
-    structuredRunners.set(setup.id, runner as any)
-    runner.on('status', async (status: string) => {
-      const newStatus = status === 'done' ? 'done' : status === 'error' ? 'zombie' : 'working'
-      await workerBeeManager.updateStatus(setup.id, newStatus as any, runner.result ?? undefined).catch(() => {})
-    })
-    runner.start().catch((err) => console.error(`[convoy dispatch] DirectRunner failed:`, err))
-
-    const bee = await workerBeeManager.getById(setup.id)
+    const bee = await spawnDirectAgent(releaseTrain.projectId, taskDescription, userId)
+    await releaseTrainManager.assignWorkerBee(releaseTrain.id, bee.id, userId)
     res.json({ bee, convoy: await releaseTrainManager.getById(releaseTrain.id), mode: 'direct' })
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })

@@ -12,6 +12,9 @@ import { releaseTrainManager } from '../releasetrain/manager.js'
 import { atomicTaskManager } from '../beads/manager.js'
 import { rigManager } from '../rig/manager.js'
 import { hookManager } from '../hooks/manager.js'
+import { DirectRunner } from '../workerbee/direct-runner.js'
+import { setupAgentSpawn } from '../workerbee/spawn-setup.js'
+import { getUserById } from '../auth/index.js'
 
 // Tool definitions
 const TOOLS = [
@@ -218,7 +221,7 @@ async function callTool(name: string, args: Record<string, unknown>, townId?: st
         // Auto-suggest role if not provided
         return routingManager.suggest(args.taskDescription as string ?? '', [])
       })()
-      return workerBeeManager.spawn(args.projectId as string, args.taskDescription as string | undefined, undefined, role)
+      const setup = await setupAgentSpawn(args.projectId as string, args.taskDescription as string); return await workerBeeManager.getById(setup.id)
     }
     case 'get_workerbee': {
       const bee = await workerBeeManager.getById(args.workerBeeId as string)
@@ -247,7 +250,7 @@ async function callTool(name: string, args: Record<string, unknown>, townId?: st
       // Auto-suggest role from routing rules + heuristics if not explicitly provided
       const rules = (await routingManager.list(releaseTrain.projectId)) as unknown as Array<{ pattern: string; role: string }>
       const role = (args.role as string | undefined) ?? routingManager.suggest(task, rules)
-      const bee = await workerBeeManager.spawn(releaseTrain.projectId, task, undefined, role)
+      const setup = await setupAgentSpawn(releaseTrain.projectId, task); const bee = await workerBeeManager.getById(setup.id); if (!bee) throw new Error('Failed to create agent')
       await releaseTrainManager.assignWorkerBee(releaseTrain.id, bee.id)
       return { bee, releaseTrain: await releaseTrainManager.getById(releaseTrain.id) }
     }
