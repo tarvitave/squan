@@ -146,13 +146,15 @@ export const workerBeeManager = {
       // method selection flow on every fresh config dir because it sees an "unexpected" key.
     }
 
-    const sessionId = ptyManager.spawn({
+    // DISABLED: PTY removed, agents use DirectRunner now
+    const sessionId = `direct-${id}` // no PTY
+    /* ptyManager.spawn({
       shell: command,
       args: ['--dangerously-skip-permissions'],
       cwd: worktreePath,
       env: workerEnv,
       ownerUserId: userId,
-    })
+    }) */
 
     const now = new Date().toISOString()
     await db.execute({
@@ -162,10 +164,10 @@ export const workerBeeManager = {
     })
 
     // --- Completion signal monitor ---
-    attachSignalMonitor(id, sessionId, taskDescription)
+    // attachSignalMonitor(id, sessionId, taskDescription) // DISABLED: no PTY
 
     // --- Auto-status on clean PTY exit (non-zero exits handled by signal monitor with note) ---
-    ptyManager.onSessionExit(sessionId, (exitCode) => {
+    /* ptyManager.onSessionExit(sessionId, (exitCode) => {
       console.log(`[WorkerBee] ${name} PTY exited with code ${exitCode}`)
       if (exitCode === 0) {
         this.getById(id).then((bee) => {
@@ -174,7 +176,7 @@ export const workerBeeManager = {
           }
         }).catch(() => {})
       }
-    })
+    }) */
 
     const bee = await this.getById(id)
 

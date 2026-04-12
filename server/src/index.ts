@@ -1573,8 +1573,10 @@ app.post('/api/terminals', async (req, res) => {
       preconfigureClaudeAuth(user.anthropicApiKey)
       env.ANTHROPIC_API_KEY = user.anthropicApiKey
     }
+    // Default to system shell, NOT claude CLI — agents now use DirectRunner
+    const defaultShell = process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL ?? 'bash')
     const id = ptyManager.spawn({
-      shell: req.body.shell ?? (process.env.TERMINAL_COMMAND ?? 'claude'),
+      shell: req.body.shell ?? (process.env.TERMINAL_COMMAND ?? defaultShell),
       args: Array.isArray(req.body.args) ? req.body.args : undefined,
       cwd: req.body.cwd,
       cols: req.body.cols ?? 120,
