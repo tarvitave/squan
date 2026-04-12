@@ -1,4 +1,6 @@
 import { useEffect } from 'react'
+import { AlertCircle, Info, X } from 'lucide-react'
+import { cn } from '../../lib/utils.js'
 import { useStore } from '../../store/index.js'
 
 export function ToastContainer() {
@@ -6,7 +8,7 @@ export function ToastContainer() {
   const dismissToast = useStore((s) => s.dismissToast)
 
   return (
-    <div style={styles.container}>
+    <div className="fixed bottom-12 right-4 flex flex-col gap-2 z-[9999] pointer-events-none">
       {toasts.map((t) => (
         <ToastItem key={t.id} toast={t} onDismiss={() => dismissToast(t.id)} />
       ))}
@@ -20,58 +22,25 @@ function ToastItem({ toast, onDismiss }: { toast: { id: string; message: string;
     return () => clearTimeout(timer)
   }, [toast.id, toast.kind, onDismiss])
 
+  const isError = toast.kind === 'error'
+
   return (
-    <div style={{ ...styles.toast, ...(toast.kind === 'error' ? styles.error : styles.info) }}>
-      <span style={styles.message}>{toast.message}</span>
-      <button style={styles.close} onClick={onDismiss}>✕</button>
+    <div
+      className={cn(
+        'flex items-center gap-2.5 px-4 py-3 rounded-lg text-sm max-w-[380px] pointer-events-auto shadow-default border',
+        isError
+          ? 'bg-bg-primary border-red-200/30 text-text-danger'
+          : 'bg-bg-primary border-green-200/30 text-green-200',
+      )}
+    >
+      {isError ? <AlertCircle className="w-4 h-4 shrink-0" /> : <Info className="w-4 h-4 shrink-0" />}
+      <span className="flex-1 break-words">{toast.message}</span>
+      <button
+        className="text-text-tertiary hover:text-text-primary transition-colors cursor-pointer shrink-0"
+        onClick={onDismiss}
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
     </div>
   )
-}
-
-const styles = {
-  container: {
-    position: 'fixed' as const,
-    bottom: 16,
-    right: 16,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 6,
-    zIndex: 9999,
-    pointerEvents: 'none' as const,
-  },
-  toast: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '6px 10px',
-    borderRadius: 4,
-    fontFamily: 'monospace',
-    fontSize: 11,
-    maxWidth: 320,
-    pointerEvents: 'all' as const,
-    boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-  },
-  error: {
-    background: '#2a1010',
-    border: '1px solid #f44747',
-    color: '#f44747',
-  },
-  info: {
-    background: '#101a10',
-    border: '1px solid #608b4e',
-    color: '#608b4e',
-  },
-  message: {
-    flex: 1,
-    wordBreak: 'break-word' as const,
-  },
-  close: {
-    background: 'none',
-    border: 'none',
-    color: 'inherit',
-    cursor: 'pointer',
-    fontSize: 10,
-    padding: 0,
-    flexShrink: 0,
-  },
 }

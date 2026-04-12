@@ -1,5 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '../../store/index.js'
+import { Button } from '../ui/button.js'
+import { Input } from '../ui/input.js'
+import { cn } from '../../lib/utils.js'
+import { RefreshCw, Loader2 } from 'lucide-react'
 
 export function AuthPage() {
   const setAuth = useStore((s) => s.setAuth)
@@ -10,234 +14,115 @@ export function AuthPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking')
+  const [serverTs, setServerTs] = useState<string | null>(null)
+  const [checkingServer, setCheckingServer] = useState(false)
+
+  const checkServer = useCallback(async () => {
+    setCheckingServer(true)
+    try {
+      const c = new AbortController()
+      const t = setTimeout(() => c.abort(), 5000)
+      const res = await fetch('/api/health', { signal: c.signal })
+      clearTimeout(t)
+      if (res.ok) { const d = await res.json(); setServerStatus('online'); setServerTs(d.ts ?? null) }
+      else { setServerStatus('offline'); setServerTs(null) }
+    } catch { setServerStatus('offline'); setServerTs(null) }
+    finally { setCheckingServer(false) }
+  }, [])
+
+  useEffect(() => { checkServer(); const i = setInterval(checkServer, 15000); return () => clearInterval(i) }, [checkServer])
+
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
+    e.preventDefault(); setError(''); setLoading(true)
     try {
       const url = mode === 'login' ? '/api/auth/login' : '/api/auth/register'
       const body: Record<string, string> = { email, password }
       if (mode === 'register' && apiKey) body.anthropicApiKey = apiKey
-
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
+      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'Something went wrong'); return }
       setAuth(data.token, data.user)
-    } catch {
-      setError('Could not reach the server')
-    } finally {
-      setLoading(false)
-    }
+    } catch { setError('Could not reach the server') }
+    finally { setLoading(false) }
   }
 
   return (
-    <div style={styles.root}>
-      <div style={styles.card}>
-        <div style={styles.logo}>SquanSQ</div>
-        <div style={styles.subtitle}>multi-agent orchestration for development</div>
+    <div className="flex items-center justify-center w-full h-full bg-bg-primary">
+      <div className="w-full max-w-[420px] flex flex-col gap-8 px-6">
 
-        <div style={styles.tabs}>
+        {/* Brand */}
+        <div className="text-center">
+          <h1 className="text-[28px] font-semibold text-text-primary tracking-tight">Squan</h1>
+          <p className="text-text-secondary mt-1.5">Multi-agent development</p>
+        </div>
+
+        {/* Server status */}
+        <div className="flex items-center gap-3 justify-center">
+          <div className={cn(
+            'w-2 h-2 rounded-full',
+            serverStatus === 'online' && 'bg-green-200',
+            serverStatus === 'offline' && 'bg-red-200',
+            serverStatus === 'checking' && 'bg-yellow-200 animate-pulse',
+          )} />
+          <span className="text-sm text-text-secondary">
+            {serverStatus === 'checking' ? 'Checking…' : serverStatus === 'online' ? 'Server connected' : 'Server offline'}
+          </span>
           <button
-            style={{ ...styles.tab, ...(mode === 'login' ? styles.tabActive : {}) }}
-            onClick={() => { setMode('login'); setError('') }}
+            className="text-text-tertiary hover:text-text-secondary transition-colors"
+            onClick={checkServer}
+            disabled={checkingServer}
           >
-            Sign in
-          </button>
-          <button
-            style={{ ...styles.tab, ...(mode === 'register' ? styles.tabActive : {}) }}
-            onClick={() => { setMode('register'); setError('') }}
-          >
-            Register
+            <RefreshCw className={cn('w-3.5 h-3.5', checkingServer && 'animate-spin')} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} style={styles.form}>
-          <label style={styles.label}>Email</label>
-          <input
-            style={styles.input}
-            type="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoFocus
-          />
+        {/* Mode toggle */}
+        <div className="flex border rounded-lg overflow-hidden">
+          {(['login', 'register'] as const).map((m) => (
+            <button key={m} className={cn(
+              'flex-1 py-2.5 text-sm transition-colors',
+              mode === m ? 'bg-bg-secondary text-text-primary font-medium' : 'text-text-tertiary hover:text-text-secondary bg-bg-primary'
+            )} onClick={() => { setMode(m); setError('') }}>
+              {m === 'login' ? 'Sign in' : 'Register'}
+            </button>
+          ))}
+        </div>
 
-          <label style={styles.label}>Password</label>
-          <input
-            style={styles.input}
-            type="password"
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div>
+            <label className="text-sm text-text-secondary mb-1.5 block">Email</label>
+            <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
+          </div>
+          <div>
+            <label className="text-sm text-text-secondary mb-1.5 block">Password</label>
+            <Input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          </div>
 
           {mode === 'register' && (
-            <>
-              <label style={styles.label}>
-                Anthropic API Key
-                <span style={styles.optional}> (required to run agents)</span>
+            <div>
+              <label className="text-sm text-text-secondary mb-1.5 block">
+                Anthropic API Key <span className="text-text-tertiary">(for agents)</span>
               </label>
-              <input
-                style={styles.input}
-                type="password"
-                placeholder="sk-ant-api03-..."
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-              />
-              <p style={styles.hint}>
-                Your key is stored in the database and used to power Claude Code agents.
-                You can update it later from your profile.
-              </p>
-            </>
+              <Input type="password" placeholder="sk-ant-api03-..." value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+              <p className="text-xs text-text-tertiary mt-1.5">Powers Claude Code agents. Update anytime in settings.</p>
+            </div>
           )}
 
-          {error && <div style={styles.error}>{error}</div>}
+          {error && (
+            <div className="text-text-danger text-sm bg-red-200/10 border border-border-danger rounded-lg px-4 py-3">
+              {error}
+            </div>
+          )}
 
-          <button style={styles.submit} type="submit" disabled={loading}>
-            {loading ? '…' : mode === 'login' ? 'Sign in' : 'Create account'}
-          </button>
+          <Button type="submit" disabled={loading || serverStatus === 'offline'} className="h-10">
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : mode === 'login' ? 'Sign in' : 'Create account'}
+          </Button>
         </form>
 
-        <div style={styles.footer}>
-          <a href="/privacy.html" target="_blank" style={styles.footerLink}>Privacy</a>
-          <span style={styles.sep}>·</span>
-          <a href="/terms.html" target="_blank" style={styles.footerLink}>Terms</a>
-          <span style={styles.sep}>·</span>
-          <a href="https://squansq.com/blog" target="_blank" rel="noopener noreferrer" style={styles.footerLink}>Blog</a>
-        </div>
+        <p className="text-center text-text-disabled text-xs">v{__APP_VERSION__}</p>
       </div>
     </div>
   )
-}
-
-const styles = {
-  root: {
-    width: '100%',
-    height: '100%',
-    background: '#0d0d0d',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  card: {
-    width: 360,
-    background: '#111',
-    border: '1px solid #2d2d2d',
-    borderRadius: 6,
-    padding: '32px 28px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 16,
-  },
-  logo: {
-    fontSize: 22,
-    fontFamily: 'monospace',
-    color: '#4ec9b0',
-    fontWeight: 'bold' as const,
-    letterSpacing: '0.05em',
-    textAlign: 'center' as const,
-  },
-  subtitle: {
-    fontSize: 11,
-    fontFamily: 'monospace',
-    color: '#555',
-    textAlign: 'center' as const,
-    marginTop: -10,
-  },
-  tabs: {
-    display: 'flex',
-    gap: 0,
-    background: '#0d0d0d',
-    borderRadius: 4,
-    padding: 2,
-  },
-  tab: {
-    flex: 1,
-    background: 'none',
-    border: 'none',
-    color: '#555',
-    padding: '6px 0',
-    cursor: 'pointer',
-    fontSize: 12,
-    fontFamily: 'monospace',
-    borderRadius: 3,
-  },
-  tabActive: {
-    background: '#1a1a1a',
-    color: '#d4d4d4',
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 8,
-  },
-  label: {
-    fontSize: 11,
-    fontFamily: 'monospace',
-    color: '#888',
-  },
-  optional: {
-    color: '#555',
-  },
-  input: {
-    background: '#1a1a1a',
-    border: '1px solid #333',
-    color: '#d4d4d4',
-    borderRadius: 3,
-    padding: '8px 10px',
-    fontSize: 13,
-    fontFamily: 'monospace',
-    outline: 'none',
-    width: '100%',
-    boxSizing: 'border-box' as const,
-  },
-  hint: {
-    fontSize: 10,
-    fontFamily: 'monospace',
-    color: '#444',
-    margin: 0,
-    lineHeight: 1.5,
-  },
-  error: {
-    background: '#1a0a0a',
-    border: '1px solid #3a1a1a',
-    color: '#f44747',
-    borderRadius: 3,
-    padding: '6px 10px',
-    fontSize: 12,
-    fontFamily: 'monospace',
-  },
-  submit: {
-    background: '#1a3a2a',
-    border: '1px solid #4ec9b0',
-    color: '#4ec9b0',
-    borderRadius: 3,
-    padding: '8px',
-    cursor: 'pointer',
-    fontSize: 13,
-    fontFamily: 'monospace',
-    marginTop: 4,
-  },
-  footer: {
-    display: 'flex',
-    justifyContent: 'center',
-    gap: 4,
-    alignItems: 'center',
-  },
-  footerLink: {
-    color: '#444',
-    fontSize: 10,
-    fontFamily: 'monospace',
-    textDecoration: 'none',
-  },
-  sep: {
-    color: '#333',
-    fontSize: 10,
-  },
 }

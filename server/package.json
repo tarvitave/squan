@@ -1,6 +1,6 @@
 {
   "name": "@squansq/server",
-  "version": "0.1.2",
+  "version": "0.2.4",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,6 +17,7 @@
     "node-pty": "^1.1.0",
     "uuid": "^10.0.0",
     "ws": "^8.18.0",
+    "yaml": "^2.8.3",
     "zod": "^3.23.8"
   },
   "devDependencies": {

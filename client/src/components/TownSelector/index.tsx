@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
+import { MapPin, ChevronDown } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
+import { cn } from '../../lib/utils.js'
 import type { TownEntry } from '../../store/index.js'
 
-const SQUANSQ_ROOT = 'C:\\Users\\colin\\squansq'
+const SQUANSQ_ROOT = 'C:\\Users\\colin\\squan'
 function autoPath(name: string) {
   return `${SQUANSQ_ROOT}\\${name.toLowerCase().replace(/\s+/g, '-')}`
 }
@@ -60,24 +62,28 @@ export function TownSelector() {
   const activeTown = towns.find((t) => t.id === activeTownId)
 
   return (
-    <div style={styles.wrapper}>
+    <div className="flex shrink-0 items-center gap-1.5 border-b border-border-primary bg-bg-primary px-2 py-1">
+      <MapPin className="h-3 w-3 shrink-0 text-text-info" />
       {towns.length > 1 ? (
-        <select
-          style={styles.select}
-          value={activeTownId ?? ''}
-          onChange={(e) => handleSwitch(e.target.value)}
-        >
-          {towns.map((t) => (
-            <option key={t.id} value={t.id}>{t.name}</option>
-          ))}
-        </select>
+        <div className="relative flex-1">
+          <select
+            className="w-full appearance-none rounded border border-border-primary bg-bg-primary pr-6 pl-1 py-0.5 font-mono text-[11px] text-text-info outline-none focus:border-block-teal"
+            value={activeTownId ?? ''}
+            onChange={(e) => handleSwitch(e.target.value)}
+          >
+            {towns.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-1 top-1/2 h-3 w-3 -translate-y-1/2 text-text-tertiary" />
+        </div>
       ) : (
-        <span style={styles.townName}>{activeTown?.name ?? 'default'}</span>
+        <span className="flex-1 font-mono text-[11px] text-text-info">{activeTown?.name ?? 'default'}</span>
       )}
       {showForm ? (
-        <div style={styles.form}>
+        <div className="flex flex-1 flex-col gap-0.5">
           <input
-            style={styles.input}
+            className="rounded border border-border-primary bg-bg-secondary px-1.5 py-0.5 font-mono text-[10px] text-text-primary outline-none focus:border-block-teal"
             placeholder="Namespace name"
             value={form.name}
             onChange={(e) => {
@@ -89,52 +95,35 @@ export function TownSelector() {
             }}
           />
           <input
-            style={styles.input}
+            className="rounded border border-border-primary bg-bg-secondary px-1.5 py-0.5 font-mono text-[10px] text-text-primary outline-none focus:border-block-teal"
             placeholder="Path"
             value={form.path}
             onChange={(e) => setForm((f) => ({ ...f, path: e.target.value }))}
           />
-          <div style={styles.btns}>
-            <button style={styles.saveBtn} onClick={handleCreate}>Create</button>
-            <button style={styles.cancelBtn} onClick={() => setShowForm(false)}>&#x2715;</button>
+          <div className="flex gap-0.5">
+            <button
+              className="flex-1 cursor-pointer rounded border border-text-info bg-transparent px-0.5 py-px font-mono text-[9px] text-text-info hover:bg-text-info/10"
+              onClick={handleCreate}
+            >
+              Create
+            </button>
+            <button
+              className="cursor-pointer rounded border border-border-primary bg-transparent px-1 py-px text-[9px] text-text-tertiary hover:text-text-secondary"
+              onClick={() => setShowForm(false)}
+            >
+              &#x2715;
+            </button>
           </div>
         </div>
       ) : (
-        <button style={styles.newBtn} onClick={() => { setForm({ name: '', path: autoPath('') }); setShowForm(true) }} title="New namespace">+</button>
+        <button
+          className="flex h-[18px] w-[18px] shrink-0 cursor-pointer items-center justify-center rounded border border-border-primary bg-transparent p-0 text-xs text-text-disabled hover:border-border-secondary hover:text-text-secondary"
+          onClick={() => { setForm({ name: '', path: autoPath('') }); setShowForm(true) }}
+          title="New namespace"
+        >
+          +
+        </button>
       )}
     </div>
   )
-}
-
-const styles = {
-  wrapper: {
-    display: 'flex', alignItems: 'center', gap: 6,
-    padding: '4px 8px', borderBottom: '1px solid #2d2d2d',
-    background: '#0d0d0d', flexShrink: 0,
-  },
-  townName: { fontSize: 11, color: '#569cd6', fontFamily: 'monospace', flex: 1 },
-  select: {
-    flex: 1, background: '#111', border: '1px solid #2a2a2a', color: '#569cd6',
-    borderRadius: 3, fontSize: 11, fontFamily: 'monospace', padding: '2px 4px', outline: 'none',
-  },
-  newBtn: {
-    background: 'none', border: '1px solid #2a2a2a', color: '#444',
-    borderRadius: 3, width: 18, height: 18, cursor: 'pointer', fontSize: 12,
-    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-    padding: 0,
-  },
-  form: { display: 'flex', flexDirection: 'column' as const, gap: 3, flex: 1 },
-  input: {
-    background: '#1a1a1a', border: '1px solid #333', color: '#d4d4d4',
-    borderRadius: 3, padding: '2px 5px', fontSize: 10, fontFamily: 'monospace', outline: 'none',
-  },
-  btns: { display: 'flex', gap: 3 },
-  saveBtn: {
-    flex: 1, background: 'none', border: '1px solid #569cd6', color: '#569cd6',
-    borderRadius: 3, padding: '1px', cursor: 'pointer', fontSize: 9, fontFamily: 'monospace',
-  },
-  cancelBtn: {
-    background: 'none', border: '1px solid #333', color: '#555',
-    borderRadius: 3, padding: '1px 4px', cursor: 'pointer', fontSize: 9,
-  },
 }

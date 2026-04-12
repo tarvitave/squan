@@ -1,0 +1,12 @@
+{
+  "files.watcherExclude": {
+    "**/out/**": true,
+    "**/dist-server/**": true,
+    "**/.vite/**": true,
+    "**/node_modules/**": true
+  },
+  "search.exclude": {
+    "**/out/**": true,
+    "**/dist-server/**": true
+  }
+}

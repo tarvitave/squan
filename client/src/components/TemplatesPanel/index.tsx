@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import { FileText, Plus, Trash2 } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
+import { cn } from '../../lib/utils.js'
 import type { TemplateEntry } from '../../store/index.js'
 
 interface Props {
@@ -49,164 +51,93 @@ export function TemplatesPanel({ projectId, onSelect }: Props) {
 
   if (templates.length === 0 && !showForm) {
     return (
-      <div style={styles.empty}>
-        <button style={styles.newBtn} onClick={() => setShowForm(true)}>+ Template</button>
+      <div className="py-1">
+        <button
+          className="mx-2 cursor-pointer rounded border border-dashed border-border-primary bg-transparent px-1.5 py-0.5 text-left font-mono text-[10px] text-text-tertiary hover:border-border-secondary hover:text-text-secondary"
+          onClick={() => setShowForm(true)}
+        >
+          <Plus className="mr-1 inline-block h-3 w-3 align-middle" />
+          Template
+        </button>
       </div>
     )
   }
 
   return (
-    <div style={styles.panel}>
+    <div className="flex flex-col gap-0.5">
       {templates.map((tpl) => (
-        <div key={tpl.id} style={styles.row}>
-          <div style={styles.rowTop}>
+        <div key={tpl.id} className="border-b border-border-primary py-1">
+          <div className="flex items-center gap-1 px-2">
+            <FileText className="h-3 w-3 shrink-0 text-text-tertiary" />
             <span
-              style={styles.name}
+              className="flex-1 cursor-pointer font-mono text-[11px] text-text-secondary hover:text-text-primary"
               onClick={() => setExpanded(expanded === tpl.id ? null : tpl.id)}
             >
               {tpl.name}
             </span>
-            <div style={styles.rowBtns}>
+            <div className="flex gap-1">
               {onSelect && (
-                <button style={styles.useBtn} onClick={() => onSelect(tpl.content)}>use</button>
+                <button
+                  className="cursor-pointer rounded border border-border-primary bg-transparent px-1.5 py-px font-mono text-[9px] text-block-teal hover:border-block-teal"
+                  onClick={() => onSelect(tpl.content)}
+                >
+                  use
+                </button>
               )}
-              <button style={styles.delBtn} onClick={() => handleDelete(tpl.id)}>✕</button>
+              <button
+                className="cursor-pointer border-none bg-transparent p-0 text-text-disabled hover:text-text-danger"
+                onClick={() => handleDelete(tpl.id)}
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
             </div>
           </div>
           {expanded === tpl.id && (
-            <pre style={styles.preview}>{tpl.content}</pre>
+            <pre className="mx-2 mt-1 max-h-[120px] overflow-auto whitespace-pre-wrap rounded border border-border-primary bg-bg-primary p-1 font-mono text-[9px] text-text-tertiary">
+              {tpl.content}
+            </pre>
           )}
         </div>
       ))}
 
       {showForm ? (
-        <div style={styles.form}>
+        <div className="flex flex-col gap-1 px-2 py-1">
           <input
-            style={styles.input}
+            className="w-full rounded border border-border-primary bg-bg-secondary px-1.5 py-1 font-mono text-[11px] text-text-primary outline-none focus:border-block-teal"
             placeholder="Template name"
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
           />
           <textarea
-            style={{ ...styles.input, resize: 'vertical', minHeight: 80 }}
+            className="min-h-[80px] w-full resize-y rounded border border-border-primary bg-bg-secondary px-1.5 py-1 font-mono text-[11px] text-text-primary outline-none focus:border-block-teal"
             placeholder="Template content (CLAUDE.md)"
             value={form.content}
             onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
           />
-          <div style={styles.formBtns}>
-            <button style={styles.addBtn} onClick={handleCreate}>Save</button>
-            <button style={styles.cancelBtn} onClick={() => setShowForm(false)}>Cancel</button>
+          <div className="flex gap-1">
+            <button
+              className="flex-1 cursor-pointer rounded border border-block-teal bg-block-teal/10 px-1 py-0.5 font-mono text-[10px] text-block-teal hover:bg-block-teal/20"
+              onClick={handleCreate}
+            >
+              Save
+            </button>
+            <button
+              className="flex-1 cursor-pointer rounded border border-border-primary bg-transparent px-1 py-0.5 font-mono text-[10px] text-text-secondary hover:border-border-secondary"
+              onClick={() => setShowForm(false)}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       ) : (
-        <button style={styles.newBtn} onClick={() => setShowForm(true)}>+ Template</button>
+        <button
+          className="mx-2 cursor-pointer rounded border border-dashed border-border-primary bg-transparent px-1.5 py-0.5 text-left font-mono text-[10px] text-text-tertiary hover:border-border-secondary hover:text-text-secondary"
+          onClick={() => setShowForm(true)}
+        >
+          <Plus className="mr-1 inline-block h-3 w-3 align-middle" />
+          Template
+        </button>
       )}
     </div>
   )
-}
-
-const styles = {
-  panel: { display: 'flex', flexDirection: 'column' as const, gap: 2 },
-  empty: { padding: '4px 0' },
-  row: {
-    borderBottom: '1px solid #1e1e1e',
-    padding: '4px 0',
-  },
-  rowTop: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-    padding: '0 8px',
-  },
-  name: {
-    fontSize: 11,
-    color: '#888',
-    fontFamily: 'monospace',
-    flex: 1,
-    cursor: 'pointer',
-  },
-  rowBtns: { display: 'flex', gap: 4 },
-  useBtn: {
-    background: 'none',
-    border: '1px solid #333',
-    color: '#4ec9b0',
-    borderRadius: 3,
-    padding: '1px 5px',
-    cursor: 'pointer',
-    fontSize: 9,
-    fontFamily: 'monospace',
-  },
-  delBtn: {
-    background: 'none',
-    border: 'none',
-    color: '#444',
-    cursor: 'pointer',
-    fontSize: 10,
-  },
-  preview: {
-    margin: '4px 8px',
-    fontSize: 9,
-    color: '#555',
-    fontFamily: 'monospace',
-    background: '#111',
-    border: '1px solid #1e1e1e',
-    borderRadius: 3,
-    padding: '4px',
-    overflow: 'auto',
-    maxHeight: 120,
-    whiteSpace: 'pre-wrap' as const,
-  },
-  form: {
-    padding: '4px 8px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 4,
-  },
-  input: {
-    background: '#1a1a1a',
-    border: '1px solid #333',
-    color: '#d4d4d4',
-    borderRadius: 3,
-    padding: '4px 6px',
-    fontSize: 11,
-    fontFamily: 'monospace',
-    outline: 'none',
-    width: '100%',
-    boxSizing: 'border-box' as const,
-  },
-  formBtns: { display: 'flex', gap: 4 },
-  addBtn: {
-    flex: 1,
-    background: '#1a3a2a',
-    border: '1px solid #4ec9b0',
-    color: '#4ec9b0',
-    borderRadius: 3,
-    padding: '3px',
-    cursor: 'pointer',
-    fontSize: 10,
-    fontFamily: 'monospace',
-  },
-  cancelBtn: {
-    flex: 1,
-    background: 'none',
-    border: '1px solid #333',
-    color: '#666',
-    borderRadius: 3,
-    padding: '3px',
-    cursor: 'pointer',
-    fontSize: 10,
-    fontFamily: 'monospace',
-  },
-  newBtn: {
-    margin: '4px 8px',
-    background: 'none',
-    border: '1px dashed #2a2a2a',
-    color: '#555',
-    borderRadius: 3,
-    padding: '3px 6px',
-    cursor: 'pointer',
-    fontSize: 10,
-    fontFamily: 'monospace',
-    textAlign: 'left' as const,
-  },
 }

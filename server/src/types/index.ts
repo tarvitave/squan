@@ -175,6 +175,7 @@ export type EventType =
   | 'releasetrain.assigned'
   | 'releasetrain.cancelled'
   | 'releasetrain.pr_review'
+  | 'releasetrain.deleted'
   | 'hook.created'
   | 'hook.activated'
   | 'hook.completed'

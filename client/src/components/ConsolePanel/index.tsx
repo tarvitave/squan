@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { Terminal, Send } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
+import { cn } from '../../lib/utils.js'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -97,7 +99,6 @@ function pad(text: string, w: number): string {
   return text.length >= w ? text.slice(0, w) : text + ' '.repeat(w - text.length)
 }
 
-// Merge multiple SpanLines into one line
 function line(...parts: SpanLine[]): SpanLine {
   return parts.flat()
 }
@@ -301,7 +302,7 @@ async function runCommand(input: string, activeTownId: string | null): Promise<S
 
     case 'help':
     case '?': {
-      push(mk('sq — Squansq console', '#4ec9b0', true))
+      push(mk('sq — Squan console', '#4ec9b0', true))
       push([])
       push(mk('Overview', '#569cd6', true))
       push(...[gray('  status               '), mk('Full orchestration overview')])
@@ -367,7 +368,7 @@ function tokenize(input: string): string[] {
 export function ConsolePanel() {
   const activeTownId = useStore((s) => s.activeTownId)
   const [lines, setLines] = useState<ConsoleLine[]>([
-    { kind: 'info', text: 'sq — Squansq console. Type help for commands.' },
+    { kind: 'info', text: 'sq — Squan console. Type help for commands.' },
   ])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -425,30 +426,48 @@ export function ConsolePanel() {
   }
 
   return (
-    <div style={styles.root} onClick={() => inputRef.current?.focus()}>
-      <div style={styles.output}>
+    <div
+      className="flex flex-col h-full bg-bg-primary font-mono text-[13px]"
+      onClick={() => inputRef.current?.focus()}
+    >
+      <div className="flex-1 overflow-y-auto px-4 py-3">
         {lines.map((consoleLine, i) => (
-          <div key={i} style={getLineStyle(consoleLine.kind)}>
+          <div
+            key={i}
+            className={cn(
+              'whitespace-pre leading-relaxed min-h-[1.6em] py-px',
+              consoleLine.kind === 'input' ? 'text-text-primary' : 'text-[#9cdcfe]'
+            )}
+          >
             {consoleLine.kind === 'input' && (
-              <><span style={styles.prompt}>sq&gt;</span>{' '}{consoleLine.text}</>
+              <>
+                <span className="text-block-teal select-none">
+                  <Terminal className="w-3 h-3 inline mr-1" />
+                  sq&gt;
+                </span>
+                {' '}{consoleLine.text}
+              </>
             )}
             {consoleLine.kind === 'output' && renderSpanLine(consoleLine.spans ?? [])}
             {consoleLine.kind === 'error' && (
-              <span style={{ color: '#f44747' }}>Error: {consoleLine.text}</span>
+              <span className="text-text-danger">Error: {consoleLine.text}</span>
             )}
             {consoleLine.kind === 'info' && (
-              <span style={{ color: '#555' }}>{consoleLine.text}</span>
+              <span className="text-text-tertiary">{consoleLine.text}</span>
             )}
           </div>
         ))}
-        {busy && <div style={styles.busy}>...</div>}
+        {busy && <div className="text-text-tertiary py-0.5">...</div>}
         <div ref={bottomRef} />
       </div>
-      <div style={styles.inputRow}>
-        <span style={styles.prompt}>sq&gt;</span>
+      <div className="flex items-center gap-2 px-4 py-2 border-t border-border-primary bg-bg-primary shrink-0">
+        <span className="text-block-teal select-none shrink-0 flex items-center gap-1">
+          <Terminal className="w-3.5 h-3.5" />
+          sq&gt;
+        </span>
         <input
           ref={inputRef}
-          style={styles.input}
+          className="flex-1 bg-transparent border-none text-text-primary text-[13px] font-[inherit] outline-none caret-block-teal"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -457,6 +476,14 @@ export function ConsolePanel() {
           spellCheck={false}
           autoComplete="off"
         />
+        <button
+          className="bg-transparent border-none text-text-tertiary cursor-pointer hover:text-block-teal disabled:opacity-30"
+          onClick={submit}
+          disabled={busy}
+          title="Send command"
+        >
+          <Send className="w-4 h-4" />
+        </button>
       </div>
     </div>
   )
@@ -473,58 +500,4 @@ function renderSpanLine(spans: SpanLine) {
       ))}
     </>
   )
-}
-
-function getLineStyle(kind: string): React.CSSProperties {
-  return {
-    padding: '1px 0',
-    whiteSpace: 'pre' as const,
-    color: kind === 'input' ? '#d4d4d4' : '#9cdcfe',
-    lineHeight: 1.6,
-    minHeight: '1.6em',
-  }
-}
-
-const styles: Record<string, React.CSSProperties> = {
-  root: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100%',
-    background: '#0d0d0d',
-    fontFamily: '"Cascadia Code", "Fira Code", monospace',
-    fontSize: 13,
-  },
-  output: {
-    flex: 1,
-    overflowY: 'auto',
-    padding: '12px 16px',
-  },
-  busy: {
-    color: '#555',
-    padding: '2px 0',
-  },
-  inputRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '8px 16px',
-    borderTop: '1px solid #2d2d2d',
-    background: '#0a0a0a',
-    flexShrink: 0,
-  },
-  prompt: {
-    color: '#4ec9b0',
-    userSelect: 'none',
-    flexShrink: 0,
-  },
-  input: {
-    flex: 1,
-    background: 'none',
-    border: 'none',
-    color: '#d4d4d4',
-    fontSize: 13,
-    fontFamily: 'inherit',
-    outline: 'none',
-    caretColor: '#4ec9b0',
-  },
 }

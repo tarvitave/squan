@@ -1,14 +1,31 @@
 {
-  "name": "squansq",
-  "version": "0.1.2",
+  "name": "squan",
+  "version": "0.2.4",
+  "description": "Squan — Multi-agent AI development command center",
+  "author": "Colin",
+  "main": ".vite/build/main.js",
   "private": true,
   "workspaces": [
     "server",
     "client"
   ],
   "scripts": {
+    "start": "npm run build:all && electron .vite/build/main.js",
     "dev": "concurrently \"npm run dev --workspace=server\" \"npm run dev --workspace=client\"",
-    "build": "node scripts/bump-version.mjs && npm run build --workspace=server && npm run build --workspace=client",
+    "dev:electron": "npm run build:all && electron .vite/build/main.js",
+    "build": "node scripts/bump-version.mjs && npm run build:all",
+    "build:all": "npm run build:server && npm run build:client && npm run build:electron",
+    "build:server": "npm run build --workspace=server",
+    "build:client": "npm run build --workspace=client",
+    "build:electron": "cd electron && npx tsc",
+    "package": "node scripts/package-binary.mjs --clean",
+    "package:quick": "node scripts/package-binary.mjs",
+    "make": "node scripts/build-binary.mjs --make",
+    "make:win": "node scripts/build-binary.mjs --make",
+    "make:mac": "node scripts/build-binary.mjs --make",
+    "make:mac-arm": "node scripts/build-binary.mjs --make --arch arm64",
+    "make:linux": "node scripts/build-binary.mjs --make",
+    "dist": "node scripts/build-binary.mjs --make",
     "install:all": "npm install",
     "sq": "node scripts/sq.mjs"
   },
@@ -16,6 +33,21 @@
     "sq": "./scripts/sq.mjs"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "@electron-forge/cli": "^7.11.1",
+    "@electron-forge/maker-deb": "^7.11.1",
+    "@electron-forge/maker-squirrel": "^7.11.1",
+    "@electron-forge/maker-zip": "^7.11.1",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
+    "@electron-forge/plugin-vite": "^7.11.1",
+    "@tailwindcss/vite": "^4.2.2",
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^9.1.2",
+    "electron": "^33.0.0",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^5.5.4",
+    "vite": "^5.3.4"
+  },
+  "dependencies": {
+    "electron-squirrel-startup": "^1.0.1"
   }
 }

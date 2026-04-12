@@ -103,6 +103,17 @@ export interface TownEntry {
 
 export type MainView = 'terminals' | 'kanban' | 'metrics' | 'events' | 'costs' | 'console' | 'claudecode'
 
+/** The currently focused project — when set, all views filter to this project */
+export type ActiveProjectId = string | null
+
+export interface UiPreferences {
+  fontSize: number       // 10-16, default 12
+  sidebarCollapsed: boolean
+  sidebarIconOnly: boolean
+  commandPaletteOpen: boolean
+  showPreferences: boolean
+}
+
 interface SquansqState {
   // Auth
   token: string | null
@@ -127,6 +138,10 @@ interface SquansqState {
   replacePaneInTab: (tabId: string, oldSessionId: string, newSessionId: string) => void
   clearAllPanes: () => void
   removePaneFromAllTabs: (sessionId: string) => void
+
+  // Active project — all views filter to this
+  activeProjectId: ActiveProjectId
+  setActiveProjectId: (id: ActiveProjectId) => void
 
   // Rigs
   rigs: Rig[]
@@ -186,6 +201,14 @@ interface SquansqState {
   toasts: ToastEntry[]
   addToast: (message: string, kind?: 'error' | 'info') => void
   dismissToast: (id: string) => void
+
+  // UI Preferences
+  ui: UiPreferences
+  setFontSize: (size: number) => void
+  toggleSidebar: () => void
+  toggleSidebarIconOnly: () => void
+  toggleCommandPalette: () => void
+  setShowPreferences: (show: boolean) => void
 }
 
 let tabCounter = 1
@@ -253,6 +276,9 @@ export const useStore = create<SquansqState>()(
 
       removePaneFromAllTabs: (sessionId) =>
         set((s) => ({ tabs: s.tabs.map((t) => ({ ...t, panes: t.panes.filter((p) => p !== sessionId) })) })),
+
+      activeProjectId: null,
+      setActiveProjectId: (activeProjectId) => set({ activeProjectId }),
 
       rigs: [],
       setRigs: (rigs) => set({ rigs }),
@@ -338,13 +364,27 @@ export const useStore = create<SquansqState>()(
         set((s) => ({ toasts: [...s.toasts, { id: crypto.randomUUID(), message, kind }] })),
       dismissToast: (id) =>
         set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+
+      // UI Preferences
+      ui: {
+        fontSize: 12,
+        sidebarCollapsed: false,
+        sidebarIconOnly: false,
+        commandPaletteOpen: false,
+        showPreferences: false,
+      },
+      setFontSize: (size) => set((s) => ({ ui: { ...s.ui, fontSize: Math.max(10, Math.min(16, size)) } })),
+      toggleSidebar: () => set((s) => ({ ui: { ...s.ui, sidebarCollapsed: !s.ui.sidebarCollapsed } })),
+      toggleSidebarIconOnly: () => set((s) => ({ ui: { ...s.ui, sidebarIconOnly: !s.ui.sidebarIconOnly } })),
+      toggleCommandPalette: () => set((s) => ({ ui: { ...s.ui, commandPaletteOpen: !s.ui.commandPaletteOpen } })),
+      setShowPreferences: (show) => set((s) => ({ ui: { ...s.ui, showPreferences: show } })),
     }),
     {
       name: 'squansq-ui',
-      version: 3,
-      migrate: (persisted) => {
-        const p = (persisted ?? {}) as Record<string, unknown>
-        return { token: p.token ?? null, user: p.user ?? null }
+      version: 4,
+      migrate: (_persisted: unknown) => {
+        const p = (_persisted ?? {}) as Record<string, unknown>
+        return { token: p.token ?? null, user: p.user ?? null } as never
       },
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Record<string, unknown>
@@ -359,9 +399,11 @@ export const useStore = create<SquansqState>()(
           mainView: p.mainView ? p.mainView as typeof current.mainView : current.mainView,
           towns: Array.isArray(p.towns) ? p.towns as typeof current.towns : current.towns,
           activeTownId: typeof p.activeTownId === 'string' ? p.activeTownId : current.activeTownId,
+          activeProjectId: typeof p.activeProjectId === 'string' ? p.activeProjectId : current.activeProjectId,
+          ui: p.ui ? { ...current.ui, ...(p.ui as Partial<typeof current.ui>), sidebarCollapsed: false } : current.ui,
         }
       },
-      partialize: (s) => ({ tabs: s.tabs, activeTabId: s.activeTabId, mainView: s.mainView, towns: s.towns, activeTownId: s.activeTownId, token: s.token, user: s.user }),
+      partialize: (s) => ({ tabs: s.tabs, activeTabId: s.activeTabId, mainView: s.mainView, towns: s.towns, activeTownId: s.activeTownId, activeProjectId: s.activeProjectId, token: s.token, user: s.user, ui: s.ui }),
     }
   )
 )

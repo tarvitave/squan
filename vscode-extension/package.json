@@ -14,18 +14,22 @@
     },
     "views": {
       "squansq": [
-        { "id": "squansq.agentTree", "name": "Agents" },
-        { "id": "squansq.projectTree", "name": "Projects" }
+        { "id": "squansq.mainTree", "name": "Squansq" }
       ]
     },
     "commands": [
-      { "command": "squansq.openKanban", "title": "Squansq: Open Kanban Board" },
-      { "command": "squansq.startRootAgent", "title": "Squansq: Start Root Agent" },
-      { "command": "squansq.addProject", "title": "Squansq: Add Project" },
+      { "command": "squansq.openKanban", "title": "Squansq: Open Kanban Board", "icon": "$(layout-panel)" },
+      { "command": "squansq.startRootAgent", "title": "Squansq: Start Root Agent", "icon": "$(play)" },
+      { "command": "squansq.addProject", "title": "Squansq: Add Project", "icon": "$(add)" },
       { "command": "squansq.copyMcpUrl", "title": "Squansq: Copy MCP URL" },
       { "command": "squansq.killAgent", "title": "Kill Agent", "icon": "$(trash)" }
     ],
     "menus": {
+      "view/title": [
+        { "command": "squansq.addProject", "when": "view == squansq.mainTree", "group": "navigation@1" },
+        { "command": "squansq.startRootAgent", "when": "view == squansq.mainTree", "group": "navigation@2" },
+        { "command": "squansq.openKanban", "when": "view == squansq.mainTree", "group": "navigation@3" }
+      ],
       "view/item/context": [
         { "command": "squansq.killAgent", "when": "viewItem == agent", "group": "inline" }
       ]

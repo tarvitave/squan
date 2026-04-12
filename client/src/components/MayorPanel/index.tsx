@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
+import { Zap } from 'lucide-react'
+import { cn } from '../../lib/utils.js'
 import { useStore } from '../../store/index.js'
 import { apiFetch } from '../../lib/api.js'
 
@@ -39,13 +41,11 @@ export function MayorPanel() {
 
   const openMayorTerminal = useCallback((sessionId: string) => {
     setMainView('terminals')
-    // If already open in some tab, switch to that tab
     const existingTab = tabs.find((t) => t.panes.includes(sessionId))
     if (existingTab) {
       setActiveTab(existingTab.id)
       return
     }
-    // Otherwise add to current tab (or create one)
     if (activeTabId) {
       addPaneToTab(activeTabId, sessionId)
     } else {
@@ -94,7 +94,6 @@ export function MayorPanel() {
         body: JSON.stringify({ townId: activeTownId ?? 'default', message: message.trim() }),
       })
       setMessage('')
-      // Open terminal so user can see Root Agent respond
       openMayorTerminal(mayor.sessionId)
     } finally {
       setSending(false)
@@ -104,27 +103,38 @@ export function MayorPanel() {
   const isRunning = !!mayor?.sessionId
 
   return (
-    <div style={styles.panel}>
-      <div style={styles.row}>
-        <span style={{ ...styles.dot, background: isRunning ? '#4ec9b0' : '#444' }} />
-        <span style={styles.label}>
-          Root Agent{activeNamespace ? <span style={styles.namespace}> · {activeNamespace.name}</span> : null}
+    <div className="p-2 flex flex-col gap-1.5">
+      <div className="flex items-center gap-1.5">
+        <Zap className={cn('w-3 h-3 shrink-0', isRunning ? 'text-block-teal' : 'text-text-disabled')} />
+        <span className="text-xs font-mono text-text-primary flex-1">
+          Root Agent{activeNamespace ? <span className="text-text-info text-[11px]"> · {activeNamespace.name}</span> : null}
         </span>
-        <span style={{ ...styles.status, color: isRunning ? '#4ec9b0' : '#555' }}>
+        <span className={cn('text-[10px] font-mono', isRunning ? 'text-block-teal' : 'text-text-tertiary')}>
           {isRunning ? 'running' : 'stopped'}
         </span>
       </div>
-      <div style={styles.buttons}>
+      <div className="flex gap-1">
         {!isRunning ? (
-          <button style={styles.btn} onClick={handleStart} disabled={loading}>
+          <button
+            className="flex-1 bg-bg-secondary border border-border-primary text-block-teal rounded-sm px-2 py-1 cursor-pointer text-[11px] font-mono hover:bg-bg-hover disabled:opacity-50"
+            onClick={handleStart}
+            disabled={loading}
+          >
             {loading ? '...' : '▶ Start'}
           </button>
         ) : (
           <>
-            <button style={styles.btn} onClick={handleAttach}>
+            <button
+              className="flex-1 bg-bg-secondary border border-border-primary text-block-teal rounded-sm px-2 py-1 cursor-pointer text-[11px] font-mono hover:bg-bg-hover"
+              onClick={handleAttach}
+            >
               ⬛ Attach
             </button>
-            <button style={{ ...styles.btn, ...styles.btnDanger }} onClick={handleStop} disabled={loading}>
+            <button
+              className="flex-1 bg-bg-secondary border border-red-200/30 text-text-danger rounded-sm px-2 py-1 cursor-pointer text-[11px] font-mono hover:bg-bg-hover disabled:opacity-50"
+              onClick={handleStop}
+              disabled={loading}
+            >
               {loading ? '...' : '■ Stop'}
             </button>
           </>
@@ -132,9 +142,9 @@ export function MayorPanel() {
       </div>
 
       {isRunning && (
-        <div style={styles.messageBox}>
+        <div className="flex flex-col gap-1">
           <textarea
-            style={styles.messageInput}
+            className="bg-bg-secondary border border-border-primary text-text-primary rounded-sm px-1.5 py-1 text-[11px] font-mono outline-none resize-y leading-snug"
             placeholder="Give Root Agent a task…"
             value={message}
             rows={3}
@@ -144,7 +154,7 @@ export function MayorPanel() {
             }}
           />
           <button
-            style={styles.sendBtn}
+            className="bg-blue-200/10 border border-blue-200/30 text-text-info rounded-sm px-2 py-1 cursor-pointer text-[11px] font-mono hover:bg-bg-hover disabled:opacity-50"
             onClick={handleSend}
             disabled={sending || !message.trim()}
           >
@@ -154,84 +164,4 @@ export function MayorPanel() {
       )}
     </div>
   )
-}
-
-const styles = {
-  panel: {
-    padding: '8px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 6,
-  },
-  row: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: '50%',
-    flexShrink: 0,
-  },
-  label: {
-    fontSize: 12,
-    color: '#d4d4d4',
-    fontFamily: 'monospace',
-    flex: 1,
-  },
-  namespace: {
-    color: '#569cd6',
-    fontSize: 11,
-  },
-  status: {
-    fontSize: 10,
-    fontFamily: 'monospace',
-  },
-  buttons: {
-    display: 'flex',
-    gap: 4,
-  },
-  btn: {
-    flex: 1,
-    background: '#1a1a1a',
-    border: '1px solid #3a3a3a',
-    color: '#4ec9b0',
-    borderRadius: 3,
-    padding: '4px 8px',
-    cursor: 'pointer',
-    fontSize: 11,
-    fontFamily: 'monospace',
-  },
-  btnDanger: {
-    color: '#f44747',
-    borderColor: '#3a1a1a',
-  },
-  messageBox: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 4,
-  },
-  messageInput: {
-    background: '#1a1a1a',
-    border: '1px solid #333',
-    color: '#d4d4d4',
-    borderRadius: 3,
-    padding: '4px 6px',
-    fontSize: 11,
-    fontFamily: 'monospace',
-    outline: 'none',
-    resize: 'vertical' as const,
-    lineHeight: 1.4,
-  },
-  sendBtn: {
-    background: '#1a2a3a',
-    border: '1px solid #569cd6',
-    color: '#569cd6',
-    borderRadius: 3,
-    padding: '4px 8px',
-    cursor: 'pointer',
-    fontSize: 11,
-    fontFamily: 'monospace',
-  },
 }

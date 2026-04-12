@@ -1,20 +1,22 @@
 import { useState } from 'react'
+import { Train, GitBranch, Play, CheckCircle, XCircle } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
+import { cn } from '../../lib/utils.js'
 import type { ReleaseTrainEntry } from '../../store/index.js'
 
 const ATOMIC_TASK_STATUS_COLOR: Record<string, string> = {
-  open: '#569cd6',
-  assigned: '#4ec9b0',
-  done: '#608b4e',
-  cancelled: '#555',
+  open: 'text-text-info',
+  assigned: 'text-block-teal',
+  done: 'text-[#608b4e]',
+  cancelled: 'text-text-tertiary',
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  open: '#569cd6',
-  in_progress: '#4ec9b0',
-  landed: '#608b4e',
-  cancelled: '#555',
+  open: 'text-text-info',
+  in_progress: 'text-block-teal',
+  landed: 'text-[#608b4e]',
+  cancelled: 'text-text-tertiary',
 }
 
 export function ReleaseTrainPanel() {
@@ -44,7 +46,6 @@ export function ReleaseTrainPanel() {
   const [dispatchingWithTemplate, setDispatchingWithTemplate] = useState<string | null>(null)
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
 
-  // suppress unused warning — used indirectly via setReleaseTrains
   void setReleaseTrains
 
   const handleCreate = async () => {
@@ -140,7 +141,6 @@ export function ReleaseTrainPanel() {
     }
   }
 
-  // suppress unused warning
   void handleDispatch
 
   const idleAgents = agents.filter((a) => a.status === 'idle' || a.status === 'working')
@@ -149,44 +149,63 @@ export function ReleaseTrainPanel() {
   const atomicTaskById = Object.fromEntries(atomicTasks.map((b) => [b.id, b]))
 
   return (
-    <div style={styles.panel}>
+    <div className="flex flex-col overflow-auto flex-1">
       {releaseTrains.map((releaseTrain) => (
-        <div key={releaseTrain.id} style={styles.row}>
-          <div style={styles.rowTop}>
-            <span style={styles.name}>{releaseTrain.name}</span>
-            <span style={{ ...styles.status, color: STATUS_COLOR[releaseTrain.status] ?? '#888' }}>
+        <div key={releaseTrain.id} className="px-2 py-1.5 border-b border-border-primary">
+          <div className="flex justify-between items-center">
+            <span className="flex items-center gap-1.5 text-xs text-text-primary font-mono">
+              <Train className="w-3 h-3 text-text-info shrink-0" />
+              {releaseTrain.name}
+            </span>
+            <span className={cn(
+              'text-[10px] font-mono',
+              STATUS_COLOR[releaseTrain.status] ?? 'text-text-secondary'
+            )}>
               {releaseTrain.status}
             </span>
           </div>
 
           {editingDesc === releaseTrain.id ? (
-            <div style={styles.descEdit}>
+            <div className="mt-1 flex flex-col gap-1">
               <textarea
-                style={styles.descInput}
+                className="w-full bg-bg-secondary border border-border-primary text-text-primary rounded px-1.5 py-1 text-[10px] font-mono outline-none resize-y box-border"
                 value={editDescText}
                 onChange={(e) => setEditDescText(e.target.value)}
                 autoFocus
                 rows={3}
               />
-              <div style={styles.descEditBtns}>
-                <button style={styles.descSaveBtn} onClick={() => handleSaveDesc(releaseTrain.id)}>save</button>
-                <button style={styles.descCancelBtn} onClick={() => setEditingDesc(null)}>cancel</button>
+              <div className="flex gap-1">
+                <button
+                  className="bg-transparent border border-block-teal text-block-teal rounded px-1.5 py-px cursor-pointer text-[9px] font-mono"
+                  onClick={() => handleSaveDesc(releaseTrain.id)}
+                >
+                  save
+                </button>
+                <button
+                  className="bg-transparent border border-border-primary text-text-tertiary rounded px-1.5 py-px cursor-pointer text-[9px] font-mono"
+                  onClick={() => setEditingDesc(null)}
+                >
+                  cancel
+                </button>
               </div>
             </div>
           ) : (
             <div
-              style={styles.description}
+              className="text-[10px] text-text-secondary font-mono mt-0.5 truncate cursor-text"
               onClick={() => { setEditingDesc(releaseTrain.id); setEditDescText(releaseTrain.description) }}
               title="Click to edit description"
             >
-              {releaseTrain.description || <span style={{ color: '#333' }}>add description…</span>}
+              {releaseTrain.description || <span className="text-text-disabled">add description…</span>}
             </div>
           )}
 
-          <div style={styles.meta}>
-            <span style={styles.rig}>{rigNameById[releaseTrain.projectId] ?? releaseTrain.projectId.slice(0, 8)}</span>
+          <div className="flex gap-2 mt-0.5">
+            <span className="flex items-center gap-1 text-[10px] text-text-info font-mono">
+              <GitBranch className="w-2.5 h-2.5" />
+              {rigNameById[releaseTrain.projectId] ?? releaseTrain.projectId.slice(0, 8)}
+            </span>
             <span
-              style={{ ...styles.beadCount, cursor: 'pointer', textDecoration: 'underline' }}
+              className="text-[10px] text-text-tertiary font-mono cursor-pointer underline"
               onClick={() => setExpandedId(expandedId === releaseTrain.id ? null : releaseTrain.id)}
               title="Show atomic tasks"
             >
@@ -195,58 +214,78 @@ export function ReleaseTrainPanel() {
           </div>
 
           {expandedId === releaseTrain.id && (
-            <div style={styles.beadSection}>
+            <div className="mt-1 bg-bg-primary border border-border-primary rounded px-1.5 py-1 flex flex-col gap-1">
               {releaseTrain.atomicTaskIds.length === 0 && (
-                <span style={styles.noBeads}>no atomic tasks</span>
+                <span className="text-[9px] text-text-disabled font-mono">no atomic tasks</span>
               )}
               {releaseTrain.atomicTaskIds.map((atid) => {
                 const atomicTask = atomicTaskById[atid]
                 return (
-                  <div key={atid} style={styles.beadItem}>
-                    <span style={styles.beadTitle}>{atomicTask?.title ?? atid.slice(0, 8)}</span>
+                  <div key={atid} className="flex items-center gap-1">
+                    <span className="flex-1 text-[10px] text-text-secondary font-mono truncate">
+                      {atomicTask?.title ?? atid.slice(0, 8)}
+                    </span>
                     {atomicTask && (
-                      <span style={{ ...styles.beadStatus, color: ATOMIC_TASK_STATUS_COLOR[atomicTask.status] ?? '#555' }}>
+                      <span className={cn(
+                        'text-[9px] font-mono shrink-0',
+                        ATOMIC_TASK_STATUS_COLOR[atomicTask.status] ?? 'text-text-tertiary'
+                      )}>
                         {atomicTask.status}
                       </span>
                     )}
                     <button
-                      style={styles.removeBeadBtn}
+                      className="bg-transparent border-none text-text-disabled cursor-pointer text-[9px] p-0 px-0.5 shrink-0 hover:text-text-danger"
                       onClick={() => handleRemoveAtomicTask(releaseTrain, atid)}
                       title="Remove from release train"
-                    >✕</button>
+                    >
+                      <XCircle className="w-3 h-3" />
+                    </button>
                   </div>
                 )
               })}
 
               {addingAtomicTasks === releaseTrain.id ? (
-                <div style={styles.addBeadForm}>
-                  <div style={styles.beadCheckList}>
+                <div className="flex flex-col gap-1">
+                  <div className="flex flex-col gap-0.5 max-h-20 overflow-y-auto bg-bg-primary border border-border-primary rounded px-1.5 py-1">
                     {atomicTasks
                       .filter((b) => b.projectId === releaseTrain.projectId && !releaseTrain.atomicTaskIds.includes(b.id))
                       .map((b) => (
-                        <label key={b.id} style={styles.beadCheck}>
+                        <label key={b.id} className="flex items-center cursor-pointer font-mono">
                           <input
                             type="checkbox"
                             checked={atomicTaskSelection.includes(b.id)}
                             onChange={() => setAtomicTaskSelection((prev) =>
                               prev.includes(b.id) ? prev.filter((x) => x !== b.id) : [...prev, b.id]
                             )}
-                            style={{ marginRight: 4 }}
+                            className="mr-1"
                           />
-                          <span style={{ color: atomicTaskSelection.includes(b.id) ? '#d4d4d4' : '#555', fontSize: 9 }}>
+                          <span className={cn(
+                            'text-[9px]',
+                            atomicTaskSelection.includes(b.id) ? 'text-text-primary' : 'text-text-tertiary'
+                          )}>
                             {b.title}
                           </span>
                         </label>
                       ))}
                   </div>
-                  <div style={styles.addBeadBtns}>
-                    <button style={styles.addBeadSaveBtn} onClick={() => handleAddAtomicTasks(releaseTrain.id)}>add</button>
-                    <button style={styles.cancelBtn} onClick={() => { setAddingAtomicTasks(null); setAtomicTaskSelection([]) }}>cancel</button>
+                  <div className="flex gap-1">
+                    <button
+                      className="bg-transparent border border-block-teal text-block-teal rounded px-2 py-px cursor-pointer text-[9px] font-mono"
+                      onClick={() => handleAddAtomicTasks(releaseTrain.id)}
+                    >
+                      add
+                    </button>
+                    <button
+                      className="bg-transparent border-none text-text-tertiary cursor-pointer text-[10px]"
+                      onClick={() => { setAddingAtomicTasks(null); setAtomicTaskSelection([]) }}
+                    >
+                      cancel
+                    </button>
                   </div>
                 </div>
               ) : (
                 <button
-                  style={styles.addBeadBtn}
+                  className="bg-transparent border border-dashed border-border-primary text-text-disabled rounded px-1.5 py-0.5 cursor-pointer text-[9px] font-mono text-left hover:text-text-tertiary"
                   onClick={() => { setAddingAtomicTasks(releaseTrain.id); setAtomicTaskSelection([]) }}
                 >
                   + add atomic task
@@ -256,17 +295,25 @@ export function ReleaseTrainPanel() {
           )}
 
           {releaseTrain.assignedWorkerBeeId ? (
-            <div style={styles.assignedRow}>
-              <span style={styles.assignedLabel}>→</span>
-              <span style={styles.assignedBee}>{agentNameById[releaseTrain.assignedWorkerBeeId] ?? releaseTrain.assignedWorkerBeeId.slice(0, 8)}</span>
-              <button style={styles.unassignBtn} onClick={() => handleAssign(releaseTrain.id, null)} title="Unassign">✕</button>
+            <div className="flex items-center gap-1 mt-1">
+              <span className="text-[10px] text-text-tertiary font-mono">→</span>
+              <span className="flex-1 text-[10px] text-block-teal font-mono">
+                {agentNameById[releaseTrain.assignedWorkerBeeId] ?? releaseTrain.assignedWorkerBeeId.slice(0, 8)}
+              </span>
+              <button
+                className="bg-transparent border-none text-text-tertiary cursor-pointer text-[10px] p-0 px-0.5 hover:text-text-danger"
+                onClick={() => handleAssign(releaseTrain.id, null)}
+                title="Unassign"
+              >
+                <XCircle className="w-3 h-3" />
+              </button>
             </div>
           ) : (
-            <div style={styles.actionRow}>
+            <div className="flex gap-1 mt-1">
               {assigning === releaseTrain.id ? (
-                <div style={styles.assignPicker}>
+                <div className="flex gap-1 flex-1">
                   <select
-                    style={styles.select}
+                    className="flex-1 bg-bg-secondary border border-border-primary text-text-primary rounded text-[10px] font-mono px-1 py-0.5"
                     defaultValue=""
                     onChange={(e) => { if (e.target.value) handleAssign(releaseTrain.id, e.target.value) }}
                   >
@@ -275,21 +322,26 @@ export function ReleaseTrainPanel() {
                       <option key={a.id} value={a.id}>{a.name} ({a.status})</option>
                     ))}
                   </select>
-                  <button style={styles.cancelBtn} onClick={() => setAssigning(null)}>✕</button>
+                  <button
+                    className="bg-transparent border-none text-text-tertiary cursor-pointer text-[10px]"
+                    onClick={() => setAssigning(null)}
+                  >
+                    ✕
+                  </button>
                 </div>
               ) : (
                 <>
                   <button
-                    style={styles.actionBtn}
+                    className="bg-transparent border border-border-primary text-text-secondary rounded px-1.5 py-0.5 cursor-pointer text-[10px] font-mono hover:border-border-primary"
                     onClick={() => setAssigning(releaseTrain.id)}
                     title="Assign existing Agent"
                   >
                     assign
                   </button>
                   {dispatchingWithTemplate === releaseTrain.id ? (
-                    <div style={styles.templatePicker}>
+                    <div className="flex gap-1 flex-1 items-center">
                       <select
-                        style={styles.select}
+                        className="flex-1 bg-bg-secondary border border-border-primary text-text-primary rounded text-[10px] font-mono px-1 py-0.5"
                         value={selectedTemplateId}
                         onChange={(e) => setSelectedTemplateId(e.target.value)}
                       >
@@ -301,7 +353,7 @@ export function ReleaseTrainPanel() {
                           ))}
                       </select>
                       <button
-                        style={{ ...styles.actionBtn, color: '#4ec9b0', borderColor: '#4ec9b0' }}
+                        className="bg-transparent border border-block-teal text-block-teal rounded px-1.5 py-0.5 cursor-pointer text-[10px] font-mono disabled:opacity-50"
                         onClick={async () => {
                           const tmpl = templates.find((t) => t.id === selectedTemplateId)
                           setDispatchingWithTemplate(null)
@@ -333,17 +385,23 @@ export function ReleaseTrainPanel() {
                         }}
                         disabled={dispatching === releaseTrain.id}
                       >
-                        go
+                        <Play className="w-3 h-3" />
                       </button>
-                      <button style={styles.cancelBtn} onClick={() => setDispatchingWithTemplate(null)}>✕</button>
+                      <button
+                        className="bg-transparent border-none text-text-tertiary cursor-pointer text-[10px]"
+                        onClick={() => setDispatchingWithTemplate(null)}
+                      >
+                        ✕
+                      </button>
                     </div>
                   ) : (
                     <button
-                      style={{ ...styles.actionBtn, color: '#4ec9b0', borderColor: '#4ec9b0' }}
+                      className="bg-transparent border border-block-teal text-block-teal rounded px-1.5 py-0.5 cursor-pointer text-[10px] font-mono disabled:opacity-50 flex items-center gap-1"
                       onClick={() => { setDispatchingWithTemplate(releaseTrain.id); setSelectedTemplateId('') }}
                       disabled={dispatching === releaseTrain.id}
                       title="Spawn a new Agent and assign"
                     >
+                      <Play className="w-3 h-3" />
                       {dispatching === releaseTrain.id ? '…' : 'dispatch'}
                     </button>
                   )}
@@ -355,21 +413,21 @@ export function ReleaseTrainPanel() {
       ))}
 
       {showForm ? (
-        <div style={styles.form}>
+        <div className="flex flex-col gap-1 px-2 py-1.5 border-t border-border-primary">
           <input
-            style={styles.input}
+            className="w-full bg-bg-secondary border border-border-primary text-text-primary rounded px-1.5 py-1 text-[11px] font-mono outline-none box-border"
             placeholder="Release train name"
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
           />
           <textarea
-            style={{ ...styles.input, resize: 'vertical', minHeight: 60 }}
+            className="w-full bg-bg-secondary border border-border-primary text-text-primary rounded px-1.5 py-1 text-[11px] font-mono outline-none box-border resize-y min-h-[60px]"
             placeholder="Task description (becomes CLAUDE.md when dispatched)"
             value={form.description}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
           />
           <select
-            style={styles.input}
+            className="w-full bg-bg-secondary border border-border-primary text-text-primary rounded px-1.5 py-1 text-[11px] font-mono outline-none box-border"
             value={form.projectId}
             onChange={(e) => setForm((f) => ({ ...f, projectId: e.target.value }))}
           >
@@ -378,326 +436,31 @@ export function ReleaseTrainPanel() {
               <option key={r.id} value={r.id}>{r.name}</option>
             ))}
           </select>
-          <div style={styles.formBtns}>
-            <button style={styles.addBtn} onClick={handleCreate}>Create</button>
-            <button style={styles.cancelFormBtn} onClick={() => setShowForm(false)}>Cancel</button>
+          <div className="flex gap-1">
+            <button
+              className="flex-1 bg-block-teal/10 border border-block-teal text-block-teal rounded py-1 cursor-pointer text-[11px] font-mono flex items-center justify-center gap-1"
+              onClick={handleCreate}
+            >
+              <CheckCircle className="w-3 h-3" />
+              Create
+            </button>
+            <button
+              className="flex-1 bg-transparent border border-border-primary text-text-tertiary rounded py-1 cursor-pointer text-[11px] font-mono"
+              onClick={() => setShowForm(false)}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       ) : (
-        <button style={styles.newBtn} onClick={() => setShowForm(true)}>
-          + New Release Train
+        <button
+          className="mx-2 my-1 flex items-center gap-1 bg-transparent border border-dashed border-border-primary text-text-info rounded px-2 py-1 cursor-pointer text-[11px] font-mono text-left hover:border-blue-200/50"
+          onClick={() => setShowForm(true)}
+        >
+          <Train className="w-3 h-3" />
+          New Release Train
         </button>
       )}
     </div>
   )
-}
-
-const styles = {
-  panel: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    overflow: 'auto',
-    flex: 1,
-  },
-  row: {
-    padding: '6px 8px',
-    borderBottom: '1px solid #1e1e1e',
-  },
-  rowTop: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  name: {
-    fontSize: 12,
-    color: '#d4d4d4',
-    fontFamily: 'monospace',
-  },
-  status: {
-    fontSize: 10,
-    fontFamily: 'monospace',
-  },
-  description: {
-    fontSize: 10,
-    color: '#888',
-    fontFamily: 'monospace',
-    marginTop: 2,
-    whiteSpace: 'nowrap' as const,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    cursor: 'text',
-  },
-  descEdit: {
-    marginTop: 3,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 3,
-  },
-  descInput: {
-    background: '#1a1a1a',
-    border: '1px solid #444',
-    color: '#d4d4d4',
-    borderRadius: 3,
-    padding: '3px 5px',
-    fontSize: 10,
-    fontFamily: 'monospace',
-    outline: 'none',
-    resize: 'vertical' as const,
-    width: '100%',
-    boxSizing: 'border-box' as const,
-  },
-  descEditBtns: {
-    display: 'flex',
-    gap: 3,
-  },
-  descSaveBtn: {
-    background: 'none',
-    border: '1px solid #4ec9b0',
-    color: '#4ec9b0',
-    borderRadius: 3,
-    padding: '1px 6px',
-    cursor: 'pointer',
-    fontSize: 9,
-    fontFamily: 'monospace',
-  },
-  descCancelBtn: {
-    background: 'none',
-    border: '1px solid #333',
-    color: '#555',
-    borderRadius: 3,
-    padding: '1px 6px',
-    cursor: 'pointer',
-    fontSize: 9,
-    fontFamily: 'monospace',
-  },
-  meta: {
-    display: 'flex',
-    gap: 8,
-    marginTop: 2,
-  },
-  rig: {
-    fontSize: 10,
-    color: '#569cd6',
-    fontFamily: 'monospace',
-  },
-  beadCount: {
-    fontSize: 10,
-    color: '#666',
-    fontFamily: 'monospace',
-  },
-  beadSection: {
-    marginTop: 4,
-    background: '#0c0c0c',
-    border: '1px solid #1e1e1e',
-    borderRadius: 3,
-    padding: '4px 6px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 3,
-  },
-  noBeads: {
-    fontSize: 9,
-    color: '#333',
-    fontFamily: 'monospace',
-  },
-  beadItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-  },
-  beadTitle: {
-    fontSize: 10,
-    color: '#888',
-    fontFamily: 'monospace',
-    flex: 1,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap' as const,
-  },
-  beadStatus: {
-    fontSize: 9,
-    fontFamily: 'monospace',
-    flexShrink: 0,
-  },
-  removeBeadBtn: {
-    background: 'none',
-    border: 'none',
-    color: '#333',
-    cursor: 'pointer',
-    fontSize: 9,
-    padding: '0 2px',
-    flexShrink: 0,
-  },
-  addBeadForm: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 3,
-  },
-  beadCheckList: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 2,
-    maxHeight: 80,
-    overflowY: 'auto' as const,
-    background: '#111',
-    border: '1px solid #222',
-    borderRadius: 3,
-    padding: '3px 5px',
-  },
-  beadCheck: {
-    display: 'flex',
-    alignItems: 'center',
-    cursor: 'pointer',
-    fontFamily: 'monospace',
-  },
-  addBeadBtns: {
-    display: 'flex',
-    gap: 3,
-  },
-  addBeadSaveBtn: {
-    background: 'none',
-    border: '1px solid #4ec9b0',
-    color: '#4ec9b0',
-    borderRadius: 3,
-    padding: '1px 8px',
-    cursor: 'pointer',
-    fontSize: 9,
-    fontFamily: 'monospace',
-  },
-  addBeadBtn: {
-    background: 'none',
-    border: '1px dashed #222',
-    color: '#444',
-    borderRadius: 3,
-    padding: '2px 6px',
-    cursor: 'pointer',
-    fontSize: 9,
-    fontFamily: 'monospace',
-    textAlign: 'left' as const,
-  },
-  assignedRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  assignedLabel: {
-    fontSize: 10,
-    color: '#555',
-    fontFamily: 'monospace',
-  },
-  assignedBee: {
-    fontSize: 10,
-    color: '#4ec9b0',
-    fontFamily: 'monospace',
-    flex: 1,
-  },
-  unassignBtn: {
-    background: 'none',
-    border: 'none',
-    color: '#555',
-    cursor: 'pointer',
-    fontSize: 10,
-    padding: '0 2px',
-  },
-  actionRow: {
-    display: 'flex',
-    gap: 4,
-    marginTop: 4,
-  },
-  actionBtn: {
-    background: 'none',
-    border: '1px solid #333',
-    color: '#888',
-    borderRadius: 3,
-    padding: '2px 6px',
-    cursor: 'pointer',
-    fontSize: 10,
-    fontFamily: 'monospace',
-  },
-  assignPicker: {
-    display: 'flex',
-    gap: 4,
-    flex: 1,
-  },
-  templatePicker: {
-    display: 'flex',
-    gap: 4,
-    flex: 1,
-    alignItems: 'center',
-  },
-  select: {
-    flex: 1,
-    background: '#1a1a1a',
-    border: '1px solid #333',
-    color: '#d4d4d4',
-    borderRadius: 3,
-    fontSize: 10,
-    fontFamily: 'monospace',
-    padding: '2px 4px',
-  },
-  cancelBtn: {
-    background: 'none',
-    border: 'none',
-    color: '#555',
-    cursor: 'pointer',
-    fontSize: 10,
-  },
-  form: {
-    padding: '6px 8px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 4,
-    borderTop: '1px solid #2d2d2d',
-  },
-  input: {
-    background: '#1a1a1a',
-    border: '1px solid #333',
-    color: '#d4d4d4',
-    borderRadius: 3,
-    padding: '4px 6px',
-    fontSize: 11,
-    fontFamily: 'monospace',
-    outline: 'none',
-    width: '100%',
-    boxSizing: 'border-box' as const,
-  },
-  formBtns: {
-    display: 'flex',
-    gap: 4,
-  },
-  addBtn: {
-    flex: 1,
-    background: '#1a3a2a',
-    border: '1px solid #4ec9b0',
-    color: '#4ec9b0',
-    borderRadius: 3,
-    padding: '4px',
-    cursor: 'pointer',
-    fontSize: 11,
-    fontFamily: 'monospace',
-  },
-  cancelFormBtn: {
-    flex: 1,
-    background: 'none',
-    border: '1px solid #333',
-    color: '#666',
-    borderRadius: 3,
-    padding: '4px',
-    cursor: 'pointer',
-    fontSize: 11,
-    fontFamily: 'monospace',
-  },
-  newBtn: {
-    margin: '4px 8px',
-    background: 'none',
-    border: '1px dashed #333',
-    color: '#569cd6',
-    borderRadius: 3,
-    padding: '4px 8px',
-    cursor: 'pointer',
-    fontSize: 11,
-    fontFamily: 'monospace',
-    textAlign: 'left' as const,
-  },
 }

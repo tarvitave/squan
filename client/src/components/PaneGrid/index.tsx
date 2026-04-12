@@ -4,16 +4,17 @@ import { ConsolePanel } from '../ConsolePanel/index.js'
 import type { Tab, Agent } from '../../store/index.js'
 import { useStore } from '../../store/index.js'
 import { apiFetch } from '../../lib/api.js'
+import { cn } from '../../lib/utils.js'
 
 let consoleCounter = 0
 function newConsoleId() { return `console:${++consoleCounter}` }
 
 const STATUS_COLOR: Record<Agent['status'], string> = {
-  idle: '#666',
-  working: '#4ec9b0',
-  stalled: '#ce9178',
-  zombie: '#f44747',
-  done: '#608b4e',
+  idle: 'text-text-secondary',
+  working: 'text-block-teal',
+  stalled: 'text-orange',
+  zombie: 'text-text-danger',
+  done: 'text-green-600',
 }
 const STATUS_DOT: Record<Agent['status'], string> = {
   idle: '○', working: '●', stalled: '◐', zombie: '✕', done: '✓',
@@ -62,11 +63,21 @@ export function PaneGrid({ tab }: Props) {
 
   if (tab.panes.length === 0) {
     return (
-      <div style={styles.empty}>
-        <p style={styles.emptyText}>No panes open</p>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button style={styles.spawnBtn} onClick={addTerminal}>+ Terminal</button>
-          <button style={styles.spawnBtn} onClick={addConsole}>+ Console</button>
+      <div className="flex flex-1 flex-col items-center justify-center gap-4">
+        <p className="font-mono text-sm text-text-secondary">No panes open</p>
+        <div className="flex gap-2">
+          <button
+            className="cursor-pointer rounded border border-block-teal bg-bg-secondary px-4 py-2 font-mono text-[13px] text-block-teal hover:bg-block-teal/10"
+            onClick={addTerminal}
+          >
+            + Terminal
+          </button>
+          <button
+            className="cursor-pointer rounded border border-block-teal bg-bg-secondary px-4 py-2 font-mono text-[13px] text-block-teal hover:bg-block-teal/10"
+            onClick={addConsole}
+          >
+            + Console
+          </button>
         </div>
       </div>
     )
@@ -75,29 +86,21 @@ export function PaneGrid({ tab }: Props) {
   // Panes to render in split mode: all, single mode: just the focused one
   const visiblePanes = splitMode ? tab.panes : [tab.panes[safeFocusedIdx]]
 
-  const gridStyle: React.CSSProperties = splitMode
-    ? {
-        flex: 1,
-        display: 'grid',
-        gap: 4,
-        padding: 4,
-        overflow: 'hidden',
-        gridTemplateColumns: tab.panes.length === 1 ? '1fr' : tab.panes.length === 2 ? '1fr 1fr' : `repeat(${Math.ceil(tab.panes.length / 2)}, 1fr)`,
-        gridTemplateRows: tab.panes.length > 2 ? '1fr 1fr' : '1fr',
-      }
-    : {
-        flex: 1,
-        display: 'grid',
-        gridTemplateColumns: '1fr',
-        overflow: 'hidden',
-        padding: 4,
-      }
+  const gridCols = splitMode
+    ? tab.panes.length === 1
+      ? 'grid-cols-1'
+      : tab.panes.length === 2
+        ? 'grid-cols-2'
+        : `grid-cols-${Math.ceil(tab.panes.length / 2)}`
+    : 'grid-cols-1'
+
+  const gridRows = splitMode && tab.panes.length > 2 ? 'grid-rows-2' : 'grid-rows-1'
 
   return (
-    <div style={styles.wrapper}>
+    <div className="flex h-full flex-col overflow-hidden">
       {/* Agent switcher bar */}
-      <div style={styles.switcherBar}>
-        <div style={styles.switcherTabs}>
+      <div className="flex shrink-0 items-center overflow-hidden border-b border-border-primary bg-bg-primary" style={{ minHeight: 34 }}>
+        <div className="flex flex-1 items-stretch overflow-x-auto" style={{ minHeight: 34 }}>
           {tab.panes.map((sessionId, i) => {
             const agent = agents.find((a) => a.sessionId === sessionId)
             const isConsole = sessionId.startsWith('console:')
@@ -110,18 +113,21 @@ export function PaneGrid({ tab }: Props) {
             return (
               <div
                 key={sessionId}
-                style={{ ...styles.switcherTab, ...(isFocused && !splitMode ? styles.switcherTabActive : {}) }}
+                className={cn(
+                  'flex min-w-[80px] shrink-0 cursor-pointer select-none items-center gap-1.5 whitespace-nowrap border-r border-border-primary px-2.5 font-mono text-[11px] text-text-tertiary',
+                  isFocused && !splitMode && 'border-b-2 border-b-block-teal bg-bg-primary text-text-primary'
+                )}
                 onClick={() => { setFocusedIdx(i); setSplitMode(false) }}
               >
                 {status && (
-                  <span style={{ color: STATUS_COLOR[status], fontSize: 9, flexShrink: 0 }}>
+                  <span className={cn('shrink-0 text-[9px]', STATUS_COLOR[status])}>
                     {STATUS_DOT[status]}
                   </span>
                 )}
-                {isConsole && <span style={{ color: '#4ec9b0', fontSize: 9, flexShrink: 0 }}>▸</span>}
-                <span style={styles.switcherLabel}>{label}</span>
+                {isConsole && <span className="shrink-0 text-[9px] text-block-teal">▸</span>}
+                <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>
                 <button
-                  style={styles.switcherClose}
+                  className="shrink-0 cursor-pointer border-none bg-transparent px-0.5 text-[9px] leading-none text-text-disabled hover:text-text-danger"
                   onClick={(e) => {
                     e.stopPropagation()
                     removePaneFromTab(tab.id, sessionId)
@@ -133,21 +139,36 @@ export function PaneGrid({ tab }: Props) {
           })}
         </div>
 
-        <div style={styles.switcherActions}>
+        <div className="flex shrink-0 items-center gap-1 border-l border-border-primary px-2">
           <button
-            style={{ ...styles.actionBtn, ...(splitMode ? styles.actionBtnActive : {}) }}
+            className={cn(
+              'cursor-pointer whitespace-nowrap rounded border border-border-primary bg-transparent px-2 py-0.5 font-mono text-[11px] text-block-teal hover:border-block-teal',
+              splitMode && 'border-block-teal bg-block-teal/10'
+            )}
             onClick={() => setSplitMode((s) => !s)}
             title={splitMode ? 'Focus mode' : 'Split mode — show all panes'}
           >
             {splitMode ? '▣' : '⊞'}
           </button>
-          <button style={styles.actionBtn} onClick={addTerminal} title="New terminal">+ term</button>
-          <button style={styles.actionBtn} onClick={addConsole} title="New sq console">+ sq</button>
+          <button
+            className="cursor-pointer whitespace-nowrap rounded border border-border-primary bg-transparent px-2 py-0.5 font-mono text-[11px] text-block-teal hover:border-block-teal"
+            onClick={addTerminal}
+            title="New terminal"
+          >
+            + term
+          </button>
+          <button
+            className="cursor-pointer whitespace-nowrap rounded border border-border-primary bg-transparent px-2 py-0.5 font-mono text-[11px] text-block-teal hover:border-block-teal"
+            onClick={addConsole}
+            title="New sq console"
+          >
+            + sq
+          </button>
         </div>
       </div>
 
       {/* Pane area */}
-      <div style={gridStyle}>
+      <div className={cn('flex-1 grid gap-1 overflow-hidden p-1', gridCols, gridRows)}>
         {visiblePanes.map((sessionId) => {
           if (sessionId.startsWith('console:')) {
             return (
@@ -190,126 +211,19 @@ export function PaneGrid({ tab }: Props) {
 function ConsolePane({ paneId, onClose }: { paneId: string; onClose: () => void }) {
   const num = paneId.split(':')[1]
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', border: '1px solid #2d2d2d', borderRadius: 4, overflow: 'hidden' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', background: '#1a1a1a', borderBottom: '1px solid #2d2d2d', flexShrink: 0 }}>
-        <span style={{ color: '#4ec9b0', fontSize: 12, fontFamily: 'monospace', letterSpacing: '0.05em' }}>
+    <div className="flex h-full flex-col overflow-hidden rounded border border-border-primary">
+      <div className="flex shrink-0 items-center justify-between border-b border-border-primary bg-bg-secondary px-2 py-1">
+        <span className="font-mono text-xs tracking-wide text-block-teal">
           sq console {num}
         </span>
         <button
-          style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: 12, padding: '0 4px' }}
+          className="cursor-pointer border-none bg-transparent px-1 text-xs text-text-secondary hover:text-text-danger"
           onClick={onClose}
         >✕</button>
       </div>
-      <div style={{ flex: 1, overflow: 'hidden' }}>
+      <div className="flex-1 overflow-hidden">
         <ConsolePanel />
       </div>
     </div>
   )
-}
-
-const styles: Record<string, React.CSSProperties> = {
-  wrapper: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100%',
-    overflow: 'hidden',
-  },
-  switcherBar: {
-    display: 'flex',
-    alignItems: 'center',
-    background: '#111',
-    borderBottom: '1px solid #2d2d2d',
-    flexShrink: 0,
-    minHeight: 34,
-    overflow: 'hidden',
-  },
-  switcherTabs: {
-    display: 'flex',
-    flex: 1,
-    overflowX: 'auto',
-    alignItems: 'stretch',
-    minHeight: 34,
-  },
-  switcherTab: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 5,
-    padding: '0 10px',
-    cursor: 'pointer',
-    borderRight: '1px solid #222',
-    color: '#555',
-    fontSize: 11,
-    fontFamily: 'monospace',
-    whiteSpace: 'nowrap',
-    userSelect: 'none',
-    minWidth: 80,
-    flexShrink: 0,
-  },
-  switcherTabActive: {
-    color: '#d4d4d4',
-    background: '#0d0d0d',
-    borderBottom: '2px solid #4ec9b0',
-  },
-  switcherLabel: {
-    flex: 1,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  switcherClose: {
-    background: 'none',
-    border: 'none',
-    color: '#444',
-    cursor: 'pointer',
-    fontSize: 9,
-    padding: '0 2px',
-    flexShrink: 0,
-    lineHeight: 1,
-  },
-  switcherActions: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-    padding: '0 8px',
-    borderLeft: '1px solid #2d2d2d',
-    flexShrink: 0,
-  },
-  actionBtn: {
-    background: 'none',
-    border: '1px solid #333',
-    color: '#4ec9b0',
-    borderRadius: 3,
-    padding: '2px 8px',
-    cursor: 'pointer',
-    fontSize: 11,
-    fontFamily: 'monospace',
-    whiteSpace: 'nowrap',
-  },
-  actionBtnActive: {
-    borderColor: '#4ec9b0',
-    background: '#0a1a14',
-  },
-  empty: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-  },
-  emptyText: {
-    color: '#aaa',
-    fontFamily: 'monospace',
-    fontSize: 14,
-  },
-  spawnBtn: {
-    background: '#1a1a1a',
-    border: '1px solid #4ec9b0',
-    color: '#4ec9b0',
-    borderRadius: 4,
-    padding: '8px 16px',
-    cursor: 'pointer',
-    fontFamily: 'monospace',
-    fontSize: 13,
-  },
 }

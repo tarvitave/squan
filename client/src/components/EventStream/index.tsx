@@ -1,38 +1,47 @@
 import { useState, useMemo, useEffect } from 'react'
+import { Activity } from 'lucide-react'
+import { cn } from '../../lib/utils.js'
 import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
 
 const EVENT_COLOR: Record<string, string> = {
-  'workerbee.spawned': '#4ec9b0',
-  'workerbee.working': '#4ec9b0',
-  'workerbee.done': '#608b4e',
-  'workerbee.stalled': '#ce9178',
-  'workerbee.zombie': '#f44747',
-  'releasetrain.created': '#569cd6',
-  'releasetrain.landed': '#608b4e',
-  'releasetrain.assigned': '#4ec9b0',
-  'releasetrain.cancelled': '#555',
-  'hook.created': '#888',
-  'hook.activated': '#dcdcaa',
-  'hook.completed': '#4ec9b0',
-  'atomictask.created': '#569cd6',
-  'atomictask.assigned': '#4ec9b0',
-  'atomictask.done': '#608b4e',
-  'rootagent.started': '#dcdcaa',
-  'rootagent.stopped': '#888',
-  'mayorlee.started': '#dcdcaa',  // legacy alias
-  'mayorlee.stopped': '#888',     // legacy alias
+  'workerbee.spawned': 'text-block-teal',
+  'workerbee.working': 'text-block-teal',
+  'workerbee.done': 'text-block-teal',
+  'workerbee.stalled': 'text-orange',
+  'workerbee.zombie': 'text-text-danger',
+  'releasetrain.created': 'text-text-info',
+  'releasetrain.landed': 'text-block-teal',
+  'releasetrain.assigned': 'text-block-teal',
+  'releasetrain.cancelled': 'text-text-tertiary',
+  'hook.created': 'text-text-secondary',
+  'hook.activated': 'text-yellow',
+  'hook.completed': 'text-block-teal',
+  'atomictask.created': 'text-text-info',
+  'atomictask.assigned': 'text-block-teal',
+  'atomictask.done': 'text-block-teal',
+  'rootagent.started': 'text-yellow',
+  'rootagent.stopped': 'text-text-secondary',
+  'mayorlee.started': 'text-yellow',
+  'mayorlee.stopped': 'text-text-secondary',
 }
 
-// Display name mapping — normalises legacy event types
 const EVENT_LABEL: Record<string, string> = {
   'mayorlee.started': 'rootAgent.started',
   'mayorlee.stopped': 'rootAgent.stopped',
 }
 
 export function EventStream() {
-  const events = useStore((s) => s.events)
+  const _events = useStore((s) => s.events)
   const pushEvent = useStore((s) => s.pushEvent)
+  const activeProjectId = useStore((s) => s.activeProjectId)
+  // Filter events by project when a project is selected
+  const events = activeProjectId
+    ? _events.filter((e) => {
+        const payload = e.payload as Record<string, unknown>
+        return payload.projectId === activeProjectId || payload.rigId === activeProjectId || !payload.projectId
+      })
+    : _events
   const [filter, setFilter] = useState('')
   const [offset, setOffset] = useState(100)
   const [hasMore, setHasMore] = useState(true)
@@ -42,7 +51,6 @@ export function EventStream() {
       .then((r) => r.json())
       .then((data: Array<{ id: string; type: string; payload: Record<string, unknown>; timestamp: string }>) => {
         setHasMore(data.length === 100)
-        // Push in reverse so oldest arrive first; store prepends, so newest ends up at top
         for (let i = data.length - 1; i >= 0; i--) {
           pushEvent(data[i])
         }
@@ -73,34 +81,42 @@ export function EventStream() {
   }, [events, filter])
 
   return (
-    <div style={styles.wrapper}>
+    <div className="flex flex-col flex-1 overflow-hidden">
       <input
-        style={styles.search}
+        className="bg-transparent border-none border-b border-border-primary text-text-secondary text-[10px] font-mono px-2 py-1 outline-none shrink-0"
         placeholder="filter events…"
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
       />
 
       {filtered.length === 0 ? (
-        <div style={styles.empty}>
-          <span style={styles.emptyText}>
+        <div className="flex flex-1 items-center justify-center">
+          <span className="text-text-disabled text-[11px] font-mono flex items-center gap-1.5">
+            <Activity className="w-3 h-3" />
             {events.length === 0 ? 'Waiting for events...' : 'No matches'}
           </span>
         </div>
       ) : (
-        <div style={styles.stream}>
+        <div className="overflow-auto flex-1 flex flex-col">
           {filtered.map((ev) => (
-            <div key={ev.id} style={styles.row} title={JSON.stringify(ev.payload, null, 2)}>
-              <span style={styles.ts}>
+            <div
+              key={ev.id}
+              className="flex gap-2 px-2 py-[3px] border-b border-border-primary font-mono text-[11px] cursor-default"
+              title={JSON.stringify(ev.payload, null, 2)}
+            >
+              <span className="text-text-tertiary shrink-0">
                 {new Date(ev.timestamp).toLocaleTimeString([], { hour12: false })}
               </span>
-              <span style={{ ...styles.type, color: EVENT_COLOR[ev.type] ?? '#888' }}>
+              <span className={cn('break-all', EVENT_COLOR[ev.type] ?? 'text-text-secondary')}>
                 {EVENT_LABEL[ev.type] ?? ev.type}
               </span>
             </div>
           ))}
           {hasMore && (
-            <button style={styles.loadMoreBtn} onClick={handleLoadMore}>
+            <button
+              className="bg-transparent border-none border-t border-border-primary text-text-tertiary text-[10px] font-mono py-1.5 px-2 cursor-pointer text-center w-full shrink-0 hover:text-text-secondary"
+              onClick={handleLoadMore}
+            >
               load more
             </button>
           )}
@@ -108,70 +124,4 @@ export function EventStream() {
       )}
     </div>
   )
-}
-
-const styles = {
-  wrapper: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    flex: 1,
-    overflow: 'hidden',
-  },
-  search: {
-    background: 'none',
-    border: 'none',
-    borderBottom: '1px solid #222',
-    color: '#888',
-    fontSize: 10,
-    fontFamily: 'monospace',
-    padding: '4px 8px',
-    outline: 'none',
-    flexShrink: 0,
-  },
-  stream: {
-    overflow: 'auto',
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column' as const,
-  },
-  row: {
-    display: 'flex',
-    gap: 8,
-    padding: '3px 8px',
-    borderBottom: '1px solid #111',
-    fontFamily: 'monospace',
-    fontSize: 11,
-    cursor: 'default',
-  },
-  ts: {
-    color: '#555',
-    flexShrink: 0,
-  },
-  type: {
-    wordBreak: 'break-all' as const,
-  },
-  empty: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyText: {
-    color: '#333',
-    fontSize: 11,
-    fontFamily: 'monospace',
-  },
-  loadMoreBtn: {
-    background: 'none',
-    border: 'none',
-    borderTop: '1px solid #1a1a1a',
-    color: '#444',
-    fontSize: 10,
-    fontFamily: 'monospace',
-    padding: '6px 8px',
-    cursor: 'pointer',
-    textAlign: 'center' as const,
-    width: '100%',
-    flexShrink: 0,
-  },
 }

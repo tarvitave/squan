@@ -8,7 +8,8 @@ import { setTerminalManager } from './managers/workerbee'
 import { setRootAgentTerminalManager, rootAgentManager } from './managers/rootagent'
 import { workerBeeManager } from './managers/workerbee'
 import { rigManager } from './managers/rig'
-import { AgentTreeProvider, AgentTreeItem } from './ui/agentTreeProvider'
+import { MainTreeProvider, MainTreeItem } from './ui/mainTreeProvider'
+import { AgentTreeItem } from './ui/agentTreeProvider'
 import { KanbanPanel } from './ui/kanbanPanel'
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -43,13 +44,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   setTerminalManager(terminalManager)
   setRootAgentTerminalManager(terminalManager)
 
-  // Register tree views
-  const agentTreeProvider = new AgentTreeProvider()
-  const agentTreeView = vscode.window.registerTreeDataProvider('squansq.agentTree', agentTreeProvider)
-
-  // Register a simple project tree provider
-  const projectTreeProvider = new ProjectTreeProvider()
-  const projectTreeView = vscode.window.registerTreeDataProvider('squansq.projectTree', projectTreeProvider)
+  // Register unified tree view
+  const mainTreeProvider = new MainTreeProvider()
+  const mainTreeView = vscode.window.registerTreeDataProvider('squansq.mainTree', mainTreeProvider)
 
   // Register commands
   const commands = [
@@ -69,7 +66,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           if (action === 'Stop') {
             await rootAgentManager.stop()
             vscode.window.showInformationMessage('Root Agent stopped.')
-            agentTreeProvider.refresh()
+            mainTreeProvider.refresh()
           }
           return
         }
@@ -88,7 +85,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           await rootAgentManager.start(mcpPort, workspacePath)
         }
 
-        agentTreeProvider.refresh()
+        mainTreeProvider.refresh()
         vscode.window.showInformationMessage('Root Agent started.')
       } catch (err) {
         vscode.window.showErrorMessage(`Failed to start Root Agent: ${err}`)
@@ -128,7 +125,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const mcpJsonPath = path.join(localPath, '.mcp.json')
         writeFileSync(mcpJsonPath, JSON.stringify(mcpConfig, null, 2), 'utf8')
 
-        projectTreeProvider.refresh()
+        mainTreeProvider.refresh()
         vscode.window.showInformationMessage(
           `Project "${name}" added (id: ${project.id}). MCP config written to ${mcpJsonPath}`
         )
@@ -165,7 +162,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
       try {
         await workerBeeManager.nuke(workerBeeId)
-        agentTreeProvider.refresh()
+        mainTreeProvider.refresh()
         vscode.window.showInformationMessage(`Agent "${bee.name}" killed.`)
       } catch (err) {
         vscode.window.showErrorMessage(`Failed to kill agent: ${err}`)
@@ -184,14 +181,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
 
     vscode.commands.registerCommand('squansq.refreshAgentTree', () => {
-      agentTreeProvider.refresh()
+      mainTreeProvider.refresh()
     }),
   ]
 
   context.subscriptions.push(
     ...commands,
-    agentTreeView,
-    projectTreeView,
+    mainTreeView,
     terminalManager,
     { dispose: stopMcpServer },
   )
@@ -205,49 +201,3 @@ export function deactivate(): void {
   console.log('[Squansq] Deactivated.')
 }
 
-// Simple project tree provider
-class ProjectTreeItem extends vscode.TreeItem {
-  constructor(
-    public readonly label: string,
-    public readonly projectId: string,
-    public readonly localPath: string
-  ) {
-    super(label, vscode.TreeItemCollapsibleState.None)
-    this.tooltip = localPath
-    this.description = localPath
-    this.iconPath = new vscode.ThemeIcon('repo')
-    this.contextValue = 'project'
-    this.command = {
-      command: 'vscode.openFolder',
-      title: 'Open Project',
-      arguments: [vscode.Uri.file(localPath), true],
-    }
-  }
-}
-
-class ProjectTreeProvider implements vscode.TreeDataProvider<ProjectTreeItem> {
-  private _onDidChangeTreeData = new vscode.EventEmitter<ProjectTreeItem | undefined | null | void>()
-  readonly onDidChangeTreeData = this._onDidChangeTreeData.event
-
-  getTreeItem(element: ProjectTreeItem): vscode.TreeItem {
-    return element
-  }
-
-  async getChildren(): Promise<ProjectTreeItem[]> {
-    try {
-      const projects = await rigManager.listAll()
-      if (projects.length === 0) {
-        const empty = new vscode.TreeItem('No projects — use "Add Project"')
-        empty.iconPath = new vscode.ThemeIcon('info')
-        return [empty as ProjectTreeItem]
-      }
-      return projects.map((p) => new ProjectTreeItem(p.name, p.id, p.localPath))
-    } catch {
-      return []
-    }
-  }
-
-  refresh(): void {
-    this._onDidChangeTreeData.fire()
-  }
-}

@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import { execFileSync } from 'child_process'
+import { resolve, join } from 'path'
 import express from 'express'
 
 // Prevent unhandled rejections from crashing the server (Node 15+ throws by default)
@@ -11,6 +12,7 @@ import { createHmac, timingSafeEqual } from 'crypto'
 import { z } from 'zod'
 import { setupWsServer } from './ws/server.js'
 import { startWitness } from './witness/index.js'
+import * as squanFs from './squan-fs/index.js'
 import { ptyManager } from './workerbee/pty.js'
 import { workerBeeManager, charterManager, routingManager } from './workerbee/manager.js'
 import { mayorLeeManager } from './mayor/manager.js'
@@ -38,6 +40,14 @@ app.use((_req, res, next) => {
   if (_req.method === 'OPTIONS') { res.sendStatus(204); return }
   next()
 })
+
+// ── Embedded mode: serve client static files ─────────────────────────
+const SQUAN_CLIENT_DIR = process.env.SQUAN_CLIENT_DIR
+if (SQUAN_CLIENT_DIR) {
+  const clientPath = resolve(SQUAN_CLIENT_DIR)
+  console.log(`[server] Serving client from: ${clientPath}`)
+  app.use(express.static(clientPath))
+}
 
 // Zod validation helper
 function validate<T>(schema: z.ZodType<T>, data: unknown): T {
@@ -68,6 +78,292 @@ app.post('/api/auth/login', async (req, res) => {
 // Health — public
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, ts: new Date().toISOString() })
+})
+
+// ── Terminal backend settings ────────────────────────────────────────
+
+app.get('/api/settings/terminal-backend', (_req, res) => {
+  res.json({
+    active: ptyManager.activeBackendName,
+    tmuxAvailable: ptyManager.tmuxAvailable,
+    backends: [
+      { name: 'pty', label: 'node-pty', description: 'In-process terminals. Fast, works everywhere. Sessions lost on server restart.', available: true },
+      { name: 'tmux', label: 'tmux', description: 'Crash-resilient. Agents survive server restarts. Requires tmux (macOS/Linux).', available: ptyManager.tmuxAvailable },
+    ],
+  })
+})
+
+app.put('/api/settings/terminal-backend', (req, res) => {
+  const { backend } = req.body as { backend: 'pty' | 'tmux' }
+  if (backend !== 'pty' && backend !== 'tmux') {
+    return res.status(400).json({ error: 'Invalid backend. Use "pty" or "tmux".' })
+  }
+  const ok = ptyManager.setBackend(backend)
+  if (!ok) {
+    return res.status(400).json({ error: 'tmux is not available on this platform. Install tmux and restart.' })
+  }
+  res.json({ active: ptyManager.activeBackendName, tmuxAvailable: ptyManager.tmuxAvailable })
+})
+
+// ── .squan/ Everything-as-Code endpoints ─────────────────────────────
+
+app.post('/api/projects/:projectId/init-squan', async (req, res) => {
+  try {
+    const userId = res.locals.userId as string
+    const project = await rigManager.getById(req.params.projectId)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
+    if (userId && project.userId && project.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
+
+    await squanFs.initAndSync(project.id, project.localPath, project.name)
+    res.json({ ok: true, message: `.squan/ initialized at ${project.localPath}` })
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
+})
+
+app.get('/api/projects/:projectId/squan-status', async (req, res) => {
+  try {
+    const project = await rigManager.getById(req.params.projectId)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
+
+    const hasDir = squanFs.hasSquanDir(project.localPath)
+    if (!hasDir) return res.json({ initialized: false })
+
+    const state = squanFs.readSquanDir(project.localPath)
+    res.json({
+      initialized: true,
+      config: state.config,
+      counts: {
+        tasks: state.tasks.length,
+        charters: state.charters.length,
+        templates: state.templates.length,
+        docs: state.docs.length,
+        security: state.security.length,
+      },
+      tasks_by_status: {
+        open: state.tasks.filter((t) => t.meta.status === 'open').length,
+        in_progress: state.tasks.filter((t) => t.meta.status === 'in_progress').length,
+        pr_review: state.tasks.filter((t) => t.meta.status === 'pr_review').length,
+        landed: state.tasks.filter((t) => t.meta.status === 'landed').length,
+        cancelled: state.tasks.filter((t) => t.meta.status === 'cancelled').length,
+      },
+    })
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
+})
+
+app.get('/api/projects/:projectId/squan/tasks', async (req, res) => {
+  try {
+    const project = await rigManager.getById(req.params.projectId)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
+    const tasks = squanFs.readBoard(project.localPath)
+    res.json(tasks)
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
+})
+
+app.post('/api/projects/:projectId/squan/tasks', async (req, res) => {
+  try {
+    const project = await rigManager.getById(req.params.projectId)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
+
+    const { title, description, type, priority, tags } = req.body as {
+      title: string; description?: string; type?: 'ai' | 'manual'; priority?: string; tags?: string[]
+    }
+    if (!title) return res.status(400).json({ error: 'title is required' })
+
+    const meta = await squanFs.createTask(project.id, project.localPath, {
+      title,
+      description: description ?? '',
+      type,
+      priority: priority as 'low' | 'medium' | 'high' | 'critical' | undefined,
+      tags,
+    })
+    res.json(meta)
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
+})
+
+app.patch('/api/projects/:projectId/squan/tasks/:taskId/status', async (req, res) => {
+  try {
+    const project = await rigManager.getById(req.params.projectId)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
+
+    const { status, currentStatus, title } = req.body as { status: string; currentStatus: string; title: string }
+    await squanFs.updateTaskStatus(
+      project.id, project.localPath,
+      req.params.taskId,
+      currentStatus as squanFs.TaskStatus,
+      status as squanFs.TaskStatus,
+      title,
+    )
+    res.json({ ok: true })
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
+})
+
+app.delete('/api/projects/:projectId/squan/tasks/:taskId', async (req, res) => {
+  try {
+    const project = await rigManager.getById(req.params.projectId)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
+
+    const status = (req.query.status as string) ?? 'open'
+    await squanFs.removeTask(project.id, project.localPath, req.params.taskId, status as squanFs.TaskStatus)
+    res.json({ ok: true })
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
+})
+
+app.get('/api/projects/:projectId/squan/charters', async (req, res) => {
+  try {
+    const project = await rigManager.getById(req.params.projectId)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
+    res.json(squanFs.readCharters(project.localPath))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
+})
+
+app.put('/api/projects/:projectId/squan/charters/:role', async (req, res) => {
+  try {
+    const project = await rigManager.getById(req.params.projectId)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
+    const { content } = req.body as { content: string }
+    await squanFs.updateCharter(project.id, project.localPath, req.params.role, content)
+    res.json({ ok: true })
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
+})
+
+app.get('/api/projects/:projectId/squan/templates', async (req, res) => {
+  try {
+    const project = await rigManager.getById(req.params.projectId)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
+    res.json(squanFs.readTemplates(project.localPath))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
+})
+
+app.post('/api/projects/:projectId/squan/templates', async (req, res) => {
+  try {
+    const project = await rigManager.getById(req.params.projectId)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
+    const { name, content, type } = req.body as { name: string; content: string; type?: 'ai' | 'manual' }
+    await squanFs.createTemplate(project.id, project.localPath, name, content, type)
+    res.json({ ok: true })
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
+})
+
+app.delete('/api/projects/:projectId/squan/templates/:name', async (req, res) => {
+  try {
+    const project = await rigManager.getById(req.params.projectId)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
+    await squanFs.removeTemplate(project.id, project.localPath, req.params.name)
+    res.json({ ok: true })
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
+})
+
+app.get('/api/projects/:projectId/squan/docs', async (req, res) => {
+  try {
+    const project = await rigManager.getById(req.params.projectId)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
+    res.json(squanFs.readDocs(project.localPath))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
+})
+
+app.get('/api/projects/:projectId/squan/security', async (req, res) => {
+  try {
+    const project = await rigManager.getById(req.params.projectId)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
+    res.json(squanFs.readSecurity(project.localPath))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
+})
+
+// ── GitHub integration endpoints ─────────────────────────────────────
+
+app.get('/api/github/repos', requireAuth, async (req, res) => {
+  try {
+    const userId = res.locals.userId as string
+    const user = await getUserById(userId)
+    if (!user?.githubToken) {
+      return res.status(400).json({ error: 'GitHub token not configured. Add it in Settings.' })
+    }
+    const page = parseInt(req.query.page as string) || 1
+    const perPage = parseInt(req.query.per_page as string) || 30
+    const sort = (req.query.sort as string) || 'updated'
+    const search = (req.query.q as string) || ''
+
+    let url = `https://api.github.com/user/repos?per_page=${perPage}&page=${page}&sort=${sort}&affiliation=owner,collaborator,organization_member`
+
+    const ghRes = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${user.githubToken}`,
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    })
+
+    if (!ghRes.ok) {
+      const err = await ghRes.text()
+      return res.status(ghRes.status).json({ error: `GitHub API: ${err.slice(0, 200)}` })
+    }
+
+    let repos = await ghRes.json() as Array<{ name: string; full_name: string; clone_url: string; ssh_url: string; html_url: string; description: string | null; private: boolean; language: string | null; updated_at: string; default_branch: string }>
+
+    // Client-side search filter (GitHub API doesn't support filtering user repos by name)
+    if (search) {
+      const q = search.toLowerCase()
+      repos = repos.filter((r) => r.full_name.toLowerCase().includes(q) || (r.description ?? '').toLowerCase().includes(q))
+    }
+
+    res.json(repos.map((r) => ({
+      name: r.name,
+      fullName: r.full_name,
+      cloneUrl: r.clone_url,
+      sshUrl: r.ssh_url,
+      htmlUrl: r.html_url,
+      description: r.description,
+      private: r.private,
+      language: r.language,
+      updatedAt: r.updated_at,
+      defaultBranch: r.default_branch,
+    })))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
+})
+
+app.post('/api/github/repos', requireAuth, async (req, res) => {
+  try {
+    const userId = res.locals.userId as string
+    const user = await getUserById(userId)
+    if (!user?.githubToken) {
+      return res.status(400).json({ error: 'GitHub token not configured. Add it in Settings.' })
+    }
+
+    const { name, description, isPrivate } = req.body as { name: string; description?: string; isPrivate?: boolean }
+    if (!name) return res.status(400).json({ error: 'Repository name is required' })
+
+    const ghRes = await fetch('https://api.github.com/user/repos', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${user.githubToken}`,
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name,
+        description: description || '',
+        private: isPrivate ?? true,
+        auto_init: true,
+      }),
+    })
+
+    if (!ghRes.ok) {
+      const err = await ghRes.json() as { message?: string }
+      return res.status(ghRes.status).json({ error: err.message ?? 'Failed to create repository' })
+    }
+
+    const repo = await ghRes.json() as { name: string; full_name: string; clone_url: string; html_url: string; description: string | null; private: boolean; default_branch: string }
+
+    res.json({
+      name: repo.name,
+      fullName: repo.full_name,
+      cloneUrl: repo.clone_url,
+      htmlUrl: repo.html_url,
+      description: repo.description,
+      private: repo.private,
+      defaultBranch: repo.default_branch,
+    })
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
 // MCP — public (Mayor Lee calls this server-side without a user token)
@@ -168,8 +464,14 @@ app.get('/api/projects', async (req, res) => {
 app.get('/api/rigs', async (req, res) => {
   try {
     const userId = res.locals.userId as string
-    const townId = (req.query.townId as string) ?? (await townManager.ensureDefault()).id
-    res.json(await rigManager.listByTown(townId, userId))
+    const townId = req.query.townId as string | undefined
+    const all = req.query.all === 'true'
+    if (all || !townId) {
+      // Return ALL rigs for this user across all towns
+      res.json(await rigManager.listAll(userId))
+    } else {
+      res.json(await rigManager.listByTown(townId, userId))
+    }
   } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
@@ -238,6 +540,27 @@ app.post('/api/rigs', async (req, res) => {
     const userId = res.locals.userId as string
     const { name, repoUrl, localPath, townId: bodyTownId } = validate(ProjectSchema, req.body)
     const townId = bodyTownId ?? (await townManager.ensureDefault()).id
+
+    // If localPath doesn't exist and repoUrl is a git URL, clone it
+    const { existsSync, mkdirSync } = await import('fs')
+    if (!existsSync(localPath) && repoUrl && !repoUrl.startsWith('file://')) {
+      console.log(`[rigs] Cloning ${repoUrl} → ${localPath}`)
+      mkdirSync(join(localPath, '..'), { recursive: true })
+      try {
+        execFileSync('git', ['clone', repoUrl, localPath], { stdio: 'pipe', timeout: 120_000 })
+        console.log(`[rigs] Cloned successfully`)
+      } catch (cloneErr) {
+        return res.status(400).json({ error: `Failed to clone: ${(cloneErr as Error).message?.slice(0, 200)}` })
+      }
+    } else if (!existsSync(localPath)) {
+      // Create directory + git init for new projects
+      console.log(`[rigs] Creating new project at ${localPath}`)
+      mkdirSync(localPath, { recursive: true })
+      try {
+        execFileSync('git', ['init', localPath], { stdio: 'pipe' })
+      } catch { /* git init is optional */ }
+    }
+
     res.json(await rigManager.add(townId, name, repoUrl ?? '', localPath, userId))
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
@@ -826,6 +1149,17 @@ app.post('/api/release-trains/:id/sync-pr', requireAuth, async (req, res) => {
       res.json({ state, merged, landed: false })
     }
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
+})
+
+app.delete('/api/release-trains/:id', async (req, res) => {
+  try {
+    const userId = res.locals.userId as string
+    await releaseTrainManager.delete(req.params.id, userId)
+    res.json({ ok: true })
+  } catch (err) {
+    const msg = (err as Error).message
+    res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
 })
 
 app.patch('/api/release-trains/:id/description', async (req, res) => {
@@ -1452,6 +1786,13 @@ app.post('/api/token-usage', async (req, res) => {
   res.json({ ok: true })
 })
 
+// ── SPA fallback for embedded mode ───────────────────────────────────
+if (SQUAN_CLIENT_DIR) {
+  app.get('*', (_req, res) => {
+    res.sendFile(join(resolve(SQUAN_CLIENT_DIR), 'index.html'))
+  })
+}
+
 const PORT = process.env.PORT ?? 3001
 const httpServer = createServer(app)
 
@@ -1475,12 +1816,32 @@ migrate().then(async () => {
 
   await seedSystemTemplates()
 
+  // Sync .squan/ directories for all projects
+  try {
+    const allRigs = await rigManager.listAll()
+    for (const rig of allRigs) {
+      if (squanFs.hasSquanDir(rig.localPath)) {
+        await squanFs.initAndSync(rig.id, rig.localPath, rig.name)
+      }
+    }
+    console.log(`[startup] Synced .squan/ for ${allRigs.filter((r) => squanFs.hasSquanDir(r.localPath)).length} project(s)`)
+  } catch (err) {
+    console.warn(`[startup] .squan/ sync error:`, err)
+  }
+
+  // Reconnect any surviving tmux sessions from a previous server run
+  const reconnected = ptyManager.reconnectTmuxSessions()
+  if (reconnected.length > 0) {
+    console.log(`[startup] Reconnected ${reconnected.length} tmux agent session(s)`)
+  }
+
   startWitness()
   startSnapshotScheduler(() => workerBeeManager.listAll())
   httpServer.listen(PORT, () => {
-    console.log(`squansq server  http://localhost:${PORT}`)
+    console.log(`squan server  http://localhost:${PORT}`)
     console.log(`websocket       ws://localhost:${PORT}/ws`)
     console.log(`mcp tools       http://localhost:${PORT}/api/mcp/tools`)
+    console.log(`terminal backend: ${ptyManager.activeBackendName}${ptyManager.tmuxAvailable ? ' (tmux available)' : ''}`)
   })
 }).catch((err) => {
   console.error('Failed to run migrations:', err)

@@ -182,6 +182,24 @@ export const releaseTrainManager = {
     })
   },
 
+  async delete(releaseTrainId: string, userId?: string): Promise<void> {
+    const db = getDb()
+    if (userId) {
+      const rt = await this.getById(releaseTrainId)
+      if (rt && rt.userId && rt.userId !== userId) throw new Error('Forbidden')
+    }
+    // Delete associated atomic tasks first
+    await db.execute({ sql: `DELETE FROM atomic_tasks WHERE release_train_id = ?`, args: [releaseTrainId] })
+    // Delete the release train
+    await db.execute({ sql: `DELETE FROM release_trains WHERE id = ?`, args: [releaseTrainId] })
+    broadcastEvent({
+      id: uuidv4(),
+      type: 'releasetrain.deleted',
+      payload: { releaseTrainId },
+      timestamp: new Date().toISOString(),
+    })
+  },
+
   async moveToPrReview(releaseTrainId: string, prUrl: string, prNumber: number, userId?: string): Promise<ReleaseTrain> {
     const db = getDb()
     if (userId) {

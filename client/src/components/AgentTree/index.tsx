@@ -1,35 +1,31 @@
+import { Bot, Circle, X, RotateCcw } from 'lucide-react'
+import { cn } from '../../lib/utils.js'
 import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
 import type { Agent } from '../../store/index.js'
 
 const ROLE_COLOR: Record<string, string> = {
-  coder:    '#569cd6',
-  tester:   '#4ec9b0',
-  reviewer: '#dcdcaa',
-  devops:   '#ce9178',
-  lead:     '#c586c0',
+  coder:    'text-text-info',
+  tester:   'text-block-teal',
+  reviewer: 'text-yellow',
+  devops:   'text-orange',
+  lead:     'text-[#c586c0]',
 }
 
 const STATUS_COLOR: Record<Agent['status'], string> = {
-  idle: '#666',
-  working: '#4ec9b0',
-  stalled: '#ce9178',
-  zombie: '#f44747',
-  done: '#608b4e',
-}
-
-const STATUS_ICON: Record<Agent['status'], string> = {
-  idle: '○',
-  working: '●',
-  stalled: '◐',
-  zombie: '✕',
-  done: '✓',
+  idle: 'text-text-info',
+  working: 'text-block-teal',
+  stalled: 'text-yellow',
+  zombie: 'text-text-danger',
+  done: 'text-block-teal',
 }
 
 
 export function AgentTree() {
-  const agents = useStore((s) => s.agents)
+  const _agents = useStore((s) => s.agents)
   const rigs = useStore((s) => s.rigs)
+  const activeProjectId = useStore((s) => s.activeProjectId)
+  const agents = activeProjectId ? _agents.filter((a) => a.projectId === activeProjectId) : _agents
   const addPaneToTab = useStore((s) => s.addPaneToTab)
   const addTab = useStore((s) => s.addTab)
   const activeTabId = useStore((s) => s.activeTabId)
@@ -117,8 +113,8 @@ export function AgentTree() {
 
   if (visibleAgents.length === 0) {
     return (
-      <div style={styles.empty}>
-        <span style={styles.emptyText}>No Agents</span>
+      <div className="flex flex-1 items-center justify-center">
+        <span className="text-text-disabled text-xs font-mono">No Agents</span>
       </div>
     )
   }
@@ -126,15 +122,22 @@ export function AgentTree() {
   const hasFinished = visibleAgents.some((a) => a.status === 'zombie' || a.status === 'done')
 
   return (
-    <div style={styles.tree}>
+    <div className="overflow-auto flex-1">
       {hasFinished && (
-        <div style={styles.clearRow}>
-          <button style={styles.clearBtn} onClick={handleClearFinished}>clear done/zombie</button>
+        <div className="px-2 py-1 border-b border-border-primary">
+          <button
+            className="w-full text-left bg-transparent border border-border-primary text-text-tertiary rounded-sm px-1.5 py-0.5 text-[9px] font-mono cursor-pointer hover:text-text-secondary"
+            onClick={handleClearFinished}
+          >
+            clear done/zombie
+          </button>
         </div>
       )}
       {Object.entries(byProject).map(([projectId, projectAgents]) => (
         <div key={projectId}>
-          <div style={styles.rigHeader}>{rigNameById[projectId] ?? '(unknown project)'}</div>
+          <div className="px-2 py-1 text-[10px] text-text-info uppercase tracking-widest border-b border-border-primary">
+            {rigNameById[projectId] ?? '(unknown project)'}
+          </div>
           {projectAgents.map((agent) => (
             <AgentRow
               key={agent.id}
@@ -150,6 +153,13 @@ export function AgentTree() {
   )
 }
 
+function StatusIcon({ status }: { status: Agent['status'] }) {
+  const colorClass = STATUS_COLOR[status]
+  if (status === 'working') return <Bot className={cn('w-3 h-3 shrink-0', colorClass)} />
+  if (status === 'done') return <Bot className={cn('w-3 h-3 shrink-0', colorClass)} />
+  return <Circle className={cn('w-3 h-3 shrink-0', colorClass)} />
+}
+
 function AgentRow({ agent, onOpenTerminal, onKill, onRestart }: {
   agent: Agent
   onOpenTerminal: () => void
@@ -159,73 +169,50 @@ function AgentRow({ agent, onOpenTerminal, onKill, onRestart }: {
   const canOpen = !!agent.sessionId
 
   return (
-    <div style={styles.agentRow}>
-      <span style={{ ...styles.statusDot, color: STATUS_COLOR[agent.status] }}>
-        {STATUS_ICON[agent.status]}
-      </span>
+    <div className="flex items-center gap-1 px-2 py-1">
+      <StatusIcon status={agent.status} />
       <span
-        style={{ ...styles.agentName, cursor: canOpen ? 'pointer' : 'default' }}
+        className={cn(
+          'text-xs font-mono text-text-primary flex-1 overflow-hidden text-ellipsis whitespace-nowrap',
+          canOpen ? 'cursor-pointer hover:text-block-teal' : 'cursor-default'
+        )}
         onClick={canOpen ? onOpenTerminal : undefined}
         title={canOpen ? 'Open terminal' : undefined}
       >
         {agent.name}
       </span>
       {agent.role && agent.role !== 'coder' && (
-        <span style={{ fontSize: 9, color: ROLE_COLOR[agent.role] ?? '#666', flexShrink: 0, fontFamily: 'monospace' }}>
+        <span className={cn('text-[9px] font-mono shrink-0', ROLE_COLOR[agent.role] ?? 'text-text-tertiary')}>
           {agent.role}
         </span>
       )}
-      <span style={{ ...styles.agentStatus, color: STATUS_COLOR[agent.status] }}>{agent.status}</span>
+      <span className={cn('text-[10px] font-mono shrink-0', STATUS_COLOR[agent.status])}>
+        {agent.status}
+      </span>
       {agent.completionNote ? (
-        <span style={{ ...styles.noteHint, color: agent.status === 'done' ? '#608b4e' : '#ce9178' }}
-          title={agent.completionNote}>
+        <span
+          className={cn('text-[11px] shrink-0 cursor-default', agent.status === 'done' ? 'text-block-teal' : 'text-orange')}
+          title={agent.completionNote}
+        >
           ⓘ
         </span>
       ) : null}
       {onRestart && (
-        <button style={styles.restartBtn} onClick={onRestart} title="Restart agent">↺</button>
+        <button
+          className="bg-transparent border-none text-orange cursor-pointer p-0 shrink-0 hover:text-yellow"
+          onClick={onRestart}
+          title="Restart agent"
+        >
+          <RotateCcw className="w-3 h-3" />
+        </button>
       )}
       <button
-        style={styles.killBtn}
+        className="bg-transparent border-none text-text-danger cursor-pointer p-0 shrink-0 hover:text-[#ff6b6b]"
         onClick={onKill}
         title={agent.status === 'done' || agent.status === 'zombie' ? 'Remove' : 'Kill agent'}
-      >✕</button>
+      >
+        <X className="w-2.5 h-2.5" />
+      </button>
     </div>
   )
-}
-
-const styles = {
-  tree: { overflow: 'auto', flex: 1 },
-  rigHeader: {
-    padding: '4px 8px', fontSize: 10, color: '#569cd6',
-    textTransform: 'uppercase' as const, letterSpacing: '0.1em',
-    borderBottom: '1px solid #1e1e1e',
-  },
-  agentRow: {
-    display: 'flex', alignItems: 'center', gap: 4,
-    padding: '4px 8px', cursor: 'default',
-  },
-  statusDot: { fontSize: 10, width: 12, textAlign: 'center' as const, flexShrink: 0 },
-  agentName: {
-    fontSize: 12, fontFamily: 'monospace', color: '#d4d4d4', flex: 1,
-    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
-  },
-  agentStatus: { fontSize: 10, fontFamily: 'monospace', flexShrink: 0 },
-  noteHint: { fontSize: 11, cursor: 'default', flexShrink: 0 },
-  restartBtn: {
-    background: 'none', border: 'none', color: '#ce9178', cursor: 'pointer',
-    fontSize: 13, padding: '0 2px', flexShrink: 0, lineHeight: 1,
-  },
-  killBtn: {
-    background: 'none', border: 'none', color: '#f44747', cursor: 'pointer',
-    fontSize: 10, padding: '0 2px', flexShrink: 0,
-  },
-  empty: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  emptyText: { color: '#444', fontSize: 12, fontFamily: 'monospace' },
-  clearRow: { padding: '4px 8px', borderBottom: '1px solid #1a1a1a' },
-  clearBtn: {
-    background: 'none', border: '1px solid #2a2a2a', color: '#555',
-    borderRadius: 3, padding: '2px 6px', cursor: 'pointer',
-    fontSize: 9, fontFamily: 'monospace', width: '100%', textAlign: 'left' as const,
-  },
 }

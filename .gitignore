@@ -1,5 +1,35 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
+dist-server/
+out/
+.vite/
+
+# Database
 *.db
+
+# Environment
 .env
 
+# Logs
+*.log
+server/server_*.log
+forge.log
+
+# Temp files
+*.timestamp-*.mjs
+
+# IDE
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Electron packaging
+squan-dist/
+
+# VS Code extension build
+*.vsix

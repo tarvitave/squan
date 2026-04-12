@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
+import { Plus, X } from 'lucide-react'
+import { cn } from '../../lib/utils.js'
 import { useStore } from '../../store/index.js'
 
 export function TabBar() {
@@ -11,12 +13,12 @@ export function TabBar() {
 
   const handleAdd = () => {
     const name = window.prompt('Tab name:', 'New Tab')
-    if (name === null) return // cancelled
+    if (name === null) return
     addTab(name.trim() || 'New Tab')
   }
 
   return (
-    <div style={styles.bar}>
+    <div className="flex items-center bg-bg-primary border-b border-border-primary shrink-0 overflow-x-auto h-[34px]">
       {tabs.map((tab) => (
         <TabItem
           key={tab.id}
@@ -29,8 +31,12 @@ export function TabBar() {
           onEndEdit={() => setEditingId(null)}
         />
       ))}
-      <button style={styles.addTab} onClick={handleAdd} title="New tab">
-        +
+      <button
+        className="bg-transparent border-none text-block-teal text-lg cursor-pointer px-2.5 h-full hover:text-[#6ee0c8]"
+        onClick={handleAdd}
+        title="New tab"
+      >
+        <Plus className="w-4 h-4" />
       </button>
     </div>
   )
@@ -65,13 +71,16 @@ function TabItem({ tab, active, editing, onActivate, onClose, onStartEdit, onEnd
 
   return (
     <div
-      style={{ ...styles.tab, ...(active ? styles.tabActive : {}) }}
+      className={cn(
+        'flex items-center gap-1.5 px-3 h-full cursor-pointer border-r border-border-primary whitespace-nowrap select-none',
+        active ? 'text-text-primary border-b-2 border-b-block-teal bg-bg-primary' : 'text-text-tertiary'
+      )}
       onClick={onActivate}
     >
       {editing ? (
         <input
           ref={inputRef}
-          style={styles.editInput}
+          className="bg-bg-primary border border-block-teal text-text-primary text-xs font-mono px-1 py-px rounded-sm outline-none w-[100px]"
           defaultValue={tab.label}
           onBlur={(e) => commit(e.target.value)}
           onKeyDown={(e) => {
@@ -83,7 +92,7 @@ function TabItem({ tab, active, editing, onActivate, onClose, onStartEdit, onEnd
         />
       ) : (
         <span
-          style={styles.tabLabel}
+          className="text-xs font-mono"
           onDoubleClick={(e) => { e.stopPropagation(); onStartEdit() }}
           title="Double-click to rename"
         >
@@ -92,75 +101,13 @@ function TabItem({ tab, active, editing, onActivate, onClose, onStartEdit, onEnd
       )}
       {onClose && (
         <button
-          style={styles.closeBtn}
+          className="bg-transparent border-none text-text-tertiary cursor-pointer p-0 leading-none hover:text-text-danger"
           onClick={(e) => { e.stopPropagation(); onClose() }}
           title="Close tab"
         >
-          ✕
+          <X className="w-2.5 h-2.5" />
         </button>
       )}
     </div>
   )
-}
-
-const styles = {
-  bar: {
-    display: 'flex',
-    alignItems: 'center',
-    background: '#111',
-    borderBottom: '1px solid #2d2d2d',
-    flexShrink: 0,
-    overflowX: 'auto' as const,
-    height: 34,
-  },
-  tab: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '0 12px',
-    height: '100%',
-    cursor: 'pointer',
-    borderRight: '1px solid #2d2d2d',
-    color: '#666',
-    whiteSpace: 'nowrap' as const,
-    userSelect: 'none' as const,
-  },
-  tabActive: {
-    color: '#d4d4d4',
-    borderBottom: '2px solid #4ec9b0',
-    background: '#0d0d0d',
-  },
-  tabLabel: {
-    fontSize: 12,
-    fontFamily: 'monospace',
-  },
-  editInput: {
-    background: '#0d0d0d',
-    border: '1px solid #4ec9b0',
-    color: '#d4d4d4',
-    fontSize: 12,
-    fontFamily: 'monospace',
-    padding: '1px 4px',
-    borderRadius: 2,
-    outline: 'none',
-    width: 100,
-  } as React.CSSProperties,
-  closeBtn: {
-    background: 'none',
-    border: 'none',
-    color: '#555',
-    cursor: 'pointer',
-    fontSize: 10,
-    padding: '0 2px',
-    lineHeight: 1,
-  },
-  addTab: {
-    background: 'none',
-    border: 'none',
-    color: '#4ec9b0',
-    fontSize: 18,
-    cursor: 'pointer',
-    padding: '0 10px',
-    height: '100%',
-  },
 }

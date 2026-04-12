@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import { FolderGit2, Plus, ExternalLink, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
 import { TemplatesPanel } from '../TemplatesPanel/index.js'
+import { cn } from '../../lib/utils.js'
 import type { Rig } from '../../store/index.js'
 
 interface RepoSuggestion { path: string; name: string; source: 'existing' | 'detected' }
@@ -24,7 +26,6 @@ export function RigPanel() {
   const [suggestions, setSuggestions] = useState<RepoSuggestion[]>([])
   const [workspacePath, setWorkspacePath] = useState('')
   const [loadingSuggestions, setLoadingSuggestions] = useState(false)
-  // 'choose' = picking mode vs new, 'new' = create new repo, 'existing' = pick from list, 'manual' = type path
   const [repoMode, setRepoMode] = useState<'choose' | 'new' | 'existing' | 'manual'>('choose')
   const [creating, setCreating] = useState(false)
   const [spawning, setSpawning] = useState<string | null>(null)
@@ -58,10 +59,9 @@ export function RigPanel() {
 
   const pickSuggestion = (s: RepoSuggestion) => {
     setForm((f) => ({ ...f, localPath: s.path, name: f.name || s.name }))
-    setRepoMode('manual')  // re-use manual state to show confirm screen
+    setRepoMode('manual')
   }
 
-  // Derived: path that would be created for a new repo
   const newRepoPath = workspacePath && form.name
     ? `${workspacePath.replace(/[\\/]+$/, '')}/${form.name.toLowerCase().replace(/\s+/g, '-')}`
     : ''
@@ -114,7 +114,6 @@ export function RigPanel() {
   const handleSpawn = async (rig: Rig, taskDescription?: string) => {
     setSpawning(rig.id)
     try {
-      // Create a Release Train so it appears on the Kanban board
       const rtRes = await apiFetch('/api/release-trains', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -127,7 +126,6 @@ export function RigPanel() {
       const rt = await rtRes.json()
       addReleaseTrain(rt)
 
-      // Dispatch it — spawns the WorkerBee and assigns it to the RT
       const dispRes = await apiFetch(`/api/release-trains/${rt.id}/dispatch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -192,54 +190,83 @@ export function RigPanel() {
   }
 
   return (
-    <div style={styles.panel}>
+    <div className="flex flex-col gap-0.5 py-1">
       {rigs.map((rig) => (
         <div key={rig.id}>
-          <div style={styles.rigRow}>
+          <div className="flex items-center gap-1.5 px-2 py-1 border-b border-border-primary">
             <div
-              style={styles.rigInfo}
+              className="flex flex-1 flex-col gap-px overflow-hidden cursor-pointer"
               onClick={() => setExpandedRig(expandedRig === rig.id ? null : rig.id)}
             >
-              <span style={styles.rigName}>{rig.name}</span>
-              <span style={styles.rigPath}>{rig.localPath}</span>
+              <span className="flex items-center gap-1.5 text-xs text-text-primary font-mono">
+                {expandedRig === rig.id
+                  ? <ChevronDown className="w-3 h-3 text-text-tertiary shrink-0" />
+                  : <ChevronRight className="w-3 h-3 text-text-tertiary shrink-0" />}
+                <FolderGit2 className="w-3 h-3 text-text-info shrink-0" />
+                {rig.name}
+              </span>
+              <span className="text-[10px] text-text-tertiary font-mono truncate pl-[30px]">
+                {rig.localPath}
+              </span>
             </div>
             <button
-              style={styles.spawnBtn}
+              className="shrink-0 flex items-center gap-1 bg-transparent border border-border-primary text-block-teal rounded px-1.5 py-0.5 cursor-pointer text-[10px] font-mono hover:border-block-teal/50"
               onClick={() => setSpawnTask({ rigId: rig.id, taskDescription: '' })}
               disabled={spawning === rig.id}
               title="Spawn a worker agent"
             >
-              {spawning === rig.id ? '…' : '+ Worker'}
+              <Plus className="w-3 h-3" />
+              {spawning === rig.id ? '…' : 'Worker'}
             </button>
           </div>
 
           {expandedRig === rig.id && (
-            <div style={styles.expanded}>
+            <div className="flex flex-col gap-2 bg-bg-primary py-1.5 border-b border-border-primary">
               {/* Repo URL */}
-              <div style={styles.expandSection}>
-                <div style={styles.expandTitle}>GitHub Repo URL</div>
+              <div className="flex flex-col gap-1 px-2">
+                <div className="text-[9px] text-text-disabled font-mono uppercase tracking-wider">
+                  GitHub Repo URL
+                </div>
                 {repoUrlEdit?.rigId === rig.id ? (
-                  <div style={styles.runtimeForm}>
+                  <div className="flex flex-col gap-1">
                     <input
-                      style={{ ...styles.runtimeInput, width: '100%', boxSizing: 'border-box' as const }}
+                      className="w-full bg-bg-secondary border border-border-primary text-text-primary rounded px-1.5 py-0.5 text-[10px] font-mono outline-none box-border"
                       value={repoUrlEdit.value}
                       placeholder="https://github.com/owner/repo"
                       autoFocus
                       onChange={(e) => setRepoUrlEdit((r) => r ? { ...r, value: e.target.value } : null)}
                       onKeyDown={(e) => { if (e.key === 'Enter') handleSaveRepoUrl(rig.id) }}
                     />
-                    <div style={styles.runtimeBtns}>
-                      <button style={styles.saveBtn} onClick={() => handleSaveRepoUrl(rig.id)}>Save</button>
-                      <button style={styles.cancelSmBtn} onClick={() => setRepoUrlEdit(null)}>Cancel</button>
+                    <div className="flex gap-1">
+                      <button
+                        className="bg-block-teal/10 border border-block-teal text-block-teal rounded px-2 py-px cursor-pointer text-[9px] font-mono"
+                        onClick={() => handleSaveRepoUrl(rig.id)}
+                      >
+                        Save
+                      </button>
+                      <button
+                        className="bg-transparent border border-border-primary text-text-tertiary rounded px-2 py-px cursor-pointer text-[9px] font-mono"
+                        onClick={() => setRepoUrlEdit(null)}
+                      >
+                        Cancel
+                      </button>
                     </div>
                   </div>
                 ) : (
-                  <div style={styles.runtimeDisplay}>
-                    <span style={{ ...styles.runtimeValue, color: rig.repoUrl ? '#569cd6' : '#555' }}>
-                      {rig.repoUrl || 'not set'}
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'flex-1 text-[10px] font-mono',
+                      rig.repoUrl ? 'text-text-info' : 'text-text-tertiary'
+                    )}>
+                      {rig.repoUrl ? (
+                        <span className="flex items-center gap-1">
+                          {rig.repoUrl}
+                          <ExternalLink className="w-2.5 h-2.5 inline" />
+                        </span>
+                      ) : 'not set'}
                     </span>
                     <button
-                      style={styles.editBtn}
+                      className="bg-transparent border border-border-primary text-text-tertiary rounded px-1.5 py-px cursor-pointer text-[9px] font-mono"
                       onClick={() => setRepoUrlEdit({ rigId: rig.id, value: rig.repoUrl ?? '' })}
                     >
                       edit
@@ -249,14 +276,16 @@ export function RigPanel() {
               </div>
 
               {/* Runtime config */}
-              <div style={styles.expandSection}>
-                <div style={styles.expandTitle}>Runtime</div>
+              <div className="flex flex-col gap-1 px-2">
+                <div className="text-[9px] text-text-disabled font-mono uppercase tracking-wider">
+                  Runtime
+                </div>
                 {runtimeEdit?.rigId === rig.id ? (
-                  <div style={styles.runtimeForm}>
-                    <div style={styles.runtimeRow}>
-                      <span style={styles.runtimeLabel}>provider</span>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[9px] text-text-tertiary font-mono w-[50px] shrink-0">provider</span>
                       <select
-                        style={styles.runtimeInput}
+                        className="flex-1 bg-bg-secondary border border-border-primary text-text-primary rounded px-1.5 py-0.5 text-[10px] font-mono outline-none"
                         value={runtimeEdit.provider}
                         onChange={(e) => setRuntimeEdit((r) => r ? { ...r, provider: e.target.value } : null)}
                       >
@@ -265,26 +294,36 @@ export function RigPanel() {
                         <option value="custom">custom</option>
                       </select>
                     </div>
-                    <div style={styles.runtimeRow}>
-                      <span style={styles.runtimeLabel}>command</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[9px] text-text-tertiary font-mono w-[50px] shrink-0">command</span>
                       <input
-                        style={styles.runtimeInput}
+                        className="flex-1 bg-bg-secondary border border-border-primary text-text-primary rounded px-1.5 py-0.5 text-[10px] font-mono outline-none"
                         value={runtimeEdit.command}
                         onChange={(e) => setRuntimeEdit((r) => r ? { ...r, command: e.target.value } : null)}
                       />
                     </div>
-                    <div style={styles.runtimeBtns}>
-                      <button style={styles.saveBtn} onClick={() => handleSaveRuntime(rig.id)}>Save</button>
-                      <button style={styles.cancelSmBtn} onClick={() => setRuntimeEdit(null)}>Cancel</button>
+                    <div className="flex gap-1">
+                      <button
+                        className="bg-block-teal/10 border border-block-teal text-block-teal rounded px-2 py-px cursor-pointer text-[9px] font-mono"
+                        onClick={() => handleSaveRuntime(rig.id)}
+                      >
+                        Save
+                      </button>
+                      <button
+                        className="bg-transparent border border-border-primary text-text-tertiary rounded px-2 py-px cursor-pointer text-[9px] font-mono"
+                        onClick={() => setRuntimeEdit(null)}
+                      >
+                        Cancel
+                      </button>
                     </div>
                   </div>
                 ) : (
-                  <div style={styles.runtimeDisplay}>
-                    <span style={styles.runtimeValue}>
+                  <div className="flex items-center gap-2">
+                    <span className="flex-1 text-[10px] text-text-secondary font-mono">
                       {rig.runtime?.provider ?? 'claude'} · {rig.runtime?.command ?? 'claude'}
                     </span>
                     <button
-                      style={styles.editBtn}
+                      className="bg-transparent border border-border-primary text-text-tertiary rounded px-1.5 py-px cursor-pointer text-[9px] font-mono"
                       onClick={() => setRuntimeEdit({
                         rigId: rig.id,
                         command: rig.runtime?.command ?? 'claude',
@@ -298,8 +337,10 @@ export function RigPanel() {
               </div>
 
               {/* Templates */}
-              <div style={styles.expandSection}>
-                <div style={styles.expandTitle}>Templates</div>
+              <div className="flex flex-col gap-1 px-2">
+                <div className="text-[9px] text-text-disabled font-mono uppercase tracking-wider">
+                  Templates
+                </div>
                 <TemplatesPanel
                   projectId={rig.id}
                   onSelect={(content) => setSpawnTask({ rigId: rig.id, taskDescription: content })}
@@ -307,7 +348,11 @@ export function RigPanel() {
               </div>
 
               {/* Delete */}
-              <button style={styles.deleteBtn} onClick={() => handleDelete(rig.id)}>
+              <button
+                className="mx-2 flex items-center gap-1 bg-transparent border border-border-primary text-text-disabled rounded px-2 py-0.5 cursor-pointer text-[9px] font-mono text-left hover:border-red-200/50 hover:text-text-danger/70"
+                onClick={() => handleDelete(rig.id)}
+              >
+                <Trash2 className="w-3 h-3" />
                 Delete Project
               </button>
             </div>
@@ -317,20 +362,20 @@ export function RigPanel() {
 
       {/* Task description prompt before spawning */}
       {spawnTask && (
-        <div style={styles.form}>
-          <div style={styles.spawnHeader}>
+        <div className="flex flex-col gap-1 px-2 py-1.5">
+          <div className="text-[10px] text-text-secondary font-mono mb-0.5">
             Spawn Agent for <strong>{rigs.find((r) => r.id === spawnTask.rigId)?.name}</strong>
           </div>
           <textarea
-            style={{ ...styles.input, resize: 'vertical', minHeight: 60 }}
+            className="w-full bg-bg-secondary border border-border-primary text-text-primary rounded px-1.5 py-1 text-[11px] font-mono outline-none box-border resize-y min-h-[60px]"
             placeholder="Task description (optional) — written as CLAUDE.md in worktree"
             value={spawnTask.taskDescription}
             onChange={(e) => setSpawnTask((t) => t ? { ...t, taskDescription: e.target.value } : null)}
             autoFocus
           />
-          <div style={styles.formBtns}>
+          <div className="flex gap-1">
             <button
-              style={styles.addBtn}
+              className="flex-1 bg-block-teal/10 border border-block-teal text-block-teal rounded py-1 cursor-pointer text-[11px] font-mono"
               onClick={() => {
                 const rig = rigs.find((r) => r.id === spawnTask.rigId)
                 if (rig) handleSpawn(rig, spawnTask.taskDescription)
@@ -338,113 +383,164 @@ export function RigPanel() {
             >
               Spawn
             </button>
-            <button style={styles.cancelBtn} onClick={() => setSpawnTask(null)}>Cancel</button>
+            <button
+              className="flex-1 bg-transparent border border-border-primary text-text-tertiary rounded py-1 cursor-pointer text-[11px] font-mono"
+              onClick={() => setSpawnTask(null)}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
 
       {showForm ? (
-        <div style={styles.form}>
+        <div className="flex flex-col gap-1 px-2 py-1.5">
           {/* Always-visible name field */}
           <input
-            style={styles.input}
+            className="w-full bg-bg-secondary border border-border-primary text-text-primary rounded px-1.5 py-1 text-[11px] font-mono outline-none box-border"
             placeholder="Project name…"
             value={form.name}
             autoFocus
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
           />
 
-          {/* Mode: choose / new / existing / manual */}
+          {/* Mode: choose */}
           {repoMode === 'choose' && (
             <>
-              <div style={styles.pickLabel}>Where is the code?</div>
+              <div className="text-[9px] text-text-info font-mono uppercase tracking-wide">
+                Where is the code?
+              </div>
               <button
-                style={styles.optionCard}
+                className="flex items-start gap-2 bg-bg-primary border border-border-primary rounded p-2 cursor-pointer text-left disabled:opacity-50"
                 onClick={() => setRepoMode('new')}
                 disabled={!form.name.trim()}
                 title={!form.name.trim() ? 'Enter a project name first' : undefined}
               >
-                <span style={styles.optionIcon}>✦</span>
-                <div style={styles.optionText}>
-                  <span style={styles.optionTitle}>Create new repo</span>
-                  <span style={styles.optionDesc}>
+                <Plus className="w-3.5 h-3.5 text-text-info shrink-0 mt-0.5" />
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[11px] text-text-primary font-mono">Create new repo</span>
+                  <span className="text-[9px] text-text-tertiary font-mono break-all">
                     {form.name.trim()
                       ? `Will create ${workspacePath ? workspacePath.replace(/[\\/]+$/, '') + '/' : ''}${form.name.toLowerCase().replace(/\s+/g, '-')}`
                       : 'Enter a name above first'}
                   </span>
                 </div>
               </button>
-              <button style={styles.optionCard} onClick={() => setRepoMode('existing')}>
-                <span style={styles.optionIcon}>⎇</span>
-                <div style={styles.optionText}>
-                  <span style={styles.optionTitle}>Use existing repo</span>
-                  <span style={styles.optionDesc}>
+              <button
+                className="flex items-start gap-2 bg-bg-primary border border-border-primary rounded p-2 cursor-pointer text-left"
+                onClick={() => setRepoMode('existing')}
+              >
+                <FolderGit2 className="w-3.5 h-3.5 text-text-info shrink-0 mt-0.5" />
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[11px] text-text-primary font-mono">Use existing repo</span>
+                  <span className="text-[9px] text-text-tertiary font-mono">
                     {loadingSuggestions ? 'scanning…' : `${suggestions.length} repo${suggestions.length !== 1 ? 's' : ''} found`}
                   </span>
                 </div>
               </button>
-              <button style={styles.cancelBtn} onClick={closeForm}>Cancel</button>
+              <button
+                className="flex-1 bg-transparent border border-border-primary text-text-tertiary rounded py-1 cursor-pointer text-[11px] font-mono"
+                onClick={closeForm}
+              >
+                Cancel
+              </button>
             </>
           )}
 
+          {/* Mode: new */}
           {repoMode === 'new' && (
             <>
-              <div style={styles.selectedPath}>
-                <span style={styles.selectedPathLabel}>will create</span>
-                <span style={styles.selectedPathValue}>{newRepoPath || '—'}</span>
-                <button style={styles.changeBtn} onClick={() => setRepoMode('choose')}>back</button>
+              <div className="flex items-center gap-1.5 bg-block-teal/5 border border-block-teal/20 rounded px-2 py-1">
+                <span className="text-[9px] text-block-teal font-mono shrink-0">will create</span>
+                <span className="flex-1 text-[10px] text-text-secondary font-mono break-all">{newRepoPath || '—'}</span>
+                <button
+                  className="bg-transparent border-none text-text-disabled cursor-pointer text-[9px] font-mono shrink-0"
+                  onClick={() => setRepoMode('choose')}
+                >
+                  back
+                </button>
               </div>
               <input
-                style={styles.input}
+                className="w-full bg-bg-secondary border border-border-primary text-text-primary rounded px-1.5 py-1 text-[11px] font-mono outline-none box-border"
                 placeholder="Repo URL (optional, e.g. github.com/…)"
                 value={form.repoUrl}
                 onChange={(e) => setForm((f) => ({ ...f, repoUrl: e.target.value }))}
               />
-              <div style={styles.formBtns}>
-                <button style={styles.addBtn} onClick={handleCreateNew} disabled={creating || !form.name.trim() || !newRepoPath}>
+              <div className="flex gap-1">
+                <button
+                  className="flex-1 bg-block-teal/10 border border-block-teal text-block-teal rounded py-1 cursor-pointer text-[11px] font-mono disabled:opacity-50"
+                  onClick={handleCreateNew}
+                  disabled={creating || !form.name.trim() || !newRepoPath}
+                >
                   {creating ? '…' : 'Create & Add'}
                 </button>
-                <button style={styles.cancelBtn} onClick={closeForm}>Cancel</button>
+                <button
+                  className="flex-1 bg-transparent border border-border-primary text-text-tertiary rounded py-1 cursor-pointer text-[11px] font-mono"
+                  onClick={closeForm}
+                >
+                  Cancel
+                </button>
               </div>
             </>
           )}
 
+          {/* Mode: existing */}
           {repoMode === 'existing' && (
             <>
               {loadingSuggestions ? (
-                <div style={styles.scanNote}>scanning for repos…</div>
+                <div className="text-[10px] text-text-tertiary font-mono">scanning for repos…</div>
               ) : suggestions.length > 0 ? (
-                <div style={styles.suggList}>
+                <div className="flex flex-col gap-0.5">
                   {suggestions.map((s) => (
-                    <button key={s.path} style={styles.suggItem} onClick={() => pickSuggestion(s)}>
-                      <span style={styles.suggName}>{s.name}</span>
-                      <span style={styles.suggPath}>{s.path}</span>
+                    <button
+                      key={s.path}
+                      className="flex flex-col gap-0.5 bg-bg-primary border border-border-primary rounded px-2 py-1.5 cursor-pointer text-left transition-colors hover:border-border-primary"
+                      onClick={() => pickSuggestion(s)}
+                    >
+                      <span className="text-[11px] text-text-primary font-mono">{s.name}</span>
+                      <span className="text-[9px] text-text-tertiary font-mono break-all">{s.path}</span>
                       {s.source === 'existing' && (
-                        <span style={styles.suggBadge}>already in workspace</span>
+                        <span className="self-start text-[8px] text-block-teal font-mono bg-block-teal/5 border border-block-teal/20 rounded px-1 py-px">
+                          already in workspace
+                        </span>
                       )}
                     </button>
                   ))}
                 </div>
               ) : (
-                <div style={styles.scanNote}>No git repos found in workspace path.</div>
+                <div className="text-[10px] text-text-tertiary font-mono">No git repos found in workspace path.</div>
               )}
-              <button style={styles.manualLink} onClick={() => setRepoMode('manual')}>
+              <button
+                className="bg-transparent border-none text-text-disabled cursor-pointer text-[9px] font-mono text-left p-0 hover:text-text-tertiary"
+                onClick={() => setRepoMode('manual')}
+              >
                 enter path manually →
               </button>
-              <button style={styles.cancelBtn} onClick={closeForm}>Cancel</button>
+              <button
+                className="flex-1 bg-transparent border border-border-primary text-text-tertiary rounded py-1 cursor-pointer text-[11px] font-mono"
+                onClick={closeForm}
+              >
+                Cancel
+              </button>
             </>
           )}
 
+          {/* Mode: manual */}
           {repoMode === 'manual' && (
             <>
-              <div style={styles.selectedPath}>
-                <span style={styles.selectedPathLabel}>repo</span>
-                <span style={styles.selectedPathValue}>{form.localPath || '—'}</span>
-                <button style={styles.changeBtn} onClick={() => { setRepoMode('existing'); setForm((f) => ({ ...f, localPath: '' })) }}>back</button>
+              <div className="flex items-center gap-1.5 bg-block-teal/5 border border-block-teal/20 rounded px-2 py-1">
+                <span className="text-[9px] text-block-teal font-mono shrink-0">repo</span>
+                <span className="flex-1 text-[10px] text-text-secondary font-mono break-all">{form.localPath || '—'}</span>
+                <button
+                  className="bg-transparent border-none text-text-disabled cursor-pointer text-[9px] font-mono shrink-0"
+                  onClick={() => { setRepoMode('existing'); setForm((f) => ({ ...f, localPath: '' })) }}
+                >
+                  back
+                </button>
               </div>
               {!form.localPath && (
                 <input
-                  style={styles.input}
+                  className="w-full bg-bg-secondary border border-border-primary text-text-primary rounded px-1.5 py-1 text-[11px] font-mono outline-none box-border"
                   placeholder="Local path (e.g. C:/projects/myapp)"
                   value={form.localPath}
                   autoFocus
@@ -452,151 +548,41 @@ export function RigPanel() {
                 />
               )}
               <input
-                style={styles.input}
+                className="w-full bg-bg-secondary border border-border-primary text-text-primary rounded px-1.5 py-1 text-[11px] font-mono outline-none box-border"
                 placeholder="Repo URL (optional)"
                 value={form.repoUrl}
                 onChange={(e) => setForm((f) => ({ ...f, repoUrl: e.target.value }))}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleAdd() }}
               />
-              <div style={styles.formBtns}>
-                <button style={styles.addBtn} onClick={() => handleAdd()} disabled={creating || !form.name || !form.localPath}>
+              <div className="flex gap-1">
+                <button
+                  className="flex-1 bg-block-teal/10 border border-block-teal text-block-teal rounded py-1 cursor-pointer text-[11px] font-mono disabled:opacity-50"
+                  onClick={() => handleAdd()}
+                  disabled={creating || !form.name || !form.localPath}
+                >
                   {creating ? '…' : 'Add Project'}
                 </button>
-                <button style={styles.cancelBtn} onClick={closeForm}>Cancel</button>
+                <button
+                  className="flex-1 bg-transparent border border-border-primary text-text-tertiary rounded py-1 cursor-pointer text-[11px] font-mono"
+                  onClick={closeForm}
+                >
+                  Cancel
+                </button>
               </div>
             </>
           )}
         </div>
       ) : (
         !spawnTask && (
-          <button style={styles.newRigBtn} onClick={openForm}>
-            + Add Project
+          <button
+            className="mx-2 my-1 flex items-center gap-1 bg-transparent border border-dashed border-border-primary text-text-info rounded px-2 py-1 cursor-pointer text-[11px] font-mono text-left hover:border-blue-200/50"
+            onClick={openForm}
+          >
+            <Plus className="w-3 h-3" />
+            Add Project
           </button>
         )
       )}
     </div>
   )
-}
-
-const styles = {
-  panel: { padding: '4px 0', display: 'flex', flexDirection: 'column' as const, gap: 2 },
-  rigRow: {
-    display: 'flex', alignItems: 'center', padding: '4px 8px', gap: 6,
-    borderBottom: '1px solid #1a1a1a',
-  },
-  rigInfo: {
-    flex: 1, display: 'flex', flexDirection: 'column' as const, gap: 1,
-    overflow: 'hidden', cursor: 'pointer',
-  },
-  rigName: { fontSize: 12, color: '#d4d4d4', fontFamily: 'monospace' },
-  rigPath: {
-    fontSize: 10, color: '#555', fontFamily: 'monospace',
-    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
-  },
-  spawnBtn: {
-    background: 'none', border: '1px solid #3a3a3a', color: '#4ec9b0',
-    borderRadius: 3, padding: '2px 6px', cursor: 'pointer',
-    fontSize: 10, fontFamily: 'monospace', flexShrink: 0,
-  },
-  expanded: {
-    background: '#0f0f0f', borderBottom: '1px solid #1a1a1a',
-    padding: '6px 0', display: 'flex', flexDirection: 'column' as const, gap: 8,
-  },
-  expandSection: {
-    padding: '0 8px', display: 'flex', flexDirection: 'column' as const, gap: 4,
-  },
-  expandTitle: {
-    fontSize: 9, color: '#444', fontFamily: 'monospace',
-    textTransform: 'uppercase' as const, letterSpacing: '0.1em',
-  },
-  runtimeDisplay: { display: 'flex', alignItems: 'center', gap: 8 },
-  runtimeValue: { fontSize: 10, color: '#888', fontFamily: 'monospace', flex: 1 },
-  editBtn: {
-    background: 'none', border: '1px solid #2a2a2a', color: '#555',
-    borderRadius: 3, padding: '1px 5px', cursor: 'pointer',
-    fontSize: 9, fontFamily: 'monospace',
-  },
-  runtimeForm: { display: 'flex', flexDirection: 'column' as const, gap: 4 },
-  runtimeRow: { display: 'flex', alignItems: 'center', gap: 6 },
-  runtimeLabel: { fontSize: 9, color: '#555', fontFamily: 'monospace', width: 50, flexShrink: 0 },
-  runtimeInput: {
-    flex: 1, background: '#1a1a1a', border: '1px solid #333', color: '#d4d4d4',
-    borderRadius: 3, padding: '2px 5px', fontSize: 10, fontFamily: 'monospace', outline: 'none',
-  },
-  runtimeBtns: { display: 'flex', gap: 4 },
-  saveBtn: {
-    background: '#1a3a2a', border: '1px solid #4ec9b0', color: '#4ec9b0',
-    borderRadius: 3, padding: '2px 8px', cursor: 'pointer', fontSize: 9, fontFamily: 'monospace',
-  },
-  cancelSmBtn: {
-    background: 'none', border: '1px solid #2a2a2a', color: '#555',
-    borderRadius: 3, padding: '2px 8px', cursor: 'pointer', fontSize: 9, fontFamily: 'monospace',
-  },
-  deleteBtn: {
-    margin: '0 8px', background: 'none', border: '1px solid #2a2a2a', color: '#444',
-    borderRadius: 3, padding: '3px 8px', cursor: 'pointer', fontSize: 9, fontFamily: 'monospace',
-    textAlign: 'left' as const,
-  },
-  spawnHeader: {
-    fontSize: 10, color: '#888', fontFamily: 'monospace', marginBottom: 2,
-  },
-  form: { padding: '6px 8px', display: 'flex', flexDirection: 'column' as const, gap: 4 },
-  input: {
-    background: '#1a1a1a', border: '1px solid #333', color: '#d4d4d4',
-    borderRadius: 3, padding: '4px 6px', fontSize: 11, fontFamily: 'monospace',
-    outline: 'none', width: '100%', boxSizing: 'border-box' as const,
-  },
-  formBtns: { display: 'flex', gap: 4 },
-  addBtn: {
-    flex: 1, background: '#1a3a2a', border: '1px solid #4ec9b0', color: '#4ec9b0',
-    borderRadius: 3, padding: '4px', cursor: 'pointer', fontSize: 11, fontFamily: 'monospace',
-  },
-  cancelBtn: {
-    flex: 1, background: 'none', border: '1px solid #333', color: '#666',
-    borderRadius: 3, padding: '4px', cursor: 'pointer', fontSize: 11, fontFamily: 'monospace',
-  },
-  newRigBtn: {
-    margin: '4px 8px', background: 'none', border: '1px dashed #333', color: '#569cd6',
-    borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: 11, fontFamily: 'monospace',
-    textAlign: 'left' as const,
-  },
-  pickLabel: { fontSize: 9, color: '#569cd6', fontFamily: 'monospace', textTransform: 'uppercase' as const, letterSpacing: '0.08em' },
-  optionCard: {
-    background: '#111', border: '1px solid #1e1e1e', borderRadius: 4,
-    padding: '8px 10px', cursor: 'pointer', textAlign: 'left' as const,
-    display: 'flex', alignItems: 'flex-start', gap: 8,
-  },
-  optionIcon: { fontSize: 14, color: '#569cd6', flexShrink: 0, lineHeight: 1.2 },
-  optionText: { display: 'flex', flexDirection: 'column' as const, gap: 2 },
-  optionTitle: { fontSize: 11, color: '#d4d4d4', fontFamily: 'monospace' },
-  optionDesc: { fontSize: 9, color: '#555', fontFamily: 'monospace', wordBreak: 'break-all' as const },
-  scanNote: { fontSize: 10, color: '#555', fontFamily: 'monospace' },
-  suggList: { display: 'flex', flexDirection: 'column' as const, gap: 3 },
-  suggItem: {
-    background: '#111', border: '1px solid #1e1e1e', borderRadius: 3,
-    padding: '6px 8px', cursor: 'pointer', textAlign: 'left' as const,
-    display: 'flex', flexDirection: 'column' as const, gap: 2,
-    transition: 'border-color 0.1s',
-  },
-  suggName: { fontSize: 11, color: '#d4d4d4', fontFamily: 'monospace' },
-  suggPath: { fontSize: 9, color: '#555', fontFamily: 'monospace', wordBreak: 'break-all' as const },
-  suggBadge: {
-    fontSize: 8, color: '#4ec9b0', fontFamily: 'monospace',
-    background: '#0d2a25', border: '1px solid #1a4a3a', borderRadius: 2, padding: '1px 4px',
-    alignSelf: 'flex-start' as const,
-  },
-  manualLink: {
-    background: 'none', border: 'none', color: '#444', cursor: 'pointer',
-    fontSize: 9, fontFamily: 'monospace', textAlign: 'left' as const, padding: 0,
-  },
-  selectedPath: {
-    display: 'flex', alignItems: 'center', gap: 6,
-    background: '#0d2010', border: '1px solid #1a3a20', borderRadius: 3, padding: '5px 8px',
-  },
-  selectedPathLabel: { fontSize: 9, color: '#4ec9b0', fontFamily: 'monospace', flexShrink: 0 },
-  selectedPathValue: { fontSize: 10, color: '#888', fontFamily: 'monospace', flex: 1, wordBreak: 'break-all' as const },
-  changeBtn: {
-    background: 'none', border: 'none', color: '#444', cursor: 'pointer',
-    fontSize: 9, fontFamily: 'monospace', flexShrink: 0,
-  },
 }

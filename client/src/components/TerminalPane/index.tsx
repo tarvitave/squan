@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { useWebSocket, SESSION_DEAD } from '../../hooks/useWebSocket.js'
+import { cn } from '../../lib/utils.js'
 import '@xterm/xterm/css/xterm.css'
 
 interface Props {
@@ -24,10 +25,15 @@ export function TerminalPane({ sessionId, label, onClose, onReconnect }: Props) 
 
     const term = new Terminal({
       theme: {
-        background: '#0d0d0d',
-        foreground: '#d4d4d4',
-        cursor: '#4ec9b0',
-        selectionBackground: '#264f78',
+        background: '#ffffff',
+        foreground: '#3f434b',
+        cursor: '#3f434b',
+        selectionBackground: '#e3e6ea',
+        selectionForeground: '#3f434b',
+        black: '#3f434b',
+        brightBlack: '#878787',
+        white: '#f4f6f7',
+        brightWhite: '#ffffff',
       },
       fontFamily: '"Cascadia Code", "Fira Code", monospace',
       fontSize: 13,
@@ -91,23 +97,30 @@ export function TerminalPane({ sessionId, label, onClose, onReconnect }: Props) 
   }, [sessionId, subscribe, unsubscribe, sendInput, sendResize])
 
   return (
-    <div style={styles.wrapper} onClick={() => termRef.current?.focus()}>
-      <div style={styles.titleBar}>
-        <span style={{ ...styles.label, ...(isDead ? styles.labelDead : {}) }}>
+    <div
+      className="flex h-full flex-col overflow-hidden rounded border border-border-primary bg-bg-primary"
+      onClick={() => termRef.current?.focus()}
+    >
+      <div className="flex shrink-0 items-center justify-between border-b border-border-primary bg-bg-secondary px-2 py-1">
+        <span className={cn('font-mono text-xs tracking-wide text-block-teal', isDead && 'text-orange')}>
           {label ?? sessionId.slice(0, 8)}
         </span>
         {onClose && (
-          <button style={styles.closeBtn} onClick={onClose} title="Close pane">
+          <button
+            className="cursor-pointer border-none bg-transparent px-1 text-xs text-text-secondary hover:text-text-danger"
+            onClick={onClose}
+            title="Close pane"
+          >
             ✕
           </button>
         )}
       </div>
-      <div style={{ position: 'relative', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div ref={containerRef} style={styles.terminal} />
+      <div className="relative flex flex-1 flex-col overflow-hidden">
+        <div ref={containerRef} className="flex-1 overflow-hidden p-1" />
         {isDead && onReconnect && (
-          <div style={styles.deadOverlay}>
+          <div className="pointer-events-none absolute bottom-4 left-0 right-0 flex justify-center">
             <button
-              style={styles.resumeBtn}
+              className="pointer-events-auto cursor-pointer rounded border border-block-teal bg-bg-secondary px-4 py-1.5 font-mono text-xs text-block-teal hover:bg-block-teal/10"
               onClick={(e) => { e.stopPropagation(); onReconnect() }}
             >
               ↺ Resume last session
@@ -117,67 +130,4 @@ export function TerminalPane({ sessionId, label, onClose, onReconnect }: Props) 
       </div>
     </div>
   )
-}
-
-const styles = {
-  wrapper: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    height: '100%',
-    border: '1px solid #2d2d2d',
-    borderRadius: 4,
-    overflow: 'hidden',
-    background: '#0d0d0d',
-  },
-  titleBar: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '4px 8px',
-    background: '#1a1a1a',
-    borderBottom: '1px solid #2d2d2d',
-    flexShrink: 0,
-  },
-  label: {
-    color: '#4ec9b0',
-    fontSize: 12,
-    fontFamily: 'monospace',
-    letterSpacing: '0.05em',
-  },
-  closeBtn: {
-    background: 'none',
-    border: 'none',
-    color: '#666',
-    cursor: 'pointer',
-    fontSize: 12,
-    padding: '0 4px',
-  },
-  terminal: {
-    flex: 1,
-    overflow: 'hidden',
-    padding: 4,
-  },
-  labelDead: {
-    color: '#ce9178',
-  },
-  deadOverlay: {
-    position: 'absolute' as const,
-    bottom: 16,
-    left: 0,
-    right: 0,
-    display: 'flex',
-    justifyContent: 'center',
-    pointerEvents: 'none' as const,
-  },
-  resumeBtn: {
-    pointerEvents: 'auto' as const,
-    background: '#1a1a1a',
-    border: '1px solid #4ec9b0',
-    color: '#4ec9b0',
-    borderRadius: 4,
-    padding: '6px 16px',
-    cursor: 'pointer',
-    fontFamily: 'monospace',
-    fontSize: 12,
-  },
 }
