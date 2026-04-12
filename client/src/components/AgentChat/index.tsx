@@ -48,7 +48,14 @@ interface AgentState {
   result: string | null
   totalCost: number
   durationMs: number
-  sessionId: string | null
+  inputTokens: number
+  outputTokens: number
+}
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K'
+  return String(n)
 }
 
 // ── Tool icon mapping ────────────────────────────────────────────────────────
@@ -269,12 +276,19 @@ export function AgentChat({ workerbeeId, taskDescription }: { workerbeeId: strin
         <span style={{ fontSize: 12, color: '#878787' }}>
           {state.status === 'working' ? 'Working…' : state.status === 'done' ? 'Completed' : 'Error'}
         </span>
-        {state.totalCost > 0 && (
-          <span style={{ marginLeft: 'auto', fontSize: 12, color: '#878787', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <DollarSign style={{ width: 12, height: 12 }} />
-            ${state.totalCost.toFixed(4)}
-          </span>
-        )}
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#878787', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {state.totalCost > 0 && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <DollarSign style={{ width: 12, height: 12 }} />
+              ${state.totalCost.toFixed(4)}
+            </span>
+          )}
+          {(state.inputTokens > 0 || state.outputTokens > 0) && (
+            <span style={{ color: '#a7b0b9' }}>
+              ↑{formatTokens(state.inputTokens ?? 0)} ↓{formatTokens(state.outputTokens ?? 0)}
+            </span>
+          )}
+        </span>
       </div>
 
       {/* Messages */}
@@ -285,10 +299,20 @@ export function AgentChat({ workerbeeId, taskDescription }: { workerbeeId: strin
         {state.messages.map((msg, i) => {
           if (msg.type === 'assistant') {
             const assistantMsg = msg as AssistantMsg
-            return <AssistantBubble key={i} content={assistantMsg.message.content} toolResults={toolResults} />
+            if (assistantMsg.message?.content) {
+              return <AssistantBubble key={i} content={assistantMsg.message.content} toolResults={toolResults} />
+            }
+            return null
           }
           if (msg.type === 'result') {
             return <ResultCard key={i} result={msg as ResultMsg} />
+          }
+          if ((msg as any).type === 'error') {
+            return (
+              <div key={i} style={{ margin: '8px 0', padding: '10px 14px', borderRadius: 8, backgroundColor: '#f94b4b10', border: '1px solid #f94b4b30', color: '#f94b4b', fontSize: 13 }}>
+                {(msg as any).text}
+              </div>
+            )
           }
           // Skip system, user (tool results rendered inside assistant), rate_limit
           return null
