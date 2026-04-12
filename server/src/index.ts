@@ -8,13 +8,18 @@ process.on('unhandledRejection', (reason) => {
   console.error('[server] Unhandled rejection:', reason)
 })
 import { createServer } from 'http'
-import { createHmac, timingSafeEqual } from 'crypto'
+import { createHmac, timingSafeEqual, randomUUID } from 'crypto'
 import { z } from 'zod'
 import { setupWsServer } from './ws/server.js'
 import { startWitness } from './witness/index.js'
 import * as squanFs from './squan-fs/index.js'
 import { ptyManager } from './workerbee/pty.js'
 import { workerBeeManager, charterManager, routingManager } from './workerbee/manager.js'
+import { StructuredRunner, type AgentMessage } from './workerbee/structured-runner.js'
+import { broadcastEvent } from './ws/server.js'
+
+// Store structured runners by workerbee ID
+const structuredRunners = new Map<string, StructuredRunner>()
 import { mayorLeeManager } from './mayor/manager.js'
 import { rigManager } from './rig/manager.js'
 import { releaseTrainManager } from './releasetrain/manager.js'
@@ -647,6 +652,87 @@ app.post('/api/rigs/:rigId/polecats', async (req, res) => {  // backwards compat
     if (user?.anthropicApiKey) preconfigureClaudeAuth(user.anthropicApiKey)
     res.json(await workerBeeManager.spawn(req.params.rigId, taskDescription ?? task, userId))
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
+})
+
+// Get structured messages for an agent (Goose-style chat view)
+app.get('/api/workerbees/:id/messages', requireAuth, async (req, res) => {
+  const runner = structuredRunners.get(req.params.id)
+  if (!runner) {
+    return res.json({ messages: [], status: 'no_runner' })
+  }
+  res.json({
+    messages: runner.messages,
+    status: runner.status,
+    result: runner.result,
+    totalCost: runner.totalCost,
+    durationMs: runner.durationMs,
+    sessionId: runner.sessionId,
+  })
+})
+
+// Spawn agent with structured runner (Option B - Goose-style)
+app.post('/api/projects/:projectId/workerbees/structured', requireAuth, async (req, res) => {
+  try {
+    const userId = res.locals.userId as string
+    const { taskDescription, releaseTrainId, model, maxBudgetUsd } = req.body
+    if (!taskDescription) return res.status(400).json({ error: 'taskDescription required' })
+
+    // Create the workerbee record using existing manager
+    const bee = await workerBeeManager.spawn(req.params.projectId, taskDescription, userId)
+
+    // Get project info for cwd
+    const project = await rigManager.getById(req.params.projectId)
+    if (!project) return res.status(404).json({ error: 'Project not found' })
+
+    // Create structured runner
+    const runner = new StructuredRunner({
+      cwd: project.localPath,
+      task: taskDescription,
+      model,
+      maxBudgetUsd,
+    })
+
+    structuredRunners.set(bee.id, runner)
+
+    // Forward messages to WebSocket
+    runner.on('message', (msg: AgentMessage) => {
+      broadcastEvent({
+        id: randomUUID(),
+        type: 'workerbee.working',
+        payload: { workerbeeId: bee.id, workerbeeName: bee.name, agentMessage: msg },
+        timestamp: new Date().toISOString(),
+      })
+    })
+
+    runner.on('status', async (status: string) => {
+      if (status === 'done') {
+        broadcastEvent({
+          id: randomUUID(),
+          type: 'workerbee.done',
+          payload: { id: bee.id, name: bee.name, result: runner.result, cost: runner.totalCost },
+          timestamp: new Date().toISOString(),
+        })
+      } else if (status === 'error') {
+        broadcastEvent({
+          id: randomUUID(),
+          type: 'workerbee.zombie',
+          payload: { id: bee.id, name: bee.name },
+          timestamp: new Date().toISOString(),
+        })
+      }
+    })
+
+    runner.on('exit', () => {
+      // Clean up after 30 minutes (keep messages for viewing)
+      setTimeout(() => structuredRunners.delete(bee.id), 30 * 60 * 1000)
+    })
+
+    runner.start()
+
+    res.json({ ...bee, mode: 'structured' })
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message })
+  }
 })
 
 app.post('/api/workerbees/:id/message', async (req, res) => {
