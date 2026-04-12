@@ -118,7 +118,6 @@ export class StructuredRunner extends EventEmitter {
       '--output-format', 'stream-json',
       '--verbose',
       '--dangerously-skip-permissions',
-      '--bare',                    // skip hooks, LSP, etc. for speed
     ]
 
     if (this.options.model) {
@@ -141,7 +140,11 @@ export class StructuredRunner extends EventEmitter {
       env.CLAUDE_CONFIG_DIR = this.options.claudeConfigDir
     }
 
+    const hasApiKey = !!env.ANTHROPIC_API_KEY
     console.log(`[structured-runner] Spawning claude in ${this.options.cwd}`)
+    console.log(`[structured-runner] API key present: ${hasApiKey}, config dir: ${this.options.claudeConfigDir ?? 'none'}`)
+    console.log(`[structured-runner] Args: claude ${args.join(' ').slice(0, 120)}...`)
+
     this.process = spawn('claude', args, {
       cwd: this.options.cwd,
       env,

@@ -187,6 +187,11 @@ export async function setupAgentSpawn(
     CLAUDE_CONFIG_DIR: agentConfigDir,
   }
 
+  // Pass Anthropic API key as env var so Claude Code doesn't prompt for OAuth
+  if (user?.anthropicApiKey) {
+    env.ANTHROPIC_API_KEY = user.anthropicApiKey
+  }
+
   // --- Insert DB record (without session_id — that's set by the caller) ---
   const now = new Date().toISOString()
   await db.execute({
