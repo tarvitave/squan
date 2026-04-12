@@ -300,6 +300,40 @@ async function runCommand(input: string, activeTownId: string | null): Promise<S
       break
     }
 
+    case 'init-squan': {
+      const projectId = args[0]
+        ? await resolveProjectId(args[0])
+        : useStore.getState().activeProjectId
+      if (!projectId) { push(...[red('Usage: sq init-squan [project-name-or-id]')]); break }
+      const data = await apiPost(`/api/projects/${projectId}/init-squan`) as Record<string, unknown>
+      push(...[mk('✓ ', '#4ec9b0'), mk(data.message as string ?? '.squan/ initialized')])
+      break
+    }
+
+    case 'squan-status': {
+      const projectId = args[0]
+        ? await resolveProjectId(args[0])
+        : useStore.getState().activeProjectId
+      if (!projectId) { push(...[red('Usage: sq squan-status [project-name-or-id]')]); break }
+      const data = await apiGet(`/api/projects/${projectId}/squan-status`) as Record<string, unknown>
+      if (!data.initialized) { push(...[gray('.squan/ not initialized. Run: init-squan')]); break }
+      push(mk('.squan/ status', '#569cd6', true))
+      const counts = data.counts as Record<string, number>
+      push(...[gray('  tasks:     '), mk(String(counts.tasks))])
+      push(...[gray('  charters:  '), mk(String(counts.charters))])
+      push(...[gray('  templates: '), mk(String(counts.templates))])
+      push(...[gray('  docs:      '), mk(String(counts.docs))])
+      push(...[gray('  security:  '), mk(String(counts.security))])
+      const byStatus = data.tasks_by_status as Record<string, number>
+      if (byStatus) {
+        push(mk('Tasks by status:', '#569cd6', true))
+        for (const [s, n] of Object.entries(byStatus)) {
+          if (n > 0) push(...[gray('  '), statusSpan(pad(s, 14)), mk(String(n))])
+        }
+      }
+      break
+    }
+
     case 'help':
     case '?': {
       push(mk('sq — Squan console', '#4ec9b0', true))
@@ -326,6 +360,10 @@ async function runCommand(input: string, activeTownId: string | null): Promise<S
       push(...[gray('  tasks [rt-id]        '), mk('List tasks')])
       push(...[gray('  task <rt-id> <title> '), mk('Create a task')])
       push(...[gray('  done <task-id>       '), mk('Mark a task done')])
+      push([])
+      push(mk('Everything-as-Code', '#569cd6', true))
+      push(...[gray('  init-squan [project] '), mk('Initialize .squan/ directory')])
+      push(...[gray('  squan-status [proj]  '), mk('Show .squan/ status & counts')])
       break
     }
 
@@ -428,14 +466,20 @@ export function ConsolePanel() {
   return (
     <div
       className="flex flex-col h-full bg-bg-primary font-mono text-[13px]"
-      onClick={() => inputRef.current?.focus()}
+      onClick={(e) => {
+        // Only focus input if user clicked empty space (not selecting text)
+        const selection = window.getSelection()
+        if (!selection || selection.isCollapsed) {
+          inputRef.current?.focus()
+        }
+      }}
     >
-      <div className="flex-1 overflow-y-auto px-4 py-3">
+      <div className="flex-1 overflow-y-auto px-4 py-3 select-text cursor-text">
         {lines.map((consoleLine, i) => (
           <div
             key={i}
             className={cn(
-              'whitespace-pre leading-relaxed min-h-[1.6em] py-px',
+              'whitespace-pre leading-relaxed min-h-[1.6em] py-px select-text',
               consoleLine.kind === 'input' ? 'text-text-primary' : 'text-[#9cdcfe]'
             )}
           >
