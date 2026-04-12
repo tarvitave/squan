@@ -1,35 +1,34 @@
 /**
- * AgentChat — Goose-style chat renderer for structured agent messages.
- * Shows assistant text as left-aligned bubbles, tool calls as collapsible cards,
- * and the user's task as a right-aligned dark pill.
+ * AgentChat — Goose-style chat renderer for agent messages.
+ * Matches Goose Desktop's exact layout:
+ * - GooseMessage: left-aligned, full width, markdown text + tool cards
+ * - UserMessage: right-aligned dark pill
+ * - ToolCallWithResponse: bordered expandable card
  */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
 import {
-  Bot, User, ChevronDown, ChevronRight, FileText, Terminal as TerminalIcon,
+  Bot, ChevronRight, ChevronDown, FileText, Terminal as TerminalIcon,
   Search, Edit3, Globe, Loader2, CheckCircle2, XCircle, DollarSign, Clock,
+  Copy, Check,
 } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 interface TextContent { type: 'text'; text: string }
 interface ToolUseContent { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
-
 interface AssistantMsg {
   type: 'assistant'
   message: { content: Array<TextContent | ToolUseContent>; usage?: { input_tokens: number; output_tokens: number } }
 }
-
 interface UserMsg {
   type: 'user'
-  tool_use_result?: { type: string; file?: { filePath: string; content: string; numLines: number } }
-  message: { content: Array<{ tool_use_id: string; type: 'tool_result'; content: string }> }
+  text?: string
+  message?: { content: Array<{ tool_use_id: string; type: 'tool_result'; content: string }> }
 }
-
-interface SystemMsg { type: 'system'; model: string; claude_code_version: string; tools: string[] }
-
+interface SystemMsg { type: 'system' }
 interface ResultMsg {
   type: 'result'
   subtype: string
@@ -39,8 +38,7 @@ interface ResultMsg {
   num_turns: number
   is_error: boolean
 }
-
-type AgentMessage = AssistantMsg | UserMsg | SystemMsg | ResultMsg | { type: string }
+type AgentMessage = AssistantMsg | UserMsg | SystemMsg | ResultMsg | { type: string; text?: string }
 
 interface AgentState {
   messages: AgentMessage[]
@@ -58,81 +56,126 @@ function formatTokens(n: number): string {
   return String(n)
 }
 
-// ── Tool icon mapping ────────────────────────────────────────────────────────
+// ── Tool helpers ─────────────────────────────────────────────────────────────
 
-function toolIcon(name: string) {
-  if (name.includes('Read') || name.includes('Glob')) return <FileText className="w-3.5 h-3.5" />
-  if (name.includes('Bash') || name.includes('Terminal')) return <TerminalIcon className="w-3.5 h-3.5" />
-  if (name.includes('Write') || name.includes('Edit')) return <Edit3 className="w-3.5 h-3.5" />
-  if (name.includes('Search') || name.includes('Grep')) return <Search className="w-3.5 h-3.5" />
-  if (name.includes('Web')) return <Globe className="w-3.5 h-3.5" />
-  return <Bot className="w-3.5 h-3.5" />
+function getToolIcon(name: string) {
+  if (name.includes('read') || name.includes('Read') || name.includes('list') || name.includes('List')) return <FileText className="w-4 h-4 shrink-0" />
+  if (name.includes('run') || name.includes('Bash') || name.includes('command')) return <TerminalIcon className="w-4 h-4 shrink-0" />
+  if (name.includes('write') || name.includes('Write') || name.includes('edit') || name.includes('Edit')) return <Edit3 className="w-4 h-4 shrink-0" />
+  if (name.includes('search') || name.includes('Search') || name.includes('grep')) return <Search className="w-4 h-4 shrink-0" />
+  if (name.includes('web') || name.includes('Web')) return <Globe className="w-4 h-4 shrink-0" />
+  return <Bot className="w-4 h-4 shrink-0" />
 }
 
-function formatToolInput(name: string, input: Record<string, unknown>): string {
-  if (name === 'Read' && input.file_path) return String(input.file_path).split(/[/\\]/).pop() ?? ''
-  if (name === 'Write' && input.file_path) return String(input.file_path).split(/[/\\]/).pop() ?? ''
-  if (name === 'Edit' && input.file_path) return String(input.file_path).split(/[/\\]/).pop() ?? ''
-  if (name === 'Bash' && input.command) return String(input.command).slice(0, 80)
-  if (name === 'Grep' && input.pattern) return `/${input.pattern}/`
-  if (name === 'Glob' && input.pattern) return String(input.pattern)
-  return Object.values(input).map(String).join(', ').slice(0, 80)
+function getToolDescription(name: string, input: Record<string, unknown>): string {
+  const getStr = (v: unknown) => typeof v === 'string' ? v : JSON.stringify(v)
+  switch (name) {
+    case 'read_file': return input.path ? `reading ${getStr(input.path).split(/[/\\]/).pop()}` : name
+    case 'write_file': return input.path ? `writing ${getStr(input.path).split(/[/\\]/).pop()}` : name
+    case 'edit_file': return input.path ? `editing ${getStr(input.path).split(/[/\\]/).pop()}` : name
+    case 'run_command': return input.command ? `running ${getStr(input.command).slice(0, 60)}` : name
+    case 'list_directory': return input.path ? `listing ${getStr(input.path)}` : 'listing directory'
+    case 'search_files': return input.pattern ? `searching for ${getStr(input.pattern)}` : 'searching'
+    case 'task_complete': return 'task complete'
+    default: {
+      const entries = Object.entries(input)
+      if (entries.length === 0) return name
+      if (entries.length === 1) return `${name}: ${getStr(entries[0][1]).slice(0, 60)}`
+      return `${name} (${entries.map(([k]) => k).join(', ')})`
+    }
+  }
 }
 
-// ── Components ───────────────────────────────────────────────────────────────
+// ── ToolCallCard (matches Goose ToolCallWithResponse) ────────────────────────
 
 function ToolCallCard({ name, input, result }: { name: string; input: Record<string, unknown>; result?: string }) {
   const [expanded, setExpanded] = useState(false)
-  const summary = formatToolInput(name, input)
+  const description = getToolDescription(name, input)
 
   return (
-    <div style={{ margin: '6px 0', borderRadius: 8, border: '1px solid #e3e6ea', overflow: 'hidden', fontSize: 13 }}>
+    <div className="w-full text-sm rounded-lg overflow-hidden border border-border-primary my-1.5">
+      {/* Header — clickable, like Goose */}
       <button
         onClick={() => setExpanded(!expanded)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px',
-          backgroundColor: '#f4f6f7', border: 'none', cursor: 'pointer', textAlign: 'left',
-          color: '#3f434b',
-        }}
+        className="group w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-bg-secondary transition-colors"
       >
-        {toolIcon(name)}
-        <span style={{ fontWeight: 500 }}>{name}</span>
-        <span style={{ color: '#878787', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 12 }}>
-          {summary}
-        </span>
-        {expanded ? <ChevronDown className="w-4 h-4" style={{ color: '#a7b0b9', flexShrink: 0 }} /> : <ChevronRight className="w-4 h-4" style={{ color: '#a7b0b9', flexShrink: 0 }} />}
-      </button>
-      {expanded && (
-        <div style={{ padding: '8px 12px', backgroundColor: '#ffffff', borderTop: '1px solid #e3e6ea' }}>
-          <pre style={{ fontSize: 12, fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#3f434b', margin: 0, maxHeight: 200, overflow: 'auto' }}>
-            {JSON.stringify(input, null, 2)}
-          </pre>
-          {result && (
-            <>
-              <div style={{ borderTop: '1px solid #e3e6ea', margin: '8px 0' }} />
-              <pre style={{ fontSize: 12, fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#878787', margin: 0, maxHeight: 200, overflow: 'auto' }}>
-                {result.slice(0, 2000)}
-              </pre>
-            </>
+        {/* Tool icon with status dot */}
+        <span className="relative">
+          {getToolIcon(name)}
+          {result !== undefined ? (
+            <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-500 border border-white" />
+          ) : (
+            <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-block-teal border border-white animate-pulse" />
           )}
-        </div>
+        </span>
+        <span className="flex-1 truncate text-text-secondary">{description}</span>
+        {expanded
+          ? <ChevronDown className="w-4 h-4 text-text-disabled shrink-0 group-hover:text-text-secondary transition-colors" />
+          : <ChevronRight className="w-4 h-4 text-text-disabled shrink-0 group-hover:text-text-secondary transition-colors" />
+        }
+      </button>
+
+      {/* Expandable details */}
+      {expanded && (
+        <>
+          {/* Tool Details */}
+          {Object.keys(input).length > 0 && (
+            <div className="border-t border-border-primary">
+              <ExpandableSection label="Tool Details" startExpanded>
+                <div className="px-4 pb-3">
+                  {Object.entries(input).map(([key, val]) => (
+                    <div key={key} className="mb-1.5 last:mb-0">
+                      <span className="text-xs font-medium text-text-secondary">{key}: </span>
+                      <span className="text-xs font-mono text-text-primary break-all whitespace-pre-wrap">
+                        {typeof val === 'string' ? val.slice(0, 2000) : JSON.stringify(val, null, 2).slice(0, 2000)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </ExpandableSection>
+            </div>
+          )}
+
+          {/* Output */}
+          {result && (
+            <div className="border-t border-border-primary">
+              <ExpandableSection label="Output">
+                <pre className="px-4 pb-3 text-xs font-mono whitespace-pre-wrap break-all text-text-secondary max-h-48 overflow-auto">
+                  {result.slice(0, 3000)}
+                </pre>
+              </ExpandableSection>
+            </div>
+          )}
+        </>
       )}
     </div>
   )
 }
 
-function AssistantBubble({ content, toolResults }: { content: Array<TextContent | ToolUseContent>; toolResults: Map<string, string> }) {
+function ExpandableSection({ label, children, startExpanded = false }: { label: string; children: React.ReactNode; startExpanded?: boolean }) {
+  const [open, setOpen] = useState(startExpanded)
   return (
-    <div style={{ display: 'flex', gap: 10, padding: '8px 0' }}>
-      <div style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#f4f6f7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
-        <Bot style={{ width: 16, height: 16, color: '#878787' }} />
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
+    <>
+      <button onClick={() => setOpen(!open)} className="group w-full flex items-center gap-2 px-4 py-2 text-left hover:bg-bg-secondary transition-colors">
+        <span className="text-sm text-text-secondary">{label}</span>
+        <ChevronRight className={`w-4 h-4 text-text-disabled transition-transform ${open ? 'rotate-90' : ''}`} />
+      </button>
+      {open && children}
+    </>
+  )
+}
+
+// ── GooseMessage (left-aligned, full width, no bubble) ───────────────────────
+
+function GooseMessageBubble({ content, toolResults }: { content: Array<TextContent | ToolUseContent>; toolResults: Map<string, string> }) {
+  return (
+    <div className="goose-message flex w-[90%] justify-start min-w-0 py-2">
+      <div className="flex flex-col w-full min-w-0">
         {content.map((c, i) => {
-          if (c.type === 'text') {
+          if (c.type === 'text' && c.text.trim()) {
             return (
-              <div key={i} style={{ backgroundColor: '#f4f6f7', borderRadius: 12, padding: '10px 14px', color: '#3f434b', fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {c.text}
+              <div key={i} className="w-full prose prose-sm text-text-primary max-w-full font-sans leading-relaxed">
+                <p className="whitespace-pre-wrap break-words m-0">{c.text}</p>
               </div>
             )
           }
@@ -146,53 +189,72 @@ function AssistantBubble({ content, toolResults }: { content: Array<TextContent 
   )
 }
 
-function TaskBubble({ text }: { text: string }) {
+// ── UserMessage (right-aligned dark pill, matches Goose) ─────────────────────
+
+function UserMessageBubble({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
   return (
-    <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 0' }}>
-      <div style={{ maxWidth: '80%', display: 'flex', gap: 10, flexDirection: 'row-reverse' }}>
-        <div style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#3f434b', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
-          <User style={{ width: 16, height: 16, color: '#ffffff' }} />
-        </div>
-        <div style={{ backgroundColor: '#3f434b', color: '#ffffff', borderRadius: 12, padding: '10px 14px', fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-          {text}
+    <div className="w-full mt-4 flex justify-end">
+      <div className="max-w-[85%] w-fit">
+        <div className="group flex flex-col">
+          <div className="flex bg-text-primary text-bg-primary rounded-xl py-2.5 px-4">
+            <div className="text-sm leading-relaxed whitespace-pre-wrap break-words font-sans text-white">
+              {text}
+            </div>
+          </div>
+          {/* Copy link on hover, like Goose */}
+          <div className="relative h-5 flex justify-end">
+            <button
+              onClick={async () => { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+              className="absolute right-0 pt-0.5 flex items-center gap-1 text-xs text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+            >
+              {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+              <span>{copied ? 'Copied' : 'Copy'}</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
+// ── Result Card ──────────────────────────────────────────────────────────────
+
 function ResultCard({ result }: { result: ResultMsg }) {
   return (
-    <div style={{
-      margin: '12px 0', padding: '12px 16px', borderRadius: 8,
-      backgroundColor: result.is_error ? '#f94b4b10' : '#91cb8010',
-      border: `1px solid ${result.is_error ? '#f94b4b30' : '#91cb8030'}`,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+    <div className={`my-3 p-3 rounded-lg border ${result.is_error ? 'border-red-200/30 bg-red-50' : 'border-green-200/30 bg-green-50'}`}>
+      <div className="flex items-center gap-2 mb-2">
         {result.is_error
-          ? <XCircle style={{ width: 16, height: 16, color: '#f94b4b' }} />
-          : <CheckCircle2 style={{ width: 16, height: 16, color: '#91cb80' }} />
+          ? <XCircle className="w-4 h-4 text-red-500" />
+          : <CheckCircle2 className="w-4 h-4 text-green-600" />
         }
-        <span style={{ fontSize: 14, fontWeight: 500, color: '#3f434b' }}>
+        <span className="text-sm font-medium text-text-primary">
           {result.is_error ? 'Agent failed' : 'Agent completed'}
         </span>
       </div>
-      <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#878787' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <Clock style={{ width: 12, height: 12 }} />
-          {(result.duration_ms / 1000).toFixed(1)}s
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <DollarSign style={{ width: 12, height: 12 }} />
-          ${result.total_cost_usd.toFixed(4)}
-        </span>
+      <div className="flex gap-4 text-xs text-text-secondary font-mono">
+        <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{(result.duration_ms / 1000).toFixed(1)}s</span>
+        <span className="flex items-center gap-1"><DollarSign className="w-3 h-3" />${result.total_cost_usd?.toFixed(4) ?? '0.0000'}</span>
         <span>{result.num_turns} turns</span>
       </div>
       {result.result && (
-        <div style={{ marginTop: 8, fontSize: 13, color: '#3f434b', whiteSpace: 'pre-wrap' }}>
-          {result.result.slice(0, 500)}
-        </div>
+        <div className="mt-2 text-sm text-text-primary whitespace-pre-wrap">{result.result.slice(0, 500)}</div>
       )}
+    </div>
+  )
+}
+
+// ── Loading Goose (animated dots) ────────────────────────────────────────────
+
+function LoadingIndicator() {
+  return (
+    <div className="flex items-center gap-2 py-3 text-text-tertiary">
+      <div className="flex gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-block-teal animate-bounce" style={{ animationDelay: '0ms' }} />
+        <span className="w-1.5 h-1.5 rounded-full bg-block-teal animate-bounce" style={{ animationDelay: '150ms' }} />
+        <span className="w-1.5 h-1.5 rounded-full bg-block-teal animate-bounce" style={{ animationDelay: '300ms' }} />
+      </div>
+      <span className="text-xs">Agent is working…</span>
     </div>
   )
 }
@@ -207,19 +269,14 @@ export function AgentChat({ workerbeeId, taskDescription }: { workerbeeId: strin
   // Poll for messages
   useEffect(() => {
     let active = true
-
     const poll = async () => {
       try {
         const r = await apiFetch(`/api/workerbees/${workerbeeId}/messages`)
-        if (r.ok && active) {
-          const data = await r.json()
-          setState(data)
-        }
+        if (r.ok && active) setState(await r.json())
       } catch { /* ignore */ }
     }
-
     poll()
-    const interval = setInterval(poll, 2000) // Poll every 2s
+    const interval = setInterval(poll, 1500)
     return () => { active = false; clearInterval(interval) }
   }, [workerbeeId])
 
@@ -231,100 +288,81 @@ export function AgentChat({ workerbeeId, taskDescription }: { workerbeeId: strin
     if (state) setLoading(false)
   }, [state])
 
+  // Build tool result map
+  const toolResults = useMemo(() => {
+    const map = new Map<string, string>()
+    if (!state) return map
+    for (const msg of state.messages) {
+      if (msg.type === 'user' && (msg as UserMsg).message?.content) {
+        for (const c of (msg as UserMsg).message!.content) {
+          if (c.type === 'tool_result') map.set(c.tool_use_id, c.content)
+        }
+      }
+    }
+    return map
+  }, [state?.messages])
+
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#a7b0b9' }}>
-        <Loader2 style={{ width: 24, height: 24, animation: 'spin 1s linear infinite' }} />
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="w-6 h-6 text-text-tertiary animate-spin" />
       </div>
     )
   }
 
   if (!state || state.status === 'no_runner') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#a7b0b9', gap: 8, padding: 32 }}>
-        <Bot style={{ width: 32, height: 32 }} />
-        <div style={{ fontSize: 14, textAlign: 'center' }}>
-          This agent is using the terminal view.<br />
-          Switch to the <strong>Terminals</strong> tab to see its output.
+      <div className="flex flex-col items-center justify-center h-full text-text-tertiary gap-3 p-8">
+        <Bot className="w-8 h-8" />
+        <div className="text-sm text-center">
+          This agent uses terminal mode.<br />Switch to <strong>Terminals</strong> to see output.
         </div>
       </div>
     )
   }
 
-  // Build tool result map (tool_use_id → result text)
-  const toolResults = new Map<string, string>()
-  for (const msg of state.messages) {
-    if (msg.type === 'user') {
-      const userMsg = msg as UserMsg
-      for (const c of userMsg.message.content) {
-        if (c.type === 'tool_result') {
-          toolResults.set(c.tool_use_id, c.content)
-        }
-      }
-    }
-  }
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: '#ffffff' }}>
-      {/* Header */}
-      <div style={{ padding: '10px 16px', borderBottom: '1px solid #e3e6ea', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        <div style={{
-          width: 8, height: 8, borderRadius: 4, flexShrink: 0,
-          backgroundColor: state.status === 'working' ? '#13bbaf' : state.status === 'done' ? '#91cb80' : '#f94b4b',
-        }} />
-        <span style={{ fontSize: 14, fontWeight: 500, color: '#3f434b' }}>Agent Chat</span>
-        <span style={{ fontSize: 12, color: '#878787' }}>
+    <div className="flex flex-col h-full bg-bg-primary">
+      {/* Header bar */}
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border-primary shrink-0">
+        <span className={`w-2 h-2 rounded-full shrink-0 ${
+          state.status === 'working' ? 'bg-block-teal animate-pulse' :
+          state.status === 'done' ? 'bg-green-500' : 'bg-red-500'
+        }`} />
+        <span className="text-sm font-medium text-text-primary">
           {state.status === 'working' ? 'Working…' : state.status === 'done' ? 'Completed' : 'Error'}
         </span>
-        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#878787', display: 'flex', alignItems: 'center', gap: 8 }}>
-          {state.totalCost > 0 && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <DollarSign style={{ width: 12, height: 12 }} />
-              ${state.totalCost.toFixed(4)}
-            </span>
-          )}
+        <span className="ml-auto flex items-center gap-3 text-xs text-text-secondary font-mono">
+          {state.totalCost > 0 && <span>${state.totalCost.toFixed(4)}</span>}
           {(state.inputTokens > 0 || state.outputTokens > 0) && (
-            <span style={{ color: '#a7b0b9' }}>
-              ↑{formatTokens(state.inputTokens ?? 0)} ↓{formatTokens(state.outputTokens ?? 0)}
-            </span>
+            <span>↑{formatTokens(state.inputTokens)} ↓{formatTokens(state.outputTokens)}</span>
           )}
         </span>
       </div>
 
-      {/* Messages */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '12px 16px' }}>
-        {/* Show task as user message */}
-        {taskDescription && <TaskBubble text={taskDescription} />}
+      {/* Messages (matches Goose BaseChat scroll area) */}
+      <div className="flex-1 overflow-y-auto px-6 py-6">
+        {/* Task as user message */}
+        {taskDescription && <UserMessageBubble text={taskDescription} />}
 
         {state.messages.map((msg, i) => {
-          if (msg.type === 'assistant') {
-            const assistantMsg = msg as AssistantMsg
-            if (assistantMsg.message?.content) {
-              return <AssistantBubble key={i} content={assistantMsg.message.content} toolResults={toolResults} />
-            }
-            return null
+          if (msg.type === 'assistant' && (msg as AssistantMsg).message?.content) {
+            return <GooseMessageBubble key={i} content={(msg as AssistantMsg).message.content} toolResults={toolResults} />
           }
           if (msg.type === 'result') {
             return <ResultCard key={i} result={msg as ResultMsg} />
           }
           if ((msg as any).type === 'error') {
             return (
-              <div key={i} style={{ margin: '8px 0', padding: '10px 14px', borderRadius: 8, backgroundColor: '#f94b4b10', border: '1px solid #f94b4b30', color: '#f94b4b', fontSize: 13 }}>
+              <div key={i} className="my-2 p-3 rounded-lg border border-red-200/30 bg-red-50 text-red-700 text-sm">
                 {(msg as any).text}
               </div>
             )
           }
-          // Skip system, user (tool results rendered inside assistant), rate_limit
           return null
         })}
 
-        {state.status === 'working' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 0', color: '#a7b0b9' }}>
-            <Loader2 style={{ width: 16, height: 16, animation: 'spin 1s linear infinite' }} />
-            <span style={{ fontSize: 13 }}>Agent is working…</span>
-          </div>
-        )}
-
+        {state.status === 'working' && <LoadingIndicator />}
         <div ref={bottomRef} />
       </div>
     </div>
