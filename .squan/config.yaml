@@ -1,0 +1,18 @@
+version: 1
+project:
+  name: squansq
+  runtime:
+    provider: claude
+    command: claude
+    args: []
+roles:
+  coder:
+    description: Implements features, fixes bugs, writes clean code.
+  tester:
+    description: Writes tests, identifies edge cases, ensures correctness.
+  reviewer:
+    description: Reviews code quality, security, and design.
+settings:
+  auto_dispatch: true
+  auto_pr: false
+  stall_threshold_minutes: 5
