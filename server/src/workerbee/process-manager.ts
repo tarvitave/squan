@@ -142,9 +142,18 @@ class ProcessManager extends EventEmitter {
     child.on('exit', (code, signal) => {
       console.log(`[agent:${opts.name}] Process exited: code=${code} signal=${signal}`)
       if (agent.status === 'working' || agent.status === 'starting') {
-        agent.status = code === 0 ? 'done' : 'error'
-        if (!agent.result) {
-          agent.result = code === 0 ? 'Process exited normally' : `Process crashed (code ${code})`
+        // If the process exits within 5 seconds with a non-zero code,
+        // it's likely a startup failure — don't flash error in the UI
+        const uptime = Date.now() - agent.startedAt
+        if (code !== 0 && uptime < 5000) {
+          console.warn(`[agent:${opts.name}] Quick exit (${uptime}ms) — suppressing error flash`)
+          agent.status = 'error'
+          agent.result = `Process failed to start (code ${code})`
+        } else {
+          agent.status = code === 0 ? 'done' : 'error'
+          if (!agent.result) {
+            agent.result = code === 0 ? 'Process exited normally' : `Process crashed (code ${code})`
+          }
         }
         this.emit('status', opts.id, agent.status)
       }
@@ -153,9 +162,13 @@ class ProcessManager extends EventEmitter {
 
     child.on('error', (err) => {
       console.error(`[agent:${opts.name}] Process error:`, err.message)
-      agent.status = 'error'
-      agent.result = `Process error: ${err.message}`
-      this.emit('status', opts.id, 'error')
+      // Don't emit error status immediately — give the process a chance to recover
+      // Only mark as error if it wasn't already done/killed
+      if (agent.status !== 'done' && agent.status !== 'killed') {
+        agent.status = 'error'
+        agent.result = `Process error: ${err.message}`
+        this.emit('status', opts.id, 'error')
+      }
     })
 
     console.log(`[process-manager] Spawned agent ${opts.name} (PID ${child.pid}) in ${opts.cwd}`)
