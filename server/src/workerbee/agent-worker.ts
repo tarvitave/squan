@@ -240,31 +240,50 @@ Working directory: ${cwd}
     turn++
 
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: useModel,
-          max_tokens: useMaxTokens,
-          system: systemPrompt,
-          tools: TOOLS,
-          messages: apiMessages,
-        }),
-      })
+      // API call with retry logic for 429/529 overload errors
+      let response: Response | null = null
+      const maxRetries = 3
+      const retryDelays = [5000, 15000, 30000] // 5s, 15s, 30s
 
-      if (!response.ok) {
-        const errText = await response.text()
-        send({ type: 'message', data: { type: 'error', text: `API ${response.status}: ${errText.slice(0, 200)}` } })
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: useModel,
+            max_tokens: useMaxTokens,
+            system: systemPrompt,
+            tools: TOOLS,
+            messages: apiMessages,
+          }),
+        })
+
+        // Retry on overload (429, 529) or server errors (500, 502, 503)
+        if (response.status === 429 || response.status === 529 || response.status === 500 || response.status === 502 || response.status === 503) {
+          if (attempt < maxRetries) {
+            const delay = retryDelays[attempt]
+            send({ type: 'message', data: { type: 'assistant', message: { content: [{ type: 'text', text: `API overloaded (${response.status}). Retrying in ${delay / 1000}s... (attempt ${attempt + 1}/${maxRetries})` }] } } })
+            await new Promise(r => setTimeout(r, delay))
+            continue
+          }
+        }
+
+        break // Success or non-retryable error
+      }
+
+      if (!response!.ok) {
+        const errText = await response!.text()
+        send({ type: 'message', data: { type: 'error', text: `API ${response!.status}: ${errText.slice(0, 200)}` } })
         send({ type: 'status', status: 'error' })
-        send({ type: 'done', result: `API error: ${response.status}`, cost: totalCost, duration: Date.now() - startTime, turns: turn, inputTokens, outputTokens, isError: true })
+        send({ type: 'done', result: `API error: ${response!.status}`, cost: totalCost, duration: Date.now() - startTime, turns: turn, inputTokens, outputTokens, isError: true })
         process.exit(1)
       }
 
-      const data = await response.json() as any
+      const data = await response!.json() as any
 
       // Track cost
       inputTokens += data.usage.input_tokens
