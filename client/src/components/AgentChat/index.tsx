@@ -254,7 +254,7 @@ function LoadingIndicator() {
         <span className="w-1.5 h-1.5 rounded-full bg-block-teal animate-bounce" style={{ animationDelay: '150ms' }} />
         <span className="w-1.5 h-1.5 rounded-full bg-block-teal animate-bounce" style={{ animationDelay: '300ms' }} />
       </div>
-      <span className="text-xs">Agent is workingâ€¦</span>
+      <span className="text-xs">Agent is working...</span>
     </div>
   )
 }
@@ -314,7 +314,7 @@ export function AgentChat({ workerbeeId, taskDescription }: { workerbeeId: strin
     return (
       <div className="flex flex-col items-center justify-center h-full text-text-tertiary gap-3 p-8">
         <Bot className="w-8 h-8" />
-        <div className="text-sm text-center">Loading agent dataâ€¦</div>
+        <div className="text-sm text-center">Loading agent data...</div>
       </div>
     )
   }
@@ -343,7 +343,7 @@ export function AgentChat({ workerbeeId, taskDescription }: { workerbeeId: strin
           displayStatus === 'done' ? 'bg-green-500' : 'bg-red-500'
         }`} />
         <span className="text-sm font-medium text-text-primary">
-          {displayStatus === 'working' ? 'Workingâ€¦' : displayStatus === 'done' ? 'Completed' : 'Error'}
+          {displayStatus === 'working' ? 'Working...' : displayStatus === 'done' ? 'Completed' : 'Error'}
         </span>
         <span className="ml-auto flex items-center gap-3 text-xs text-text-secondary font-mono">
           {state.totalCost > 0 && <span>${state.totalCost.toFixed(4)}</span>}
@@ -381,4 +381,5 @@ export function AgentChat({ workerbeeId, taskDescription }: { workerbeeId: strin
     </div>
   )
 }
+
 

@@ -158,6 +158,13 @@ export async function migrate() {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS workerbee_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      workerbee_id TEXT NOT NULL,
+      message_json TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS token_usage (
       id TEXT PRIMARY KEY,
       workerbee_id TEXT,

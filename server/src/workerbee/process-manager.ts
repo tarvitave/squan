@@ -1,5 +1,5 @@
-/**
- * ProcessManager — manages agent child processes.
+﻿/**
+ * ProcessManager â€” manages agent child processes.
  * Each agent runs in its own Node.js child process for full isolation.
  * Like Goose: each agent is a separate process that can be killed independently.
  */
@@ -8,8 +8,10 @@ import { fork, ChildProcess } from 'child_process'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { EventEmitter } from 'events'
+import { getDb } from '../db/index.js'
+import { randomUUID } from 'crypto'
 
-// ESM doesn't have __dirname — derive it from import.meta.url
+// ESM doesn't have __dirname â€” derive it from import.meta.url
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
@@ -52,7 +54,7 @@ class ProcessManager extends EventEmitter {
         ...process.env,
         ANTHROPIC_API_KEY: opts.apiKey,
       },
-      // Don't inherit the server's cwd — each agent has its own
+      // Don't inherit the server's cwd â€” each agent has its own
       cwd: opts.cwd,
     })
 
@@ -77,7 +79,7 @@ class ProcessManager extends EventEmitter {
     child.on('message', (msg: any) => {
       switch (msg.type) {
         case 'ready':
-          // Worker is ready — send the start command
+          // Worker is ready â€” send the start command
           child.send({
             type: 'start',
             cwd: opts.cwd,
@@ -86,15 +88,26 @@ class ProcessManager extends EventEmitter {
             model: opts.model,
             maxTurns: opts.maxTurns,
           })
+          // Immediately mark as working â€” don't wait for the first status update
+          agent.status = 'working'
+          this.emit('status', opts.id, 'working')
           break
 
         case 'status':
+          // Only emit meaningful status changes, skip 'starting' to prevent flash
+          if (msg.status === 'error' && agent.status === 'starting') {
+            // Suppress error during startup â€” wait for the exit handler
+            console.log(`[agent:${opts.name}] Suppressing error during startup`)
+            break
+          }
           agent.status = msg.status
           this.emit('status', opts.id, msg.status)
           break
 
         case 'message':
           agent.messages.push(msg.data)
+          // Persist message to DB for history
+          getDb().execute({ sql: `INSERT INTO workerbee_messages (workerbee_id, message_json) VALUES (?, ?)`, args: [opts.id, JSON.stringify(msg.data)] }).catch(() => {})
           this.emit('message', opts.id, msg.data)
           break
 
@@ -112,7 +125,7 @@ class ProcessManager extends EventEmitter {
           agent.outputTokens = msg.outputTokens
           agent.status = msg.isError ? 'error' : 'done'
           // Emit a result message for the chat view
-          agent.messages.push({
+          const resultMsg = {
             type: 'result',
             subtype: msg.isError ? 'error' : 'success',
             result: msg.result,
@@ -120,8 +133,11 @@ class ProcessManager extends EventEmitter {
             duration_ms: msg.duration,
             num_turns: msg.turns,
             is_error: msg.isError,
-          })
-          this.emit('message', opts.id, agent.messages[agent.messages.length - 1])
+          }
+          agent.messages.push(resultMsg)
+          // Persist result message to DB
+          getDb().execute({ sql: `INSERT INTO workerbee_messages (workerbee_id, message_json) VALUES (?, ?)`, args: [opts.id, JSON.stringify(resultMsg)] }).catch(() => {})
+          this.emit('message', opts.id, resultMsg)
           this.emit('done', opts.id, msg)
           break
       }
@@ -143,10 +159,10 @@ class ProcessManager extends EventEmitter {
       console.log(`[agent:${opts.name}] Process exited: code=${code} signal=${signal}`)
       if (agent.status === 'working' || agent.status === 'starting') {
         // If the process exits within 5 seconds with a non-zero code,
-        // it's likely a startup failure — don't flash error in the UI
+        // it's likely a startup failure â€” don't flash error in the UI
         const uptime = Date.now() - agent.startedAt
         if (code !== 0 && uptime < 5000) {
-          console.warn(`[agent:${opts.name}] Quick exit (${uptime}ms) — suppressing error flash`)
+          console.warn(`[agent:${opts.name}] Quick exit (${uptime}ms) â€” suppressing error flash`)
           agent.status = 'error'
           agent.result = `Process failed to start (code ${code})`
         } else {
@@ -162,7 +178,7 @@ class ProcessManager extends EventEmitter {
 
     child.on('error', (err) => {
       console.error(`[agent:${opts.name}] Process error:`, err.message)
-      // Don't emit error status immediately — give the process a chance to recover
+      // Don't emit error status immediately â€” give the process a chance to recover
       // Only mark as error if it wasn't already done/killed
       if (agent.status !== 'done' && agent.status !== 'killed') {
         agent.status = 'error'
@@ -238,3 +254,4 @@ class ProcessManager extends EventEmitter {
 }
 
 export const processManager = new ProcessManager()
+

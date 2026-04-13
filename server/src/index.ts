@@ -1,4 +1,4 @@
-import 'dotenv/config'
+﻿import 'dotenv/config'
 import { execFileSync } from 'child_process'
 import { resolve, join } from 'path'
 import express from 'express'
@@ -13,7 +13,7 @@ import { z } from 'zod'
 import { setupWsServer } from './ws/server.js'
 import { startWitness } from './witness/index.js'
 import * as squanFs from './squan-fs/index.js'
-// PTY completely disabled — agents use DirectRunner (direct API calls like Goose)
+// PTY completely disabled â€” agents use DirectRunner (direct API calls like Goose)
 const ptyManager = {
   activeBackendName: 'disabled' as string,
   tmuxAvailable: false,
@@ -40,7 +40,7 @@ async function spawnDirectAgent(projectId: string, taskDescription: string, user
 
   const setup = await setupAgentSpawn(projectId, taskDescription, userId)
 
-  // Spawn in a separate process — full isolation, can be killed independently
+  // Spawn in a separate process â€” full isolation, can be killed independently
   const agent = processManager.spawn({
     id: setup.id,
     name: setup.name,
@@ -66,7 +66,7 @@ async function spawnDirectAgent(projectId: string, taskDescription: string, user
     broadcastEvent({
       id: randomUUID(),
       type: status === 'done' ? 'workerbee.done' : status === 'error' ? 'workerbee.zombie' : 'workerbee.working',
-      payload: { id: setup.id, name: setup.name, result: agentState?.result, cost: agentState?.totalCost },
+      payload: { workerBeeId: setup.id, id: setup.id, name: setup.name, result: agentState?.result, cost: agentState?.totalCost, note: agentState?.result },
       timestamp: new Date().toISOString(),
     })
 
@@ -120,7 +120,7 @@ app.use((_req, res, next) => {
   next()
 })
 
-// ── Embedded mode: serve client static files ─────────────────────────
+// â”€â”€ Embedded mode: serve client static files â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const SQUAN_CLIENT_DIR = process.env.SQUAN_CLIENT_DIR
 if (SQUAN_CLIENT_DIR) {
   const clientPath = resolve(SQUAN_CLIENT_DIR)
@@ -154,12 +154,12 @@ app.post('/api/auth/login', async (req, res) => {
   }
 })
 
-// Health — public
+// Health â€” public
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, ts: new Date().toISOString() })
 })
 
-// ── Terminal backend settings ────────────────────────────────────────
+// â”€â”€ Terminal backend settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 app.get('/api/settings/terminal-backend', (_req, res) => {
   res.json({
@@ -184,7 +184,7 @@ app.put('/api/settings/terminal-backend', (req, res) => {
   res.json({ active: ptyManager.activeBackendName, tmuxAvailable: ptyManager.tmuxAvailable })
 })
 
-// ── .squan/ Everything-as-Code endpoints ─────────────────────────────
+// â”€â”€ .squan/ Everything-as-Code endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 app.post('/api/projects/:projectId/init-squan', async (req, res) => {
   try {
@@ -347,7 +347,7 @@ app.get('/api/projects/:projectId/squan/security', async (req, res) => {
   } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
-// ── GitHub integration endpoints ─────────────────────────────────────
+// â”€â”€ GitHub integration endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 app.get('/api/github/repos', requireAuth, async (req, res) => {
   try {
@@ -445,11 +445,11 @@ app.post('/api/github/repos', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
-// MCP — public (Mayor Lee calls this server-side without a user token)
+// MCP â€” public (Mayor Lee calls this server-side without a user token)
 app.get('/api/mcp/tools', handleMcpToolsList)
 app.post('/api/mcp', handleMcpCall)
 
-// ── Claude Code integration ───────────────────────────────────────────────────
+// â”€â”€ Claude Code integration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 app.get('/api/claude-code/sessions', requireAuth, (_req, res) => {
   res.json(listSessions())
@@ -623,7 +623,7 @@ app.post('/api/rigs', async (req, res) => {
     // If localPath doesn't exist and repoUrl is a git URL, clone it
     const { existsSync, mkdirSync } = await import('fs')
     if (!existsSync(localPath) && repoUrl && !repoUrl.startsWith('file://')) {
-      console.log(`[rigs] Cloning ${repoUrl} → ${localPath}`)
+      console.log(`[rigs] Cloning ${repoUrl} â†’ ${localPath}`)
       mkdirSync(join(localPath, '..'), { recursive: true })
       try {
         execFileSync('git', ['clone', repoUrl, localPath], { stdio: 'pipe', timeout: 120_000 })
@@ -728,22 +728,40 @@ app.post('/api/rigs/:rigId/polecats', async (req, res) => {  // backwards compat
 // Get messages for an agent (Goose-style chat view)
 app.get('/api/workerbees/:id/messages', requireAuth, async (req, res) => {
   const agent = processManager.get(req.params.id)
-  if (!agent) {
-    return res.json({ messages: [], status: 'no_runner' })
+  if (agent) {
+    return res.json({
+      messages: agent.messages ?? [],
+      status: agent.status ?? 'unknown',
+      result: agent.result ?? null,
+      totalCost: agent.totalCost ?? 0,
+      durationMs: agent.durationMs ?? 0,
+      inputTokens: agent.inputTokens ?? 0,
+      outputTokens: agent.outputTokens ?? 0,
+    })
   }
-  res.json({
-    messages: agent.messages ?? [],
-    status: agent.status ?? 'unknown',
-    result: agent.result ?? null,
-    totalCost: agent.totalCost ?? 0,
-    durationMs: agent.durationMs ?? 0,
-    inputTokens: agent.inputTokens ?? 0,
-    outputTokens: agent.outputTokens ?? 0,
-  })
+  // No active process â€” check DB for persisted messages
+  try {
+    const rows = await getDb().execute({ sql: `SELECT message_json FROM workerbee_messages WHERE workerbee_id = ? ORDER BY id ASC`, args: [req.params.id] })
+    const messages = rows.rows.map((r: any) => JSON.parse(r.message_json as string))
+    // Get workerbee status from DB
+    const bee = await getDb().execute({ sql: `SELECT status FROM workerbees WHERE id = ?`, args: [req.params.id] })
+    const dbStatus = bee.rows.length > 0 ? (bee.rows[0].status as string) : 'unknown'
+    res.json({
+      messages,
+      status: messages.length > 0 ? (dbStatus === 'done' ? 'done' : 'no_runner') : 'no_runner',
+      result: null,
+      totalCost: 0,
+      durationMs: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+    })
+  } catch {
+    res.json({ messages: [], status: 'no_runner' })
+  }
 })
 
 // Spawn agent with structured runner (Option B - Goose-style)
-// Spawn agent with direct API calls (Goose-style) — no CLI needed
+// Spawn agent with direct API calls (Goose-style) â€” no CLI needed
 app.post('/api/projects/:projectId/workerbees/structured', requireAuth, async (req, res) => {
   try {
     const userId = res.locals.userId as string
@@ -848,11 +866,11 @@ async function notifyRootAgentOfCommit(bee: Awaited<ReturnType<typeof workerBeeM
   })
   const sessionId = (mayorRow.rows[0] as unknown as { session_id: string } | undefined)?.session_id
   if (!sessionId || !ptyManager.list().includes(sessionId)) return
-  const msg = `\n[Squansq] Agent ${bee.name} committed: "${message.slice(0, 100)}". Use get_status_summary to track progress. 📝\n`
+  const msg = `\n[Squansq] Agent ${bee.name} committed: "${message.slice(0, 100)}". Use get_status_summary to track progress. ðŸ“\n`
   ptyManager.write(sessionId, msg)
 }
 
-// Git post-commit hook fires this — no auth required (called from agent's shell)
+// Git post-commit hook fires this â€” no auth required (called from agent's shell)
 app.post('/api/workerbees/:id/commit', async (req, res) => {
   try {
     const bee = await workerBeeManager.getById(req.params.id)
@@ -1179,7 +1197,7 @@ app.post('/api/release-trains/:id/dispatch', async (req, res) => {
     const taskDescription = releaseTrain.description || releaseTrain.name
 
     {
-      // Direct API mode — calls Anthropic API directly like Goose
+      // Direct API mode â€” calls Anthropic API directly like Goose
       // No Claude Code CLI, no OAuth, no terminal
       const bee = await spawnDirectAgent(releaseTrain.projectId, taskDescription, userId)
       await releaseTrainManager.assignWorkerBee(releaseTrain.id, bee.id, userId)
@@ -1209,20 +1227,20 @@ app.post('/api/release-trains/:id/create-pr', requireAuth, async (req, res) => {
 
     const user = await getUserById(userId)
     const githubToken = user?.githubToken
-    if (!githubToken) { res.status(400).json({ error: 'GitHub token not configured — add it in account settings' }); return }
+    if (!githubToken) { res.status(400).json({ error: 'GitHub token not configured â€” add it in account settings' }); return }
 
     const project = await rigManager.getById(rt.projectId)
     if (!project) { res.status(400).json({ error: 'Project not found' }); return }
 
-    if (!project.repoUrl) { res.status(400).json({ error: 'No GitHub repo URL set for this project — edit the project in the sidebar to add one' }); return }
+    if (!project.repoUrl) { res.status(400).json({ error: 'No GitHub repo URL set for this project â€” edit the project in the sidebar to add one' }); return }
     const parsed = parseGithubRepo(project.repoUrl)
-    if (!parsed) { res.status(400).json({ error: 'Could not parse GitHub repo from URL: ' + project.repoUrl + ' — expected format: https://github.com/owner/repo' }); return }
+    if (!parsed) { res.status(400).json({ error: 'Could not parse GitHub repo from URL: ' + project.repoUrl + ' â€” expected format: https://github.com/owner/repo' }); return }
 
     const bee = rt.assignedWorkerBeeId
       ? (await workerBeeManager.getById(rt.assignedWorkerBeeId))
       : null
     const head = bee?.branch ?? req.body.branch
-    if (!head) { res.status(400).json({ error: 'No branch found — Agent must be assigned' }); return }
+    if (!head) { res.status(400).json({ error: 'No branch found â€” Agent must be assigned' }); return }
 
     const base = detectDefaultBranch(project.localPath)
     const title = rt.name
@@ -1233,10 +1251,10 @@ app.post('/api/release-trains/:id/create-pr', requireAuth, async (req, res) => {
     try {
       execFileSync('git', ['-C', project.localPath, 'rev-parse', '--verify', head], { stdio: 'pipe' })
     } catch {
-      throw new Error(`Branch '${head}' does not exist locally — the agent may not have committed any work yet`)
+      throw new Error(`Branch '${head}' does not exist locally â€” the agent may not have committed any work yet`)
     }
 
-    // Push the branch to origin — always push from the main repo root (worktree may be gone)
+    // Push the branch to origin â€” always push from the main repo root (worktree may be gone)
     try {
       execFileSync('git', ['-C', project.localPath, 'push', '--set-upstream', 'origin', head], { stdio: 'pipe' })
     } catch (pushErr) {
@@ -1873,7 +1891,7 @@ app.post('/api/token-usage', async (req, res) => {
   res.json({ ok: true })
 })
 
-// ── SPA fallback for embedded mode ───────────────────────────────────
+// â”€â”€ SPA fallback for embedded mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 if (SQUAN_CLIENT_DIR) {
   app.get('*', (_req, res) => {
     res.sendFile(join(resolve(SQUAN_CLIENT_DIR), 'index.html'))
@@ -1898,7 +1916,7 @@ migrate().then(async () => {
     console.log(`[startup] Marked ${staleResult.rowsAffected} stale WorkerBee(s) as zombie`)
   }
 
-  // Clear stale Mayor Lee session IDs — PTY sessions are in-memory only and lost on restart
+  // Clear stale Mayor Lee session IDs â€” PTY sessions are in-memory only and lost on restart
   await db.execute({ sql: `UPDATE mayors SET session_id = NULL WHERE session_id IS NOT NULL`, args: [] })
 
   await seedSystemTemplates()
@@ -1916,7 +1934,7 @@ migrate().then(async () => {
     console.warn(`[startup] .squan/ sync error:`, err)
   }
 
-  // PTY/tmux disabled — no sessions to reconnect
+  // PTY/tmux disabled â€” no sessions to reconnect
 
   startWitness()
   startSnapshotScheduler(() => workerBeeManager.listAll())
@@ -1930,3 +1948,4 @@ migrate().then(async () => {
   console.error('Failed to run migrations:', err)
   process.exit(1)
 })
+
