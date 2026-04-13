@@ -181,7 +181,7 @@ function Board() {
       const data = await res.json()
       if (data.bee) {
         addAgent({ ...data.bee, taskDescription: data.bee.taskDescription ?? '', worktreePath: data.bee.worktreePath ?? '', branch: data.bee.branch ?? '' })
-        useStore.getState().addToast(`Agent ${data.bee.name} dispatched!`)
+        useStore.getState().addToast(`Agent ${data.bee.name} dispatched!`, 'info')
       }
       if (data.releaseTrain) updateReleaseTrain(id, { assignedWorkerBeeId: data.releaseTrain.assignedWorkerBeeId, status: data.releaseTrain.status })
       // Switch to Agents view to see the chat

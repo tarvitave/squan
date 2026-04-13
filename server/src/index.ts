@@ -69,6 +69,26 @@ async function spawnDirectAgent(projectId: string, taskDescription: string, user
       payload: { id: setup.id, name: setup.name, result: agentState?.result, cost: agentState?.totalCost },
       timestamp: new Date().toISOString(),
     })
+
+    // Auto-move release train to PR Review when agent completes
+    if (status === 'done') {
+      try {
+        const db = getDb()
+        const rt = await db.execute({ sql: `SELECT id, status FROM release_trains WHERE assignedWorkerBeeId = ?`, args: [setup.id] })
+        if (rt.rows.length > 0 && rt.rows[0].status === 'in_progress') {
+          const rtId = rt.rows[0].id as string
+          await db.execute({ sql: `UPDATE release_trains SET status = 'pr_review' WHERE id = ?`, args: [rtId] })
+          console.log(`[auto] Release train ${rtId} moved to pr_review (agent ${setup.name} completed)`)
+          broadcastEvent({
+            id: randomUUID(), type: 'releasetrain.pr_review',
+            payload: { releaseTrainId: rtId },
+            timestamp: new Date().toISOString(),
+          })
+        }
+      } catch (err) {
+        console.error('[auto] Failed to auto-advance release train:', err)
+      }
+    }
   })
 
   console.log(`[spawn] Agent ${setup.name} (PID ${agent.pid}) dispatched to ${setup.worktreePath}`)
