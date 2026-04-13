@@ -3,7 +3,16 @@ import { Server } from 'http'
 import { v4 as uuidv4 } from 'uuid'
 import jwt from 'jsonwebtoken'
 import type { WsMessage, SquansqEvent } from '../types/index.js'
-import { ptyManager } from '../workerbee/pty.js'
+// PTY disabled — stub out all terminal methods
+const ptyManager = {
+  onAnySessionExit: (_cb: any) => {},
+  list: () => [] as string[],
+  subscribe: (_sid: string, _cid: string, _cb: any) => {},
+  unsubscribe: (_sid: string, _cid: string) => {},
+  write: (_sid: string, _data: string) => {},
+  resize: (_sid: string, _cols: number, _rows: number) => {},
+  getOwnerUserId: (_sid: string) => null as string | null,
+}
 import { getDb } from '../db/index.js'
 
 const JWT_SECRET = process.env.JWT_SECRET ?? 'squansq-dev-secret-change-in-production'

@@ -4,7 +4,17 @@ import path from 'path'
 import os from 'os'
 import { v4 as uuidv4 } from 'uuid'
 import { getDb } from '../db/index.js'
-import { ptyManager } from './pty.js'
+// PTY disabled — agents use DirectRunner (direct API calls)
+const ptyManager = {
+  spawn: () => 'disabled',
+  write: () => {},
+  kill: () => {},
+  subscribe: () => {},
+  unsubscribe: () => {},
+  list: () => [] as string[],
+  onSessionExit: () => {},
+  getOwnerUserId: () => null,
+}
 import { rigManager } from '../rig/manager.js'
 import { releaseTrainManager } from '../releasetrain/manager.js'
 import { broadcastEvent } from '../ws/server.js'

@@ -13,7 +13,16 @@ import { z } from 'zod'
 import { setupWsServer } from './ws/server.js'
 import { startWitness } from './witness/index.js'
 import * as squanFs from './squan-fs/index.js'
-import { ptyManager } from './workerbee/pty.js'
+// PTY completely disabled — agents use DirectRunner (direct API calls like Goose)
+const ptyManager = {
+  activeBackendName: 'disabled' as string,
+  tmuxAvailable: false,
+  setBackend: () => true,
+  reconnectTmuxSessions: () => 0,
+  list: () => [] as string[],
+  write: () => {},
+  onAnySessionExit: () => {},
+}
 import { workerBeeManager, charterManager, routingManager } from './workerbee/manager.js'
 import { StructuredRunner, type AgentMessage } from './workerbee/structured-runner.js'
 import { DirectRunner } from './workerbee/direct-runner.js'
@@ -1552,58 +1561,12 @@ app.get('/api/events', async (req, res) => {
   })))
 })
 
-// --- Terminals ---
-app.get('/api/terminals', (req, res) => {
-  const userId = res.locals.userId as string
-  // Only return terminal session IDs owned by this user
-  const allSessions = ptyManager.list()
-  const userSessions = allSessions.filter((id) => {
-    const owner = ptyManager.getOwnerUserId(id)
-    return owner === null || owner === userId
-  })
-  res.json(userSessions)
-})
-
-app.post('/api/terminals', async (req, res) => {
-  try {
-    const userId = res.locals.userId as string
-    const user = await getUserById(userId)
-    const env: Record<string, string> = {}
-    if (user?.anthropicApiKey) {
-      preconfigureClaudeAuth(user.anthropicApiKey)
-      env.ANTHROPIC_API_KEY = user.anthropicApiKey
-    }
-    // Default to system shell — claude CLI is BLOCKED, agents use DirectRunner
-    const defaultShell = process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL ?? 'bash')
-    let requestedShell = req.body.shell ?? (process.env.TERMINAL_COMMAND ?? defaultShell)
-    // Block claude from being spawned as a terminal shell
-    if (requestedShell.toLowerCase().includes('claude')) {
-      console.warn(`[terminals] BLOCKED: Client requested shell '${requestedShell}'. Using system shell.`)
-      requestedShell = defaultShell
-    }
-    const id = ptyManager.spawn({
-      shell: requestedShell,
-      args: Array.isArray(req.body.args) ? req.body.args : undefined,
-      cwd: req.body.cwd,
-      cols: req.body.cols ?? 120,
-      rows: req.body.rows ?? 30,
-      env,
-      ownerUserId: userId,
-    })
-    res.json({ id })
-  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
-})
-
-app.delete('/api/terminals/:id', (req, res) => {
-  const userId = res.locals.userId as string
-  const owner = ptyManager.getOwnerUserId(req.params.id)
-  if (owner !== null && owner !== userId) {
-    res.status(403).json({ error: 'Forbidden' })
-    return
-  }
-  ptyManager.kill(req.params.id)
-  res.json({ ok: true })
-})
+// --- Terminals REMOVED ---
+// Terminal PTY endpoints have been removed. Agents use DirectRunner (direct Anthropic API calls).
+// The "Agents" view shows Goose-style chat windows instead of raw terminals.
+app.get('/api/terminals', (_req, res) => { res.json([]) })
+app.post('/api/terminals', (_req, res) => { res.status(410).json({ error: 'Terminal PTY disabled. Agents use direct API mode.' }) })
+app.delete('/api/terminals/:id', (_req, res) => { res.json({ ok: true }) })
 
 // --- Webhooks (GitHub/GitLab) ---
 app.post('/api/webhooks/github', express.raw({ type: 'application/json' }), async (req, res) => {
