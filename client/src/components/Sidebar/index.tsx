@@ -522,7 +522,11 @@ export function Sidebar() {
                       if (!confirm(`Kill agent ${agent.name}?`)) return
                       try {
                         await apiFetch(`/api/workerbees/${agent.id}/kill`, { method: 'POST' })
-                        // Refresh agents
+                        // Also delete the record
+                        await apiFetch(`/api/workerbees/${agent.id}`, { method: 'DELETE' }).catch(() => {})
+                        // Remove from local state immediately
+                        useStore.getState().setAgents(useStore.getState().agents.filter(a => a.id !== agent.id))
+                        // Also refresh from server
                         const res = await apiFetch('/api/workerbees')
                         if (res.ok) useStore.getState().setAgents(await res.json())
                       } catch { /* ignore */ }

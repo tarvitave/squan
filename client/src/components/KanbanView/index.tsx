@@ -168,15 +168,31 @@ function Board() {
     finally { setRestarting(null) }
   }
 
+  const [dispatchingId, setDispatchingId] = useState<string | null>(null)
   const dispatch = async (id: string) => {
-    const res = await apiFetch(`/api/release-trains/${id}/dispatch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-    const data = await res.json()
-    if (data.bee) addAgent({ ...data.bee, taskDescription: data.bee.taskDescription ?? '', worktreePath: data.bee.worktreePath ?? '', branch: data.bee.branch ?? '' })
-    if (data.releaseTrain) updateReleaseTrain(id, { assignedWorkerBeeId: data.releaseTrain.assignedWorkerBeeId, status: data.releaseTrain.status })
-    if (data.bee?.sessionId) {
-      if (!tabs.some((t) => t.panes.includes(data.bee.sessionId))) {
-        if (activeTabId) addPaneToTab(activeTabId, data.bee.sessionId); else addTab(data.bee.name, [data.bee.sessionId])
+    setDispatchingId(id)
+    try {
+      const res = await apiFetch(`/api/release-trains/${id}/dispatch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Dispatch failed' }))
+        useStore.getState().addToast(err.error || 'Dispatch failed')
+        return
       }
+      const data = await res.json()
+      if (data.bee) {
+        addAgent({ ...data.bee, taskDescription: data.bee.taskDescription ?? '', worktreePath: data.bee.worktreePath ?? '', branch: data.bee.branch ?? '' })
+        useStore.getState().addToast(`Agent ${data.bee.name} dispatched!`)
+      }
+      if (data.releaseTrain) updateReleaseTrain(id, { assignedWorkerBeeId: data.releaseTrain.assignedWorkerBeeId, status: data.releaseTrain.status })
+      // Switch to Agents view to see the chat
+      useStore.getState().setMainView('terminals')
+      // Refresh agents list
+      const agentsRes = await apiFetch('/api/workerbees')
+      if (agentsRes.ok) useStore.getState().setAgents(await agentsRes.json())
+    } catch (err) {
+      useStore.getState().addToast(`Dispatch failed: ${(err as Error).message}`)
+    } finally {
+      setDispatchingId(null)
     }
   }
 
@@ -314,8 +330,8 @@ function Board() {
                         </>
                       ) : (
                         <>
-                          {col.status === 'open' && <ActionBtn onClick={() => dispatch(rt.id)}>Dispatch</ActionBtn>}
-                          {col.status === 'in_progress' && !bee && <ActionBtn onClick={() => dispatch(rt.id)}>Re-dispatch</ActionBtn>}
+                          {col.status === 'open' && <ActionBtn onClick={() => dispatch(rt.id)} disabled={dispatchingId === rt.id}>{dispatchingId === rt.id ? 'Dispatching…' : 'Dispatch'}</ActionBtn>}
+                          {col.status === 'in_progress' && !bee && <ActionBtn onClick={() => dispatch(rt.id)} disabled={dispatchingId === rt.id}>{dispatchingId === rt.id ? 'Dispatching…' : 'Re-dispatch'}</ActionBtn>}
                           {col.status === 'in_progress' && bee && (
                             <ActionBtn variant="warning" onClick={() => createPr(rt.id)} disabled={creatingPr === rt.id}>
                               {creatingPr === rt.id ? '…' : 'Create PR'}

@@ -173,12 +173,19 @@ declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined
 declare const MAIN_WINDOW_VITE_NAME: string | undefined
 
 function createWindow() {
+  // Load icon — works in both dev and packaged mode
+  const iconPath = isDev
+    ? join(PROJECT_ROOT, 'assets', 'icon.ico')
+    : join(process.resourcesPath!, 'icon.ico')
+  const windowIcon = existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : undefined
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 900,
     minHeight: 600,
     title: 'Squan',
+    icon: windowIcon,
     backgroundColor: '#f4f6f7',
     titleBarStyle: 'hiddenInset',
     titleBarOverlay: process.platform === 'win32' ? {

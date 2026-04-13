@@ -17,8 +17,9 @@ const config: ForgeConfig = {
     extraResource: [
       './dist-server',
       './client/dist',
+      './assets/icon.ico',
     ],
-    // icon: './assets/icon',  // Add custom icon later
+    icon: './assets/icon',
   },
 
   // ── Installers ────────────────────────────────────────────────────
