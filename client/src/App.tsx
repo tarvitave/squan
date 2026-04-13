@@ -8,7 +8,7 @@ import { EventStream } from './components/EventStream/index.js'
 import { AuthPage } from './components/AuthPage/index.js'
 import { KanbanView } from './components/KanbanView/index.js'
 import { ConsolePanel } from './components/ConsolePanel/index.js'
-import { ClaudeCodePanel } from './components/ClaudeCodePanel/index.js'
+// ClaudeCodePanel removed — agents now use DirectRunner with Goose-style chat
 import { MetricsPanel } from './components/MetricsPanel/index.js'
 import { CostPanel } from './components/CostPanel/index.js'
 import { ToastContainer } from './components/Toast/index.js'
@@ -171,7 +171,7 @@ export default function App() {
       if (m && e.key === ',') { e.preventDefault(); setShowPreferences(true) }
       if (m && e.key >= '1' && e.key <= '7') {
         e.preventDefault()
-        const views: MainView[] = ['terminals', 'kanban', 'metrics', 'events', 'costs', 'console', 'claudecode']
+        const views: MainView[] = ['terminals', 'kanban', 'metrics', 'events', 'costs', 'console']
         setMainView(views[parseInt(e.key) - 1] ?? 'terminals')
       }
     }
@@ -273,7 +273,6 @@ export default function App() {
             {mainView === 'costs' && <CostPanel />}
             {mainView === 'events' && <div className="flex-1 overflow-hidden flex flex-col"><EventStream /></div>}
             {mainView === 'console' && <ConsolePanel />}
-            {mainView === 'claudecode' && <ClaudeCodePanel />}
           </div>
         </div>
       </div>

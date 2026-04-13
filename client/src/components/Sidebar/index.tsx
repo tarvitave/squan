@@ -10,13 +10,12 @@ import {
 import type { MainView, Rig } from '../../store/index.js'
 
 const NAV_ITEMS: { view: MainView; icon: typeof Monitor; label: string }[] = [
-  { view: 'terminals', icon: Monitor, label: 'Terminals' },
+  { view: 'terminals', icon: Bot, label: 'Agents' },
   { view: 'kanban', icon: Columns3, label: 'Kanban' },
   { view: 'metrics', icon: BarChart3, label: 'Metrics' },
   { view: 'events', icon: Activity, label: 'Events' },
   { view: 'costs', icon: DollarSign, label: 'Costs' },
   { view: 'console', icon: Terminal, label: 'Console' },
-  { view: 'claudecode', icon: Code2, label: 'Claude Code' },
 ]
 
 interface GithubRepo {

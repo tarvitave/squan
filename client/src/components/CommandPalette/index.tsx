@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useStore } from '../../store/index.js'
 import { cn } from '../../lib/utils.js'
-import { Monitor, Columns3, BarChart3, Activity, DollarSign, Terminal, Code2, PanelLeft, Settings } from 'lucide-react'
+import { Bot, Columns3, BarChart3, Activity, DollarSign, Terminal, PanelLeft, Settings } from 'lucide-react'
 import type { MainView } from '../../store/index.js'
 
 interface Cmd { id: string; label: string; shortcut?: string; icon: React.ReactNode; section: string; action: () => void }
@@ -17,13 +17,13 @@ export function CommandPalette() {
   const ic = 'w-4 h-4 text-text-tertiary'
 
   const commands: Cmd[] = [
-    { id: 'v1', label: 'Terminals', shortcut: '⌘1', icon: <Monitor className={ic} />, section: 'Views', action: () => { setMainView('terminals'); close() } },
+    { id: 'v1', label: 'Agents', shortcut: '⌘1', icon: <Bot className={ic} />, section: 'Views', action: () => { setMainView('terminals'); close() } },
     { id: 'v2', label: 'Kanban', shortcut: '⌘2', icon: <Columns3 className={ic} />, section: 'Views', action: () => { setMainView('kanban'); close() } },
     { id: 'v3', label: 'Metrics', shortcut: '⌘3', icon: <BarChart3 className={ic} />, section: 'Views', action: () => { setMainView('metrics'); close() } },
     { id: 'v4', label: 'Events', shortcut: '⌘4', icon: <Activity className={ic} />, section: 'Views', action: () => { setMainView('events'); close() } },
     { id: 'v5', label: 'Costs', shortcut: '⌘5', icon: <DollarSign className={ic} />, section: 'Views', action: () => { setMainView('costs'); close() } },
     { id: 'v6', label: 'Console', shortcut: '⌘6', icon: <Terminal className={ic} />, section: 'Views', action: () => { setMainView('console'); close() } },
-    { id: 'v7', label: 'Claude Code', shortcut: '⌘7', icon: <Code2 className={ic} />, section: 'Views', action: () => { setMainView('claudecode'); close() } },
+
     { id: 'sb', label: 'Toggle Sidebar', shortcut: '⌘B', icon: <PanelLeft className={ic} />, section: 'Layout', action: () => { toggleSidebar(); close() } },
     { id: 'pr', label: 'Settings', shortcut: '⌘,', icon: <Settings className={ic} />, section: 'Settings', action: () => { setShowPreferences(true); close() } },
   ]
