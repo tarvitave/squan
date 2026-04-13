@@ -48,7 +48,7 @@ export function PaneGrid({ tab }: Props) {
       const res = await apiFetch('/api/terminals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cols: 120, rows: 30, shell: 'bash' }),
+        body: JSON.stringify({ cols: 120, rows: 30 }),
       })
       const body = await res.json()
       if (!res.ok) { addToast(`Failed to open terminal: ${body.error ?? res.status}`); return }
@@ -191,7 +191,7 @@ export function PaneGrid({ tab }: Props) {
                   const res = await apiFetch('/api/terminals', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ cols: 120, rows: 30, shell: 'bash' }),
+                    body: JSON.stringify({ cols: 120, rows: 30 }),
                   })
                   const body = await res.json()
                   if (!res.ok) { addToast(`Reconnect failed: ${body.error ?? res.status}`); return }

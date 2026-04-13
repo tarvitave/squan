@@ -1573,10 +1573,16 @@ app.post('/api/terminals', async (req, res) => {
       preconfigureClaudeAuth(user.anthropicApiKey)
       env.ANTHROPIC_API_KEY = user.anthropicApiKey
     }
-    // Default to system shell, NOT claude CLI — agents now use DirectRunner
+    // Default to system shell — claude CLI is BLOCKED, agents use DirectRunner
     const defaultShell = process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL ?? 'bash')
+    let requestedShell = req.body.shell ?? (process.env.TERMINAL_COMMAND ?? defaultShell)
+    // Block claude from being spawned as a terminal shell
+    if (requestedShell.toLowerCase().includes('claude')) {
+      console.warn(`[terminals] BLOCKED: Client requested shell '${requestedShell}'. Using system shell.`)
+      requestedShell = defaultShell
+    }
     const id = ptyManager.spawn({
-      shell: req.body.shell ?? (process.env.TERMINAL_COMMAND ?? defaultShell),
+      shell: requestedShell,
       args: Array.isArray(req.body.args) ? req.body.args : undefined,
       cwd: req.body.cwd,
       cols: req.body.cols ?? 120,

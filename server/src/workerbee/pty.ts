@@ -40,7 +40,15 @@ class NodePtyBackend implements TerminalBackend {
 
   spawn(opts: SpawnOpts): string {
     const id = opts.id ?? uuidv4()
-    const requestedShell = opts.shell ?? (process.platform === 'win32' ? 'cmd.exe' : 'bash')
+    const requestedShell = opts.shell ?? (process.platform === 'win32' ? 'powershell.exe' : 'bash')
+
+    // GUARD: Block any attempt to spawn claude CLI — agents now use DirectRunner (direct API)
+    const shellLower = requestedShell.toLowerCase()
+    if (shellLower === 'claude' || shellLower === 'claude.exe' || shellLower.includes('claude')) {
+      console.warn(`[pty] BLOCKED: Attempted to spawn '${requestedShell}'. Agents use DirectRunner now. Spawning system shell instead.`)
+      opts.shell = process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL ?? 'bash')
+      opts.args = []
+    }
     const requestedArgs = opts.args ?? []
 
     let shell: string
