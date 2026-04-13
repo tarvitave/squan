@@ -1,5 +1,5 @@
-/**
- * Agent Worker — runs in a separate child process.
+﻿/**
+ * Agent Worker ƒ?" runs in a separate child process.
  * Each agent gets its own Node.js process for full isolation.
  * Communicates with the main server via IPC (process.send / process.on).
  *
@@ -10,7 +10,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSy
 import { execSync } from 'child_process'
 import { join, relative, dirname } from 'path'
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ƒ"?ƒ"? Types ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?
 
 interface StartMessage {
   type: 'start'
@@ -28,7 +28,7 @@ interface KillMessage {
 
 type WorkerMessage = StartMessage | KillMessage
 
-// ── Tool definitions ─────────────────────────────────────────────────────────
+// ƒ"?ƒ"? Tool definitions ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?
 
 const TOOLS = [
   {
@@ -113,7 +113,7 @@ const TOOLS = [
   },
 ]
 
-// ── Tool execution ───────────────────────────────────────────────────────────
+// ƒ"?ƒ"? Tool execution ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?
 
 function executeTool(name: string, input: Record<string, unknown>, cwd: string): { result: string; isError: boolean } {
   try {
@@ -200,17 +200,28 @@ function executeTool(name: string, input: Record<string, unknown>, cwd: string):
   }
 }
 
-// ── IPC send helper ──────────────────────────────────────────────────────────
+// ƒ"?ƒ"? IPC send helper ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?
 
 function send(msg: Record<string, unknown>) {
   if (process.send) process.send(msg)
 }
 
-// ── Main agent loop ──────────────────────────────────────────────────────────
+
+// ƒ"?ƒ"? Conversation state for follow-ups ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?
 
 let aborted = false
 
-async function runAgent(opts: StartMessage) {
+let savedApiMessages: Array<{ role: string; content: any }> = []
+let savedSystemPrompt = ''
+let savedOpts: StartMessage | null = null
+let savedCost = 0
+let savedInputTokens = 0
+let savedOutputTokens = 0
+let savedTotalTurns = 0
+
+// Modified agent loop that preserves conversation state instead of exiting
+async function runAgentPersistent(opts: StartMessage) {
+  savedOpts = opts
   const { cwd, task, apiKey, model, maxTokens, maxTurns } = opts
   const useModel = model ?? 'claude-sonnet-4-20250514'
   const useMaxTokens = maxTokens ?? 8192
@@ -219,31 +230,25 @@ async function runAgent(opts: StartMessage) {
   send({ type: 'status', status: 'working' })
   send({ type: 'message', data: { type: 'user', text: task } })
 
-  const systemPrompt = `You are an expert software engineer working on a coding task.
+  savedSystemPrompt = `You are an expert software engineer working on a coding task.
 You have tools for reading, writing, editing files, running commands, and searching code.
 Work autonomously to complete the task. When done, use task_complete with a summary.
 
 Working directory: ${cwd}
 `
 
-  const apiMessages: Array<{ role: string; content: any }> = [
-    { role: 'user', content: task },
-  ]
+  savedApiMessages = [{ role: 'user', content: task }]
 
-  let totalCost = 0
-  let inputTokens = 0
-  let outputTokens = 0
-  let turn = 0
   const startTime = Date.now()
+  let turn = 0
 
   while (turn < useTurns && !aborted) {
     turn++
 
     try {
-      // API call with retry logic for 429/529 overload errors
       let response: Response | null = null
       const maxRetries = 3
-      const retryDelays = [5000, 15000, 30000] // 5s, 15s, 30s
+      const retryDelays = [5000, 15000, 30000]
 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -256,13 +261,12 @@ Working directory: ${cwd}
           body: JSON.stringify({
             model: useModel,
             max_tokens: useMaxTokens,
-            system: systemPrompt,
+            system: savedSystemPrompt,
             tools: TOOLS,
-            messages: apiMessages,
+            messages: savedApiMessages,
           }),
         })
 
-        // Retry on overload (429, 529) or server errors (500, 502, 503)
         if (response.status === 429 || response.status === 529 || response.status === 500 || response.status === 502 || response.status === 503) {
           if (attempt < maxRetries) {
             const delay = retryDelays[attempt]
@@ -271,31 +275,27 @@ Working directory: ${cwd}
             continue
           }
         }
-
-        break // Success or non-retryable error
+        break
       }
 
       if (!response!.ok) {
         const errText = await response!.text()
         send({ type: 'message', data: { type: 'error', text: `API ${response!.status}: ${errText.slice(0, 200)}` } })
         send({ type: 'status', status: 'error' })
-        send({ type: 'done', result: `API error: ${response!.status}`, cost: totalCost, duration: Date.now() - startTime, turns: turn, inputTokens, outputTokens, isError: true })
-        process.exit(1)
+        send({ type: 'done', result: `API error: ${response!.status}`, cost: savedCost, duration: Date.now() - startTime, turns: savedTotalTurns + turn, inputTokens: savedInputTokens, outputTokens: savedOutputTokens, isError: true })
+        return // Don't exit ƒ?" allow follow-ups
       }
 
       const data = await response!.json() as any
 
-      // Track cost
-      inputTokens += data.usage.input_tokens
-      outputTokens += data.usage.output_tokens
-      totalCost += (data.usage.input_tokens / 1e6) * 3.0 + (data.usage.output_tokens / 1e6) * 15.0
+      savedInputTokens += data.usage.input_tokens
+      savedOutputTokens += data.usage.output_tokens
+      savedCost += (data.usage.input_tokens / 1e6) * 3.0 + (data.usage.output_tokens / 1e6) * 15.0
 
-      send({ type: 'usage', inputTokens, outputTokens, totalCost })
+      send({ type: 'usage', inputTokens: savedInputTokens, outputTokens: savedOutputTokens, totalCost: savedCost })
 
-      // Add assistant response
-      apiMessages.push({ role: 'assistant', content: data.content })
+      savedApiMessages.push({ role: 'assistant', content: data.content })
 
-      // Emit content blocks
       for (const block of data.content) {
         if (block.type === 'text') {
           send({ type: 'message', data: { type: 'assistant', message: { content: [{ type: 'text', text: block.text }], usage: data.usage } } })
@@ -305,29 +305,28 @@ Working directory: ${cwd}
         }
       }
 
-      // No tool use = done
       if (data.stop_reason === 'end_turn') {
         const text = data.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n')
-        send({ type: 'done', result: text, cost: totalCost, duration: Date.now() - startTime, turns: turn, inputTokens, outputTokens, isError: false })
+        savedTotalTurns += turn
+        send({ type: 'done', result: text, cost: savedCost, duration: Date.now() - startTime, turns: savedTotalTurns, inputTokens: savedInputTokens, outputTokens: savedOutputTokens, isError: false })
         send({ type: 'status', status: 'done' })
-        process.exit(0)
+        return // Don't exit ƒ?" wait for follow-up messages
       }
 
-      // Execute tools
       if (data.stop_reason === 'tool_use') {
         const toolResults: any[] = []
 
         for (const block of data.content) {
           if (block.type !== 'tool_use') continue
 
-          // task_complete
           if (block.name === 'task_complete') {
             const summary = (block.input as any).summary
             toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: 'Task marked as complete.' })
-            apiMessages.push({ role: 'user', content: toolResults })
-            send({ type: 'done', result: summary, cost: totalCost, duration: Date.now() - startTime, turns: turn, inputTokens, outputTokens, isError: false })
+            savedApiMessages.push({ role: 'user', content: toolResults })
+            savedTotalTurns += turn
+            send({ type: 'done', result: summary, cost: savedCost, duration: Date.now() - startTime, turns: savedTotalTurns, inputTokens: savedInputTokens, outputTokens: savedOutputTokens, isError: false })
             send({ type: 'status', status: 'done' })
-            process.exit(0)
+            return // Don't exit ƒ?" wait for follow-up
           }
 
           console.log(`[agent-worker] Tool: ${block.name}`)
@@ -343,33 +342,176 @@ Working directory: ${cwd}
           })
         }
 
-        apiMessages.push({ role: 'user', content: toolResults })
+        savedApiMessages.push({ role: 'user', content: toolResults })
       }
 
     } catch (err) {
       send({ type: 'message', data: { type: 'error', text: `Turn ${turn}: ${(err as Error).message}` } })
-      send({ type: 'done', result: `Error: ${(err as Error).message}`, cost: totalCost, duration: Date.now() - startTime, turns: turn, inputTokens, outputTokens, isError: true })
+      savedTotalTurns += turn
+      send({ type: 'done', result: `Error: ${(err as Error).message}`, cost: savedCost, duration: Date.now() - startTime, turns: savedTotalTurns, inputTokens: savedInputTokens, outputTokens: savedOutputTokens, isError: true })
       send({ type: 'status', status: 'error' })
-      process.exit(1)
+      return // Don't exit
     }
   }
 
-  // Max turns
   if (!aborted) {
-    send({ type: 'done', result: 'Reached maximum turns', cost: totalCost, duration: Date.now() - startTime, turns: turn, inputTokens, outputTokens, isError: false })
+    savedTotalTurns += turn
+    send({ type: 'done', result: 'Reached maximum turns', cost: savedCost, duration: Date.now() - startTime, turns: savedTotalTurns, inputTokens: savedInputTokens, outputTokens: savedOutputTokens, isError: false })
     send({ type: 'status', status: 'done' })
   }
-  process.exit(0)
 }
 
-// ── IPC message handler ──────────────────────────────────────────────────────
+// Handle follow-up messages by injecting into the conversation and resuming
+async function handleFollowUp(message: string) {
+  if (!savedOpts) {
+    send({ type: 'message', data: { type: 'error', text: 'No previous conversation to follow up on' } })
+    return
+  }
 
-process.on('message', (msg: WorkerMessage) => {
+  aborted = false
+  send({ type: 'status', status: 'working' })
+  send({ type: 'message', data: { type: 'user', text: message } })
+
+  // Inject user follow-up into conversation
+  savedApiMessages.push({ role: 'user', content: message })
+
+  const startTime = Date.now()
+  const useModel = savedOpts.model ?? 'claude-sonnet-4-20250514'
+  const useMaxTokens = savedOpts.maxTokens ?? 8192
+  const useTurns = savedOpts.maxTurns ?? 50
+  let turn = 0
+
+  while (turn < useTurns && !aborted) {
+    turn++
+
+    try {
+      let response: Response | null = null
+      const maxRetries = 3
+      const retryDelays = [5000, 15000, 30000]
+
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': savedOpts.apiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: useModel,
+            max_tokens: useMaxTokens,
+            system: savedSystemPrompt,
+            tools: TOOLS,
+            messages: savedApiMessages,
+          }),
+        })
+
+        if (response.status === 429 || response.status === 529 || response.status === 500 || response.status === 502 || response.status === 503) {
+          if (attempt < maxRetries) {
+            const delay = retryDelays[attempt]
+            send({ type: 'message', data: { type: 'assistant', message: { content: [{ type: 'text', text: `API overloaded (${response.status}). Retrying in ${delay / 1000}s...` }] } } })
+            await new Promise(r => setTimeout(r, delay))
+            continue
+          }
+        }
+        break
+      }
+
+      if (!response!.ok) {
+        const errText = await response!.text()
+        send({ type: 'message', data: { type: 'error', text: `API ${response!.status}: ${errText.slice(0, 200)}` } })
+        send({ type: 'status', status: 'error' })
+        send({ type: 'done', result: `API error: ${response!.status}`, cost: savedCost, duration: Date.now() - startTime, turns: savedTotalTurns + turn, inputTokens: savedInputTokens, outputTokens: savedOutputTokens, isError: true })
+        return
+      }
+
+      const data = await response!.json() as any
+
+      savedInputTokens += data.usage.input_tokens
+      savedOutputTokens += data.usage.output_tokens
+      savedCost += (data.usage.input_tokens / 1e6) * 3.0 + (data.usage.output_tokens / 1e6) * 15.0
+
+      send({ type: 'usage', inputTokens: savedInputTokens, outputTokens: savedOutputTokens, totalCost: savedCost })
+
+      savedApiMessages.push({ role: 'assistant', content: data.content })
+
+      for (const block of data.content) {
+        if (block.type === 'text') {
+          send({ type: 'message', data: { type: 'assistant', message: { content: [{ type: 'text', text: block.text }], usage: data.usage } } })
+        }
+        if (block.type === 'tool_use') {
+          send({ type: 'message', data: { type: 'assistant', message: { content: [{ type: 'tool_use', id: block.id, name: block.name, input: block.input }] } } })
+        }
+      }
+
+      if (data.stop_reason === 'end_turn') {
+        const text = data.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n')
+        savedTotalTurns += turn
+        send({ type: 'done', result: text, cost: savedCost, duration: Date.now() - startTime, turns: savedTotalTurns, inputTokens: savedInputTokens, outputTokens: savedOutputTokens, isError: false })
+        send({ type: 'status', status: 'done' })
+        return
+      }
+
+      if (data.stop_reason === 'tool_use') {
+        const toolResults: any[] = []
+
+        for (const block of data.content) {
+          if (block.type !== 'tool_use') continue
+
+          if (block.name === 'task_complete') {
+            const summary = (block.input as any).summary
+            toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: 'Task marked as complete.' })
+            savedApiMessages.push({ role: 'user', content: toolResults })
+            savedTotalTurns += turn
+            send({ type: 'done', result: summary, cost: savedCost, duration: Date.now() - startTime, turns: savedTotalTurns, inputTokens: savedInputTokens, outputTokens: savedOutputTokens, isError: false })
+            send({ type: 'status', status: 'done' })
+            return
+          }
+
+          console.log(`[agent-worker] Follow-up tool: ${block.name}`)
+          const { result, isError } = executeTool(block.name, block.input, savedOpts.cwd)
+
+          send({ type: 'message', data: { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: block.id, content: result }] } } })
+
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: block.id,
+            content: result,
+            ...(isError ? { is_error: true } : {}),
+          })
+        }
+
+        savedApiMessages.push({ role: 'user', content: toolResults })
+      }
+    } catch (err) {
+      send({ type: 'message', data: { type: 'error', text: `Follow-up turn ${turn}: ${(err as Error).message}` } })
+      savedTotalTurns += turn
+      send({ type: 'done', result: `Error: ${(err as Error).message}`, cost: savedCost, duration: Date.now() - startTime, turns: savedTotalTurns, inputTokens: savedInputTokens, outputTokens: savedOutputTokens, isError: true })
+      send({ type: 'status', status: 'error' })
+      return
+    }
+  }
+
+  if (!aborted) {
+    savedTotalTurns += turn
+    send({ type: 'done', result: 'Reached maximum turns', cost: savedCost, duration: Date.now() - startTime, turns: savedTotalTurns, inputTokens: savedInputTokens, outputTokens: savedOutputTokens, isError: false })
+    send({ type: 'status', status: 'done' })
+  }
+}
+
+// ƒ"?ƒ"? IPC message handler ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?
+
+process.on('message', (msg: any) => {
   if (msg.type === 'start') {
-    runAgent(msg).catch((err) => {
+    runAgentPersistent(msg as StartMessage).catch((err) => {
       send({ type: 'message', data: { type: 'error', text: err.message } })
       send({ type: 'status', status: 'error' })
-      process.exit(1)
+    })
+  }
+  if (msg.type === 'followup') {
+    handleFollowUp(msg.message).catch((err) => {
+      send({ type: 'message', data: { type: 'error', text: err.message } })
+      send({ type: 'status', status: 'error' })
     })
   }
   if (msg.type === 'kill') {

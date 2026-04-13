@@ -1,9 +1,10 @@
 /**
- * AgentChat — Goose-style chat renderer for agent messages.
+ * AgentChat \u2014 Goose-style chat renderer for agent messages.
  * Matches Goose Desktop's exact layout:
  * - GooseMessage: left-aligned, full width, markdown text + tool cards
  * - UserMessage: right-aligned dark pill
  * - ToolCallWithResponse: bordered expandable card
+ * - Follow-up input: always available, even after agent completes
  */
 
 import { useState, useEffect, useRef, useMemo } from 'react'
@@ -12,10 +13,10 @@ import { useStore } from '../../store/index.js'
 import {
   Bot, ChevronRight, ChevronDown, FileText, Terminal as TerminalIcon,
   Search, Edit3, Globe, Loader2, CheckCircle2, XCircle, DollarSign, Clock,
-  Copy, Check,
+  Copy, Check, Send, ArrowUp,
 } from 'lucide-react'
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// \u2500\u2500 Types \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 interface TextContent { type: 'text'; text: string }
 interface ToolUseContent { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
@@ -56,7 +57,7 @@ function formatTokens(n: number): string {
   return String(n)
 }
 
-// ── Tool helpers ─────────────────────────────────────────────────────────────
+// \u2500\u2500 Tool helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 function getToolIcon(name: string) {
   if (name.includes('read') || name.includes('Read') || name.includes('list') || name.includes('List')) return <FileText className="w-4 h-4 shrink-0" />
@@ -86,7 +87,7 @@ function getToolDescription(name: string, input: Record<string, unknown>): strin
   }
 }
 
-// ── ToolCallCard (matches Goose ToolCallWithResponse) ────────────────────────
+// \u2500\u2500 ToolCallCard (matches Goose ToolCallWithResponse) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 function ToolCallCard({ name, input, result }: { name: string; input: Record<string, unknown>; result?: string }) {
   const [expanded, setExpanded] = useState(false)
@@ -94,7 +95,7 @@ function ToolCallCard({ name, input, result }: { name: string; input: Record<str
 
   return (
     <div className="w-full text-sm rounded-lg overflow-hidden border border-border-primary my-1.5">
-      {/* Header — clickable, like Goose */}
+      {/* Header \u2014 clickable, like Goose */}
       <button
         onClick={() => setExpanded(!expanded)}
         className="group w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-bg-secondary transition-colors"
@@ -165,7 +166,7 @@ function ExpandableSection({ label, children, startExpanded = false }: { label: 
   )
 }
 
-// ── GooseMessage (left-aligned, full width, no bubble) ───────────────────────
+// \u2500\u2500 GooseMessage (left-aligned, full width, no bubble) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 function GooseMessageBubble({ content, toolResults }: { content: Array<TextContent | ToolUseContent>; toolResults: Map<string, string> }) {
   return (
@@ -189,7 +190,7 @@ function GooseMessageBubble({ content, toolResults }: { content: Array<TextConte
   )
 }
 
-// ── UserMessage (right-aligned dark pill, matches Goose) ─────────────────────
+// \u2500\u2500 UserMessage (right-aligned dark pill, matches Goose) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 function UserMessageBubble({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
@@ -218,7 +219,7 @@ function UserMessageBubble({ text }: { text: string }) {
   )
 }
 
-// ── Result Card ──────────────────────────────────────────────────────────────
+// \u2500\u2500 Result Card \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 function ResultCard({ result }: { result: ResultMsg }) {
   return (
@@ -244,7 +245,7 @@ function ResultCard({ result }: { result: ResultMsg }) {
   )
 }
 
-// ── Loading Goose (animated dots) ────────────────────────────────────────────
+// \u2500\u2500 Loading Goose (animated dots) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 function LoadingIndicator() {
   return (
@@ -259,7 +260,84 @@ function LoadingIndicator() {
   )
 }
 
-// ── Main Component ───────────────────────────────────────────────────────────
+// \u2500\u2500 Follow-up Input Bar \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+function FollowUpInput({ workerbeeId, onSent }: { workerbeeId: string; onSent: () => void }) {
+  const [message, setMessage] = useState('')
+  const [sending, setSending] = useState(false)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  const handleSend = async () => {
+    const text = message.trim()
+    if (!text || sending) return
+    setSending(true)
+    try {
+      const res = await apiFetch(`/api/workerbees/${workerbeeId}/followup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Follow-up failed' }))
+        useStore.getState().addToast(err.error || 'Follow-up failed')
+        return
+      }
+      setMessage('')
+      onSent()
+    } catch (err) {
+      useStore.getState().addToast(`Follow-up failed: ${(err as Error).message}`)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
+  }
+
+  return (
+    <div className="border-t border-border-primary bg-bg-primary px-4 py-3 shrink-0">
+      <div className="flex items-end gap-2 max-w-3xl mx-auto">
+        <div className="flex-1 relative">
+          <textarea
+            ref={inputRef}
+            className="w-full bg-bg-secondary border border-border-primary rounded-xl px-4 py-2.5 pr-10 text-sm outline-none focus:border-block-teal resize-none min-h-[42px] max-h-[120px] placeholder:text-text-disabled"
+            placeholder="Ask a follow-up question..."
+            value={message}
+            onChange={(e) => {
+              setMessage(e.target.value)
+              // Auto-resize
+              e.target.style.height = 'auto'
+              e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'
+            }}
+            onKeyDown={handleKeyDown}
+            rows={1}
+            disabled={sending}
+          />
+          <button
+            onClick={handleSend}
+            disabled={!message.trim() || sending}
+            className="absolute right-2 bottom-2 p-1 rounded-lg bg-block-teal text-white disabled:opacity-30 disabled:bg-text-tertiary hover:bg-block-teal/80 transition-colors"
+            title="Send follow-up (Enter)"
+          >
+            {sending
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <ArrowUp className="w-4 h-4" />
+            }
+          </button>
+        </div>
+      </div>
+      <div className="text-center mt-1.5">
+        <span className="text-[10px] text-text-disabled">Press Enter to send \u2022 Shift+Enter for new line</span>
+      </div>
+    </div>
+  )
+}
+
+// \u2500\u2500 Main Component \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 export function AgentChat({ workerbeeId, taskDescription }: { workerbeeId: string; taskDescription?: string }) {
   const [state, setState] = useState<AgentState | null>(null)
@@ -322,17 +400,21 @@ export function AgentChat({ workerbeeId, taskDescription }: { workerbeeId: strin
   // If no_runner but we have messages from a previous run, show them
   if (state.status === 'no_runner' && state.messages.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-text-tertiary gap-3 p-8">
-        <Bot className="w-8 h-8" />
-        <div className="text-sm text-center">
-          This agent has finished. No conversation history available.
+      <div className="flex flex-col h-full">
+        <div className="flex flex-col items-center justify-center flex-1 text-text-tertiary gap-3 p-8">
+          <Bot className="w-8 h-8" />
+          <div className="text-sm text-center">
+            This agent has finished. No conversation history available.
+          </div>
         </div>
+        <FollowUpInput workerbeeId={workerbeeId} onSent={() => {}} />
       </div>
     )
   }
 
   // Map no_runner with messages to 'done' for display
   const displayStatus = state.status === 'no_runner' ? 'done' : state.status
+  const isFinished = displayStatus === 'done' || displayStatus === 'error'
 
   return (
     <div className="flex flex-col h-full bg-bg-primary">
@@ -345,6 +427,9 @@ export function AgentChat({ workerbeeId, taskDescription }: { workerbeeId: strin
         <span className="text-sm font-medium text-text-primary">
           {displayStatus === 'working' ? 'Working...' : displayStatus === 'done' ? 'Completed' : 'Error'}
         </span>
+        {isFinished && (
+          <span className="text-xs text-text-tertiary ml-1">\u2014 send a follow-up below</span>
+        )}
         <span className="ml-auto flex items-center gap-3 text-xs text-text-secondary font-mono">
           {state.totalCost > 0 && <span>${state.totalCost.toFixed(4)}</span>}
           {(state.inputTokens > 0 || state.outputTokens > 0) && (
@@ -365,6 +450,10 @@ export function AgentChat({ workerbeeId, taskDescription }: { workerbeeId: strin
           if (msg.type === 'result') {
             return <ResultCard key={i} result={msg as ResultMsg} />
           }
+          if (msg.type === 'user' && (msg as UserMsg).text) {
+            // Follow-up user messages (not tool results)
+            return <UserMessageBubble key={i} text={(msg as UserMsg).text!} />
+          }
           if ((msg as any).type === 'error') {
             return (
               <div key={i} className="my-2 p-3 rounded-lg border border-red-200/30 bg-red-50 text-red-700 text-sm">
@@ -378,8 +467,15 @@ export function AgentChat({ workerbeeId, taskDescription }: { workerbeeId: strin
         {displayStatus === 'working' && <LoadingIndicator />}
         <div ref={bottomRef} />
       </div>
+
+      {/* Follow-up input \u2014 always visible so user can interact at any time */}
+      <FollowUpInput
+        workerbeeId={workerbeeId}
+        onSent={() => {
+          // Scroll to bottom after sending
+          setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 200)
+        }}
+      />
     </div>
   )
 }
-
-

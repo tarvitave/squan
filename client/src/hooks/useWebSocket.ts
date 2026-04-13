@@ -2,9 +2,14 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 import { useStore } from '../store/index.js'
 
 // Sentinel value written to a terminal subscriber when its PTY session no longer exists
-export const SESSION_DEAD = '\x1b[31m\r\n[session ended — close this pane or create a new terminal]\x1b[0m\r\n'
+export const SESSION_DEAD = '\x1b[31m\r\n[session ended \u2014 close this pane or create a new terminal]\x1b[0m\r\n'
 
 type DataCallback = (data: string) => void
+
+// Helper: normalize workerBeeId field (server may send workerBeeId or workerbeeId)
+function getWorkerBeeId(p: Record<string, unknown>): string | undefined {
+  return (p.workerBeeId ?? p.workerbeeId ?? p.id) as string | undefined
+}
 
 export function useWebSocket() {
   const ws = useRef<WebSocket | null>(null)
@@ -66,7 +71,7 @@ export function useWebSocket() {
           if (msg.type === 'ack') {
             const bootId = msg.payload?.bootId as string | undefined
             if (bootId && lastBootId.current !== null && lastBootId.current !== bootId) {
-              // Server restarted — signal App to clear stale panes
+              // Server restarted \u2014 signal App to clear stale panes
               setServerRestarted(true)
             }
             if (bootId) lastBootId.current = bootId
@@ -98,7 +103,7 @@ export function useWebSocket() {
             if (payload?.type === 'workerbee.spawned') {
               const p = payload as Record<string, unknown>
               addAgent({
-                id: p.workerBeeId as string,
+                id: (p.workerBeeId ?? p.workerbeeId) as string,
                 name: p.name as string,
                 projectId: p.projectId as string,
                 role: (p.role as string) ?? 'coder',
@@ -110,19 +115,36 @@ export function useWebSocket() {
                 branch: (p.branch as string) ?? '',
               })
             }
-            if (payload?.type === 'workerbee.working')
-              updateAgent(payload.workerBeeId as string, { status: 'working' })
-            if (payload?.type === 'workerbee.done')
-              updateAgent(payload.workerBeeId as string, { status: 'done', completionNote: (payload.note as string) ?? '' })
-            if (payload?.type === 'workerbee.stalled')
-              updateAgent(payload.workerBeeId as string, { status: 'stalled', completionNote: (payload.note as string) ?? '' })
-            if (payload?.type === 'workerbee.zombie')
-              updateAgent(payload.workerBeeId as string, { status: 'zombie' })
+            if (payload?.type === 'workerbee.working') {
+              const id = getWorkerBeeId(payload as Record<string, unknown>)
+              if (id) updateAgent(id, { status: 'working' })
+            }
+            if (payload?.type === 'workerbee.done') {
+              const id = getWorkerBeeId(payload as Record<string, unknown>)
+              if (id) {
+                updateAgent(id, { status: 'done', completionNote: (payload.note as string) ?? '' })
+                // Client-side fallback: auto-advance the release train assigned to this agent
+                const rt = useStore.getState().releaseTrains.find(
+                  (r) => r.assignedWorkerBeeId === id && r.status === 'in_progress'
+                )
+                if (rt) updateReleaseTrain(rt.id, { status: 'pr_review' })
+              }
+            }
+            if (payload?.type === 'workerbee.stalled') {
+              const id = getWorkerBeeId(payload as Record<string, unknown>)
+              if (id) updateAgent(id, { status: 'stalled', completionNote: (payload.note as string) ?? '' })
+            }
+            if (payload?.type === 'workerbee.zombie') {
+              const id = getWorkerBeeId(payload as Record<string, unknown>)
+              if (id) updateAgent(id, { status: 'zombie' })
+            }
             if (payload?.type === 'workerbee.deleted') {
-              const workerBeeId = payload.workerBeeId as string
-              const agent = useStore.getState().agents.find((a) => a.id === workerBeeId)
-              if (agent?.sessionId) useStore.getState().removePaneFromAllTabs(agent.sessionId)
-              removeAgent(workerBeeId)
+              const workerBeeId = getWorkerBeeId(payload as Record<string, unknown>)
+              if (workerBeeId) {
+                const agent = useStore.getState().agents.find((a) => a.id === workerBeeId)
+                if (agent?.sessionId) useStore.getState().removePaneFromAllTabs(agent.sessionId)
+                removeAgent(workerBeeId)
+              }
             }
 
             // ReleaseTrain events
@@ -191,7 +213,7 @@ export function useWebSocket() {
       socket.onclose = () => {
         if (pingTimer.current) { clearInterval(pingTimer.current); pingTimer.current = null }
         setConnected(false)
-        // Reconnect with exponential backoff (1s → 2s → 4s → … → 30s max)
+        // Reconnect with exponential backoff (1s \u2192 2s \u2192 4s \u2192 \u2026 \u2192 30s max)
         reconnectTimer = setTimeout(connect, retryDelay.current)
         retryDelay.current = Math.min(retryDelay.current * 2, 30_000)
       }

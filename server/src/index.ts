@@ -54,7 +54,7 @@ async function spawnDirectAgent(projectId: string, taskDescription: string, user
     if (agentId !== setup.id) return
     broadcastEvent({
       id: randomUUID(), type: 'workerbee.working',
-      payload: { workerbeeId: setup.id, workerbeeName: setup.name, agentMessage: msg },
+      payload: { workerBeeId: setup.id, workerbeeName: setup.name, agentMessage: msg },
       timestamp: new Date().toISOString(),
     })
   })
@@ -782,6 +782,94 @@ app.post('/api/workerbees/:id/message', async (req, res) => {
   } catch (err) {
     const msg = (err as Error).message
     res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
+  }
+})
+
+// Follow-up: resume conversation with a completed agent
+app.post('/api/workerbees/:id/followup', requireAuth, async (req, res) => {
+  try {
+    const userId = res.locals.userId as string
+    const { message } = req.body
+    if (!message) return res.status(400).json({ error: 'message required' })
+
+    const bee = await workerBeeManager.getById(req.params.id)
+    if (!bee) return res.status(404).json({ error: 'Agent not found' })
+    if (bee.userId && bee.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
+
+    const user = await getUserById(userId)
+    if (!user?.anthropicApiKey) return res.status(400).json({ error: 'No Anthropic API key' })
+
+    // Check if there's still an active process
+    let agent = processManager.get(req.params.id)
+    if (agent && (agent.status === 'done' || agent.status === 'error')) {
+      // Agent process exists but finished — inject user message and resume the loop
+      const userMsg = { type: 'user', text: message }
+      agent.messages.push(userMsg)
+      getDb().execute({
+        sql: `INSERT INTO workerbee_messages (workerbee_id, message_json) VALUES (?, ?)`,
+        args: [req.params.id, JSON.stringify(userMsg)],
+      }).catch(() => {})
+      broadcastEvent({
+        id: randomUUID(), type: 'workerbee.working',
+        payload: { workerBeeId: req.params.id },
+        timestamp: new Date().toISOString(),
+      })
+
+      // Send follow-up to the child process via IPC
+      if (agent.process && agent.process.connected) {
+        agent.status = 'working'
+        agent.result = null
+        agent.process.send({ type: 'followup', message })
+        await workerBeeManager.updateStatus(req.params.id, 'working' as any)
+        return res.json({ ok: true, resumed: true })
+      }
+    }
+
+    // No active process — spawn a fresh one with conversation context
+    const existingMessages = await getDb().execute({
+      sql: `SELECT message_json FROM workerbee_messages WHERE workerbee_id = ? ORDER BY id ASC`,
+      args: [req.params.id],
+    })
+    const history = existingMessages.rows.map((r: any) => JSON.parse(r.message_json as string))
+
+    // Record the user follow-up message
+    const userMsg = { type: 'user', text: message }
+    await getDb().execute({
+      sql: `INSERT INTO workerbee_messages (workerbee_id, message_json) VALUES (?, ?)`,
+      args: [req.params.id, JSON.stringify(userMsg)],
+    })
+
+    // Spawn a new process for the follow-up
+    const newAgent = processManager.spawn({
+      id: req.params.id,
+      name: bee.name,
+      cwd: bee.worktreePath,
+      task: message,
+      apiKey: user.anthropicApiKey,
+    })
+
+    // Restore message history into the new process
+    newAgent.messages = [...history, userMsg]
+
+    await workerBeeManager.updateStatus(req.params.id, 'working' as any)
+
+    // Wire up the same event handlers as spawnDirectAgent
+    processManager.on('status', async (agentId: string, status: string) => {
+      if (agentId !== req.params.id) return
+      const newStatus = status === 'done' ? 'done' : status === 'error' ? 'zombie' : 'working'
+      const agentState = processManager.get(req.params.id)
+      await workerBeeManager.updateStatus(req.params.id, newStatus as any, agentState?.result ?? undefined).catch(() => {})
+      broadcastEvent({
+        id: randomUUID(),
+        type: status === 'done' ? 'workerbee.done' : status === 'error' ? 'workerbee.zombie' : 'workerbee.working',
+        payload: { workerBeeId: req.params.id, id: req.params.id, name: bee.name, result: agentState?.result, note: agentState?.result },
+        timestamp: new Date().toISOString(),
+      })
+    })
+
+    res.json({ ok: true, resumed: false, spawned: true })
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message })
   }
 })
 

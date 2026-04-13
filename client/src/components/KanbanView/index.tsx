@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
 import type { ReleaseTrainEntry, TemplateEntry } from '../../store/index.js'
@@ -7,7 +7,7 @@ import { cn } from '../../lib/utils.js'
 import { Button } from '../ui/button.js'
 import {
   Plus, X, ChevronDown, ChevronRight, Trash2,
-  RefreshCw, ExternalLink, Zap, Wrench, Rocket, Send,
+  RefreshCw, ExternalLink, Zap, Wrench, Rocket, Send, Maximize2,
 } from 'lucide-react'
 
 type KanbanTab = 'board' | 'trains' | 'standbys'
@@ -92,6 +92,8 @@ function Board() {
   const [syncingPr, setSyncingPr] = useState<string | null>(null)
   const [restarting, setRestarting] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [showExpandedEditor, setShowExpandedEditor] = useState(false)
+  const nameInputRef = useRef<HTMLInputElement>(null)
 
   const agentById = Object.fromEntries(agents.map((a) => [a.id, a]))
   const rigNameById = Object.fromEntries(rigs.map((r) => [r.id, r.name]))
@@ -167,6 +169,13 @@ function Board() {
     } catch (err) { addToast(`Restart failed: ${(err as Error).message}`) }
     finally { setRestarting(null) }
   }
+
+  // Auto-focus name input when new form opens (once, not on every render)
+  useEffect(() => {
+    if (showNewForm && nameInputRef.current) {
+      nameInputRef.current.focus()
+    }
+  }, [showNewForm])
 
   const [dispatchingId, setDispatchingId] = useState<string | null>(null)
   const dispatch = async (id: string) => {
@@ -244,8 +253,18 @@ function Board() {
                     {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                 )}
-                <input ref={(el) => { if (el) setTimeout(() => el.focus(), 100) }} className="w-full bg-bg-primary border border-border-primary rounded-md px-2.5 py-1.5 text-sm outline-none focus:border-block-teal" placeholder="Task name…" value={newForm.name} onChange={(e) => setNewForm((f) => ({ ...f, name: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') handleCreate() }} />
-                <textarea className="w-full bg-bg-primary border border-border-primary rounded-md px-2.5 py-1.5 text-sm outline-none focus:border-block-teal resize-y min-h-[48px]" placeholder={isManual ? 'Description…' : "Agent instructions…"} value={newForm.description} rows={2} onChange={(e) => setNewForm((f) => ({ ...f, description: e.target.value }))} />
+                <input ref={nameInputRef} className="w-full bg-bg-primary border border-border-primary rounded-md px-2.5 py-2 text-sm outline-none focus:border-block-teal" placeholder="Task name…" value={newForm.name} onChange={(e) => setNewForm((f) => ({ ...f, name: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleCreate() }} />
+                <div className="relative">
+                  <textarea className="w-full bg-bg-primary border border-border-primary rounded-md px-2.5 py-2 text-sm outline-none focus:border-block-teal resize-y min-h-[80px]" placeholder={isManual ? 'Description…' : "Agent instructions — be detailed about what you want…"} value={newForm.description} rows={4} onChange={(e) => setNewForm((f) => ({ ...f, description: e.target.value }))} />
+                  <button
+                    type="button"
+                    className="absolute top-1.5 right-1.5 text-text-tertiary hover:text-text-primary transition-colors p-0.5 rounded hover:bg-bg-hover"
+                    onClick={() => setShowExpandedEditor(true)}
+                    title="Expand editor"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
                 {rigs.length > 1 && !activeProjectId && (
                   <select className="w-full bg-bg-primary border border-border-primary rounded-md px-2.5 py-1.5 text-sm outline-none" value={newForm.projectId || rigs[0]?.id} onChange={(e) => setNewForm((f) => ({ ...f, projectId: e.target.value }))}>
                     {rigs.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
@@ -368,6 +387,48 @@ function Board() {
           </div>
         )
       })}
+
+      {/* Expanded editor modal */}
+      {showExpandedEditor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowExpandedEditor(false)}>
+          <div className="bg-bg-primary border border-border-primary rounded-xl shadow-2xl w-[600px] max-w-[90vw] max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-border-primary">
+              <h3 className="text-sm font-medium text-text-primary">Task Instructions</h3>
+              <button className="text-text-tertiary hover:text-text-primary transition-colors" onClick={() => setShowExpandedEditor(false)}>
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex flex-col gap-3 p-5 flex-1 overflow-auto">
+              <div>
+                <label className="text-xs text-text-secondary mb-1 block">Task Name</label>
+                <input
+                  className="w-full bg-bg-secondary border border-border-primary rounded-md px-3 py-2 text-sm outline-none focus:border-block-teal"
+                  placeholder="Task name…"
+                  value={newForm.name}
+                  onChange={(e) => setNewForm((f) => ({ ...f, name: e.target.value }))}
+                />
+              </div>
+              <div className="flex-1">
+                <label className="text-xs text-text-secondary mb-1 block">{isManual ? 'Description' : 'Agent Instructions'}</label>
+                <textarea
+                  className="w-full bg-bg-secondary border border-border-primary rounded-md px-3 py-2 text-sm outline-none focus:border-block-teal resize-y min-h-[200px]"
+                  placeholder={isManual ? 'Describe the task in detail…' : 'Write detailed agent instructions — what to do, files to touch, constraints…'}
+                  value={newForm.description}
+                  rows={10}
+                  autoFocus
+                  onChange={(e) => setNewForm((f) => ({ ...f, description: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-3 border-t border-border-primary">
+              <Button variant="ghost" size="sm" onClick={() => setShowExpandedEditor(false)}>Close</Button>
+              <Button variant="outline" size="sm" onClick={() => { setShowExpandedEditor(false); handleCreate() }} disabled={creating || !newForm.name.trim()}>
+                {creating ? '…' : isManual ? 'Create' : autoDispatch ? 'Create & Dispatch' : 'Create'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
