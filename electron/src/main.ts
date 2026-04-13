@@ -152,7 +152,15 @@ async function startServer(): Promise<void> {
 
 function stopServer() {
   if (serverProcess) {
-    serverProcess.kill('SIGTERM')
+    const pid = serverProcess.pid
+    try {
+      // On Windows, SIGTERM doesn't work — kill the process tree
+      if (process.platform === 'win32' && pid) {
+        require('child_process').execSync(`taskkill /pid ${pid} /t /f`, { stdio: 'ignore' })
+      } else {
+        serverProcess.kill('SIGTERM')
+      }
+    } catch { /* ignore — process may already be dead */ }
     serverProcess = null
     serverReady = false
     updateTray()
