@@ -42,7 +42,7 @@ async function allocateName(projectId: string): Promise<string> {
 async function getCharter(projectId: string, role: string): Promise<string | undefined> {
   const db = getDb()
   const result = await db.execute({
-    sql: `SELECT content FROM charters WHERE rig_id = ? AND role = ? LIMIT 1`,
+    sql: `SELECT content FROM charters WHERE project_id = ? AND role = ? LIMIT 1`,
     args: [projectId, role],
   })
   return result.rows[0]?.content as string | undefined
