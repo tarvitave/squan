@@ -244,7 +244,7 @@ function Board() {
                     {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                 )}
-                <input className="w-full bg-bg-primary border border-border-primary rounded-md px-2.5 py-1.5 text-sm outline-none focus:border-block-teal" placeholder="Task name…" value={newForm.name} onChange={(e) => setNewForm((f) => ({ ...f, name: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') handleCreate() }} autoFocus />
+                <input ref={(el) => { if (el) setTimeout(() => el.focus(), 100) }} className="w-full bg-bg-primary border border-border-primary rounded-md px-2.5 py-1.5 text-sm outline-none focus:border-block-teal" placeholder="Task name…" value={newForm.name} onChange={(e) => setNewForm((f) => ({ ...f, name: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') handleCreate() }} />
                 <textarea className="w-full bg-bg-primary border border-border-primary rounded-md px-2.5 py-1.5 text-sm outline-none focus:border-block-teal resize-y min-h-[48px]" placeholder={isManual ? 'Description…' : "Agent instructions…"} value={newForm.description} rows={2} onChange={(e) => setNewForm((f) => ({ ...f, description: e.target.value }))} />
                 {rigs.length > 1 && !activeProjectId && (
                   <select className="w-full bg-bg-primary border border-border-primary rounded-md px-2.5 py-1.5 text-sm outline-none" value={newForm.projectId || rigs[0]?.id} onChange={(e) => setNewForm((f) => ({ ...f, projectId: e.target.value }))}>

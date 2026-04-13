@@ -5,8 +5,13 @@
  */
 
 import { fork, ChildProcess } from 'child_process'
-import { join } from 'path'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
 import { EventEmitter } from 'events'
+
+// ESM doesn't have __dirname — derive it from import.meta.url
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 export interface AgentProcess {
   id: string
