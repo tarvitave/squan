@@ -1,5 +1,5 @@
-/**
- * AgentChat — Goose-style chat renderer for agent messages.
+﻿/**
+ * AgentChat â€” Goose-style chat renderer for agent messages.
  * Matches Goose Desktop's exact layout:
  * - GooseMessage: left-aligned, full width, markdown text + tool cards
  * - UserMessage: right-aligned dark pill
@@ -15,7 +15,7 @@ import {
   Copy, Check,
 } from 'lucide-react'
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface TextContent { type: 'text'; text: string }
 interface ToolUseContent { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
@@ -56,7 +56,7 @@ function formatTokens(n: number): string {
   return String(n)
 }
 
-// ── Tool helpers ─────────────────────────────────────────────────────────────
+// â”€â”€ Tool helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function getToolIcon(name: string) {
   if (name.includes('read') || name.includes('Read') || name.includes('list') || name.includes('List')) return <FileText className="w-4 h-4 shrink-0" />
@@ -86,7 +86,7 @@ function getToolDescription(name: string, input: Record<string, unknown>): strin
   }
 }
 
-// ── ToolCallCard (matches Goose ToolCallWithResponse) ────────────────────────
+// â”€â”€ ToolCallCard (matches Goose ToolCallWithResponse) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function ToolCallCard({ name, input, result }: { name: string; input: Record<string, unknown>; result?: string }) {
   const [expanded, setExpanded] = useState(false)
@@ -94,7 +94,7 @@ function ToolCallCard({ name, input, result }: { name: string; input: Record<str
 
   return (
     <div className="w-full text-sm rounded-lg overflow-hidden border border-border-primary my-1.5">
-      {/* Header — clickable, like Goose */}
+      {/* Header â€” clickable, like Goose */}
       <button
         onClick={() => setExpanded(!expanded)}
         className="group w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-bg-secondary transition-colors"
@@ -165,7 +165,7 @@ function ExpandableSection({ label, children, startExpanded = false }: { label: 
   )
 }
 
-// ── GooseMessage (left-aligned, full width, no bubble) ───────────────────────
+// â”€â”€ GooseMessage (left-aligned, full width, no bubble) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function GooseMessageBubble({ content, toolResults }: { content: Array<TextContent | ToolUseContent>; toolResults: Map<string, string> }) {
   return (
@@ -189,7 +189,7 @@ function GooseMessageBubble({ content, toolResults }: { content: Array<TextConte
   )
 }
 
-// ── UserMessage (right-aligned dark pill, matches Goose) ─────────────────────
+// â”€â”€ UserMessage (right-aligned dark pill, matches Goose) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function UserMessageBubble({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
@@ -218,7 +218,7 @@ function UserMessageBubble({ text }: { text: string }) {
   )
 }
 
-// ── Result Card ──────────────────────────────────────────────────────────────
+// â”€â”€ Result Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function ResultCard({ result }: { result: ResultMsg }) {
   return (
@@ -244,7 +244,7 @@ function ResultCard({ result }: { result: ResultMsg }) {
   )
 }
 
-// ── Loading Goose (animated dots) ────────────────────────────────────────────
+// â”€â”€ Loading Goose (animated dots) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function LoadingIndicator() {
   return (
@@ -254,12 +254,12 @@ function LoadingIndicator() {
         <span className="w-1.5 h-1.5 rounded-full bg-block-teal animate-bounce" style={{ animationDelay: '150ms' }} />
         <span className="w-1.5 h-1.5 rounded-full bg-block-teal animate-bounce" style={{ animationDelay: '300ms' }} />
       </div>
-      <span className="text-xs">Agent is working…</span>
+      <span className="text-xs">Agent is workingâ€¦</span>
     </div>
   )
 }
 
-// ── Main Component ───────────────────────────────────────────────────────────
+// â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function AgentChat({ workerbeeId, taskDescription }: { workerbeeId: string; taskDescription?: string }) {
   const [state, setState] = useState<AgentState | null>(null)
@@ -310,32 +310,45 @@ export function AgentChat({ workerbeeId, taskDescription }: { workerbeeId: strin
     )
   }
 
-  if (!state || state.status === 'no_runner') {
+  if (!state) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-text-tertiary gap-3 p-8">
+        <Bot className="w-8 h-8" />
+        <div className="text-sm text-center">Loading agent dataâ€¦</div>
+      </div>
+    )
+  }
+
+  // If no_runner but we have messages from a previous run, show them
+  if (state.status === 'no_runner' && state.messages.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-text-tertiary gap-3 p-8">
         <Bot className="w-8 h-8" />
         <div className="text-sm text-center">
-          This agent uses terminal mode.<br />Switch to <strong>Terminals</strong> to see output.
+          This agent has finished. No conversation history available.
         </div>
       </div>
     )
   }
+
+  // Map no_runner with messages to 'done' for display
+  const displayStatus = state.status === 'no_runner' ? 'done' : state.status
 
   return (
     <div className="flex flex-col h-full bg-bg-primary">
       {/* Header bar */}
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border-primary shrink-0">
         <span className={`w-2 h-2 rounded-full shrink-0 ${
-          state.status === 'working' ? 'bg-block-teal animate-pulse' :
-          state.status === 'done' ? 'bg-green-500' : 'bg-red-500'
+          displayStatus === 'working' ? 'bg-block-teal animate-pulse' :
+          displayStatus === 'done' ? 'bg-green-500' : 'bg-red-500'
         }`} />
         <span className="text-sm font-medium text-text-primary">
-          {state.status === 'working' ? 'Working…' : state.status === 'done' ? 'Completed' : 'Error'}
+          {displayStatus === 'working' ? 'Workingâ€¦' : displayStatus === 'done' ? 'Completed' : 'Error'}
         </span>
         <span className="ml-auto flex items-center gap-3 text-xs text-text-secondary font-mono">
           {state.totalCost > 0 && <span>${state.totalCost.toFixed(4)}</span>}
           {(state.inputTokens > 0 || state.outputTokens > 0) && (
-            <span>↑{formatTokens(state.inputTokens)} ↓{formatTokens(state.outputTokens)}</span>
+            <span>â†‘{formatTokens(state.inputTokens)} â†“{formatTokens(state.outputTokens)}</span>
           )}
         </span>
       </div>
@@ -362,9 +375,10 @@ export function AgentChat({ workerbeeId, taskDescription }: { workerbeeId: strin
           return null
         })}
 
-        {state.status === 'working' && <LoadingIndicator />}
+        {displayStatus === 'working' && <LoadingIndicator />}
         <div ref={bottomRef} />
       </div>
     </div>
   )
 }
+

@@ -74,7 +74,7 @@ async function spawnDirectAgent(projectId: string, taskDescription: string, user
     if (status === 'done') {
       try {
         const db = getDb()
-        const rt = await db.execute({ sql: `SELECT id, status FROM release_trains WHERE assignedWorkerBeeId = ?`, args: [setup.id] })
+        const rt = await db.execute({ sql: `SELECT id, status FROM release_trains WHERE assigned_workerbee_id = ?`, args: [setup.id] })
         if (rt.rows.length > 0 && rt.rows[0].status === 'in_progress') {
           const rtId = rt.rows[0].id as string
           await db.execute({ sql: `UPDATE release_trains SET status = 'pr_review' WHERE id = ?`, args: [rtId] })
