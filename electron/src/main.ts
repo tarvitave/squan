@@ -287,9 +287,9 @@ function createMenu() {
     {
       label: 'View',
       submenu: [
-        ...['Terminals', 'Kanban', 'Metrics', 'Events', 'Costs', 'Console', 'Claude Code'].map((label, i) => ({
+        ...['Agents', 'Kanban', 'Metrics', 'Events', 'Costs', 'Console'].map((label, i) => ({
           label, accelerator: `CmdOrCtrl+${i + 1}`,
-          click: () => mainWindow?.webContents.send('switch-view', ['terminals', 'kanban', 'metrics', 'events', 'costs', 'console', 'claudecode'][i]),
+          click: () => mainWindow?.webContents.send('switch-view', ['terminals', 'kanban', 'metrics', 'events', 'costs', 'console'][i]),
         })),
         { type: 'separator' as const },
         { label: 'Command Palette', accelerator: 'CmdOrCtrl+K', click: () => mainWindow?.webContents.send('toggle-command-palette') },
@@ -306,11 +306,11 @@ function createMenu() {
     },
     { label: 'Window', submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'close' }] },
     { label: 'Help', submenu: [
-      { label: 'Documentation', click: () => shell.openExternal('https://squansq.com/docs') },
-      { label: 'GitHub', click: () => shell.openExternal('https://github.com/tarvitave/squansq') },
+      { label: 'Documentation', click: () => shell.openExternal('https://squan.dev/docs') },
+      { label: 'GitHub', click: () => shell.openExternal('https://github.com/tarvitave/squan') },
       { type: 'separator' },
-      { label: 'Author: Colin', enabled: false },
-      { label: 'Visit squansq.com', click: () => shell.openExternal('https://squansq.com') },
+      { label: 'Author: Colin Wynd', click: () => shell.openExternal('https://linkedin.com/in/colinwynd') },
+      { label: 'Visit squan.dev', click: () => shell.openExternal('https://squan.dev') },
       { type: 'separator' },
       { label: `Squan v${app.getVersion()}`, enabled: false },
     ]},
