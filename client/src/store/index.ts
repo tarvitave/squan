@@ -141,6 +141,8 @@ interface SquansqState {
 
   // Active project — all views filter to this
   activeProjectId: ActiveProjectId
+  selectedAgentId: string | null
+  setSelectedAgentId: (id: string | null) => void
   setActiveProjectId: (id: ActiveProjectId) => void
 
   // Rigs
@@ -153,9 +155,6 @@ interface SquansqState {
   addAgent: (agent: Agent) => void
   updateAgent: (id: string, patch: Partial<Agent>) => void
   removeAgent: (id: string) => void
-  selectedAgentId: string | null
-  setSelectedAgent: (id: string | null) => void
-
   // Release Trains (formerly Convoys)
   releaseTrains: ReleaseTrainEntry[]
   setReleaseTrains: (releaseTrains: ReleaseTrainEntry[]) => void
@@ -279,6 +278,8 @@ export const useStore = create<SquansqState>()(
 
       activeProjectId: null,
       setActiveProjectId: (activeProjectId) => set({ activeProjectId }),
+      selectedAgentId: null,
+      setSelectedAgentId: (selectedAgentId) => set({ selectedAgentId }),
 
       rigs: [],
       setRigs: (rigs) => set({ rigs }),
@@ -289,8 +290,7 @@ export const useStore = create<SquansqState>()(
       updateAgent: (id, patch) =>
         set((s) => ({ agents: s.agents.map((a) => (a.id === id ? { ...a, ...patch } : a)) })),
       removeAgent: (id) => set((s) => ({ agents: s.agents.filter((a) => a.id !== id) })),
-      selectedAgentId: null,
-      setSelectedAgent: (selectedAgentId) => set({ selectedAgentId }),
+
 
       releaseTrains: [],
       setReleaseTrains: (releaseTrains) => set({ releaseTrains, convoys: releaseTrains }),

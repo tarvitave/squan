@@ -100,65 +100,26 @@ export function PreferencesPanel() {
             </div>
           </div>
 
-          {/* Terminal Backend */}
+          {/* Agent Engine */}
           <div className="px-6 py-5">
-            <h3 className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-4">Terminal Backend</h3>
-            {backendSettings ? (
-              <div className="flex flex-col gap-3">
-                {backendSettings.backends.map((b) => {
-                  const isActive = backendSettings.active === b.name
-                  const isTmux = b.name === 'tmux'
-                  return (
-                    <button
-                      key={b.name}
-                      className={cn(
-                        'flex items-start gap-3 w-full text-left p-3 rounded-lg border transition-all',
-                        isActive
-                          ? 'border-block-teal bg-block-teal/5'
-                          : b.available
-                            ? 'border-border-primary hover:border-border-secondary bg-bg-primary'
-                            : 'border-border-primary bg-bg-secondary opacity-50 cursor-not-allowed',
-                      )}
-                      onClick={() => b.available && !isActive && switchBackend(b.name as 'pty' | 'tmux')}
-                      disabled={!b.available || isActive || switchingBackend}
-                    >
-                      <div className={cn(
-                        'mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0',
-                        isActive ? 'border-block-teal' : 'border-border-secondary',
-                      )}>
-                        {isActive && <div className="w-2 h-2 rounded-full bg-block-teal" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <Terminal className="w-3.5 h-3.5 text-text-secondary" />
-                          <span className="text-sm font-medium text-text-primary">{b.label}</span>
-                          {isActive && <span className="text-[10px] font-medium text-block-teal bg-block-teal/10 rounded px-1.5 py-0.5">Active</span>}
-                          {isTmux && b.available && (
-                            <span className="text-[10px] font-medium text-text-info bg-blue-200/10 rounded px-1.5 py-0.5 flex items-center gap-0.5">
-                              <Shield className="w-2.5 h-2.5" /> Crash-resilient
-                            </span>
-                          )}
-                          {isTmux && !b.available && (
-                            <span className="text-[10px] text-text-tertiary">Not available</span>
-                          )}
-                        </div>
-                        <p className="text-xs text-text-secondary mt-1 leading-relaxed">{b.description}</p>
-                      </div>
-                    </button>
-                  )
-                })}
-                {switchingBackend && (
-                  <div className="flex items-center gap-2 text-xs text-text-secondary">
-                    <RefreshCw className="w-3 h-3 animate-spin" /> Switching backend…
-                  </div>
-                )}
-                <p className="text-[11px] text-text-tertiary leading-relaxed">
-                  New agents will use the selected backend. Existing agents continue on their current backend until they finish or are killed.
+            <h3 className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-4">Agent Engine</h3>
+            <div className="flex items-start gap-3 w-full text-left p-3 rounded-lg border border-block-teal bg-block-teal/5">
+              <div className="mt-0.5 w-4 h-4 rounded-full border-2 border-block-teal flex items-center justify-center shrink-0">
+                <div className="w-2 h-2 rounded-full bg-block-teal" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-text-primary">Direct API</span>
+                  <span className="text-[10px] font-medium text-block-teal bg-block-teal/10 rounded px-1.5 py-0.5">Active</span>
+                </div>
+                <p className="text-xs text-text-secondary mt-1 leading-relaxed">
+                  Agents call the Anthropic API directly and execute tools locally. Each agent runs in its own isolated child process.
                 </p>
               </div>
-            ) : (
-              <div className="text-sm text-text-tertiary">Loading…</div>
-            )}
+            </div>
+            <p className="text-[11px] text-text-tertiary leading-relaxed mt-3">
+              Each dispatched agent runs as a separate Node.js process with full crash isolation. No CLI or terminal needed.
+            </p>
           </div>
 
           {/* Anthropic key */}

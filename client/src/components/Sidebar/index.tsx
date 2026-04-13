@@ -510,11 +510,16 @@ export function Sidebar() {
                 }} />
                 <span
                   style={{ flex: 1, color: '#3f434b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
-                  onClick={() => { useStore.getState().setMainView('terminals'); }}
+                  onClick={() => {
+                    useStore.getState().setMainView('terminals')
+                    useStore.getState().setSelectedAgentId(agent.id)
+                  }}
                   title={agent.taskDescription ?? agent.name}
                 >{agent.name}</span>
-                <span style={{ fontSize: 10, color: '#878787', flexShrink: 0 }}>{agent.status}</span>
-                {(agent.status === 'working' || agent.status === 'stalled' || agent.status === 'zombie') && (
+                <span style={{ fontSize: 10, color: (agent.status === 'working' || agent.status === 'idle') ? '#13bbaf' : agent.status === 'done' ? '#91cb80' : (agent.status as string) === 'zombie' || (agent.status as string) === 'error' ? '#f94b4b' : '#878787', flexShrink: 0, fontWeight: 500 }}>
+                  {agent.status === 'idle' ? 'working' : agent.status}
+                </span>
+                {(agent.status === 'working' || agent.status === 'idle' || agent.status === 'stalled' || agent.status === 'zombie') && (
                   <button
                     onClick={async (e) => {
                       e.stopPropagation()

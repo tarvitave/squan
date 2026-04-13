@@ -58,7 +58,16 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: string |
 function AgentDashboard({ activeTab }: { activeTab: any }) {
   const agents = useStore((s) => s.agents)
   const activeProjectId = useStore((s) => s.activeProjectId)
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
+  const storeSelectedId = useStore((s) => s.selectedAgentId)
+  const setStoreSelectedId = useStore((s) => s.setSelectedAgentId)
+  const [localSelectedId, setLocalSelectedId] = useState<string | null>(null)
+
+  // Use store selection if set (from sidebar click), otherwise local
+  const selectedAgentId = storeSelectedId ?? localSelectedId
+  const setSelectedAgentId = (id: string | null) => {
+    setLocalSelectedId(id)
+    setStoreSelectedId(null) // Clear store selection after using it
+  }
 
   const projectAgents = activeProjectId
     ? agents.filter((a) => a.projectId === activeProjectId)
@@ -68,12 +77,15 @@ function AgentDashboard({ activeTab }: { activeTab: any }) {
   const doneAgents = projectAgents.filter((a) => a.status === 'done').slice(0, 5)
   const allVisible = [...workingAgents, ...doneAgents]
 
-  // Auto-select first working agent
+  // Auto-select: store selection (from sidebar) → first working agent → first visible
   useEffect(() => {
-    if (!selectedAgentId && workingAgents.length > 0) {
-      setSelectedAgentId(workingAgents[0].id)
+    if (storeSelectedId && allVisible.find(a => a.id === storeSelectedId)) {
+      setLocalSelectedId(storeSelectedId)
+      setStoreSelectedId(null)
+    } else if (!selectedAgentId && workingAgents.length > 0) {
+      setLocalSelectedId(workingAgents[0].id)
     }
-  }, [workingAgents.length])
+  }, [storeSelectedId, workingAgents.length])
 
   if (allVisible.length === 0) {
     return (
