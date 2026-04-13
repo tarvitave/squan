@@ -5,9 +5,9 @@ import jwt from 'jsonwebtoken'
 import type { WsMessage, SquansqEvent } from '../types/index.js'
 // PTY disabled — stub out all terminal methods
 const ptyManager = {
-  onAnySessionExit: (_cb: any) => {},
+  onAnySessionExit: (_cb: (sessionId: string) => void) => {},
   list: () => [] as string[],
-  subscribe: (_sid: string, _cid: string, _cb: any) => {},
+  subscribe: (_sid: string, _cid: string, _cb: (data: string) => void) => {},
   unsubscribe: (_sid: string, _cid: string) => {},
   write: (_sid: string, _data: string) => {},
   resize: (_sid: string, _cols: number, _rows: number) => {},

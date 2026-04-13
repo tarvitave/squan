@@ -503,10 +503,62 @@ export function Sidebar() {
             <div style={{ padding: '12px 16px', fontSize: 12, color: '#a7b0b9', textAlign: 'center' }}>No agents yet</div>
           ) : (
             projectAgents.map((agent) => (
-              <div key={agent.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderBottom: '1px solid #e3e6ea', fontSize: 12 }}>
-                <span style={{ color: agent.status === 'working' ? '#13bbaf' : agent.status === 'done' ? '#91cb80' : agent.status === 'stalled' ? '#fbcd44' : '#a7b0b9' }}>●</span>
-                <span style={{ flex: 1, color: '#3f434b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{agent.name}</span>
-                <span style={{ fontSize: 11, color: '#878787' }}>{agent.status}</span>
+              <div key={agent.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderBottom: '1px solid #e3e6ea', fontSize: 12 }}>
+                <span style={{
+                  width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                  backgroundColor: agent.status === 'working' ? '#13bbaf' : agent.status === 'done' ? '#91cb80' : agent.status === 'stalled' ? '#fbcd44' : agent.status === 'zombie' ? '#f94b4b' : '#a7b0b9',
+                  animation: agent.status === 'working' ? 'pulse 2s infinite' : 'none',
+                }} />
+                <span
+                  style={{ flex: 1, color: '#3f434b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
+                  onClick={() => { useStore.getState().setMainView('terminals'); }}
+                  title={agent.taskDescription ?? agent.name}
+                >{agent.name}</span>
+                <span style={{ fontSize: 10, color: '#878787', flexShrink: 0 }}>{agent.status}</span>
+                {(agent.status === 'working' || agent.status === 'stalled' || agent.status === 'zombie') && (
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      if (!confirm(`Kill agent ${agent.name}?`)) return
+                      try {
+                        await apiFetch(`/api/workerbees/${agent.id}/kill`, { method: 'POST' })
+                        // Refresh agents
+                        const res = await apiFetch('/api/workerbees')
+                        if (res.ok) useStore.getState().setAgents(await res.json())
+                      } catch { /* ignore */ }
+                    }}
+                    title="Kill agent"
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      width: 20, height: 20, borderRadius: 4, border: '1px solid #e3e6ea',
+                      backgroundColor: 'transparent', cursor: 'pointer', flexShrink: 0,
+                      color: '#f94b4b', fontSize: 11, padding: 0,
+                    }}
+                    onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#fef2f2')}
+                    onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  >✕</button>
+                )}
+                {agent.status === 'done' && (
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      try {
+                        await apiFetch(`/api/workerbees/${agent.id}`, { method: 'DELETE' })
+                        const res = await apiFetch('/api/workerbees')
+                        if (res.ok) useStore.getState().setAgents(await res.json())
+                      } catch { /* ignore */ }
+                    }}
+                    title="Remove agent"
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      width: 20, height: 20, borderRadius: 4, border: '1px solid #e3e6ea',
+                      backgroundColor: 'transparent', cursor: 'pointer', flexShrink: 0,
+                      color: '#878787', fontSize: 11, padding: 0,
+                    }}
+                    onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f4f6f7')}
+                    onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  >✕</button>
+                )}
               </div>
             ))
           )}

@@ -17,55 +17,61 @@ import * as squanFs from './squan-fs/index.js'
 const ptyManager = {
   activeBackendName: 'disabled' as string,
   tmuxAvailable: false,
-  setBackend: () => true,
+  setBackend: (_backend: string) => true,
   reconnectTmuxSessions: () => 0,
   list: () => [] as string[],
-  write: () => {},
-  onAnySessionExit: () => {},
+  write: (_id: string, _data: string) => {},
+  onAnySessionExit: (_cb: (id: string) => void) => {},
 }
 import { workerBeeManager, charterManager, routingManager } from './workerbee/manager.js'
 import { StructuredRunner, type AgentMessage } from './workerbee/structured-runner.js'
 import { DirectRunner } from './workerbee/direct-runner.js'
+import { processManager } from './workerbee/process-manager.js'
 import { setupAgentSpawn, updateSessionId } from './workerbee/spawn-setup.js'
 import { broadcastEvent } from './ws/server.js'
 
 // Store runners by workerbee ID (DirectRunner or StructuredRunner)
 const structuredRunners = new Map<string, DirectRunner | StructuredRunner>()
 
-// Helper: spawn an agent using DirectRunner (API calls, no CLI)
+// Helper: spawn an agent in a separate child process (like Goose)
 async function spawnDirectAgent(projectId: string, taskDescription: string, userId: string): Promise<any> {
   const user = await getUserById(userId)
   if (!user?.anthropicApiKey) throw new Error('No Anthropic API key configured. Add one in Settings.')
 
   const setup = await setupAgentSpawn(projectId, taskDescription, userId)
 
-  const runner = new DirectRunner({
+  // Spawn in a separate process — full isolation, can be killed independently
+  const agent = processManager.spawn({
+    id: setup.id,
+    name: setup.name,
     cwd: setup.worktreePath,
     task: taskDescription,
     apiKey: user.anthropicApiKey,
   })
-  structuredRunners.set(setup.id, runner)
 
-  runner.on('message', (msg: any) => {
+  // Forward IPC messages to WebSocket
+  processManager.on('message', (agentId: string, msg: any) => {
+    if (agentId !== setup.id) return
     broadcastEvent({
       id: randomUUID(), type: 'workerbee.working',
       payload: { workerbeeId: setup.id, workerbeeName: setup.name, agentMessage: msg },
       timestamp: new Date().toISOString(),
     })
   })
-  runner.on('status', async (status: string) => {
+  processManager.on('status', async (agentId: string, status: string) => {
+    if (agentId !== setup.id) return
     const newStatus = status === 'done' ? 'done' : status === 'error' ? 'zombie' : 'working'
-    await workerBeeManager.updateStatus(setup.id, newStatus as any, runner.result ?? undefined).catch(() => {})
+    const agentState = processManager.get(setup.id)
+    await workerBeeManager.updateStatus(setup.id, newStatus as any, agentState?.result ?? undefined).catch(() => {})
     broadcastEvent({
       id: randomUUID(),
       type: status === 'done' ? 'workerbee.done' : status === 'error' ? 'workerbee.zombie' : 'workerbee.working',
-      payload: { id: setup.id, name: setup.name, result: runner.result, cost: runner.totalCost },
+      payload: { id: setup.id, name: setup.name, result: agentState?.result, cost: agentState?.totalCost },
       timestamp: new Date().toISOString(),
     })
   })
 
-  runner.start().catch((err) => console.error(`[direct-runner] Failed:`, err))
-
+  console.log(`[spawn] Agent ${setup.name} (PID ${agent.pid}) dispatched to ${setup.worktreePath}`)
   return await workerBeeManager.getById(setup.id)
 }
 import { mayorLeeManager } from './mayor/manager.js'
@@ -701,18 +707,18 @@ app.post('/api/rigs/:rigId/polecats', async (req, res) => {  // backwards compat
 
 // Get messages for an agent (Goose-style chat view)
 app.get('/api/workerbees/:id/messages', requireAuth, async (req, res) => {
-  const runner = structuredRunners.get(req.params.id) as any
-  if (!runner) {
+  const agent = processManager.get(req.params.id)
+  if (!agent) {
     return res.json({ messages: [], status: 'no_runner' })
   }
   res.json({
-    messages: runner.messages ?? [],
-    status: runner.status ?? 'unknown',
-    result: runner.result ?? null,
-    totalCost: runner.totalCost ?? 0,
-    durationMs: runner.durationMs ?? 0,
-    inputTokens: runner.inputTokens ?? 0,
-    outputTokens: runner.outputTokens ?? 0,
+    messages: agent.messages ?? [],
+    status: agent.status ?? 'unknown',
+    result: agent.result ?? null,
+    totalCost: agent.totalCost ?? 0,
+    durationMs: agent.durationMs ?? 0,
+    inputTokens: agent.inputTokens ?? 0,
+    outputTokens: agent.outputTokens ?? 0,
   })
 })
 
@@ -756,6 +762,8 @@ app.delete('/api/workerbees/:id', async (req, res) => {
   try {
     const userId = res.locals.userId as string
     console.log(`[DELETE] workerbee ${req.params.id} by user ${userId}`)
+    // Kill the child process if running
+    processManager.kill(req.params.id)
     await workerBeeManager.nuke(req.params.id, userId)
     console.log(`[DELETE] workerbee ${req.params.id} OK`)
     res.json({ ok: true })
@@ -764,6 +772,15 @@ app.delete('/api/workerbees/:id', async (req, res) => {
     console.error(`[DELETE] workerbee ${req.params.id} FAILED: ${msg}`)
     res.status(msg === 'Forbidden' ? 403 : 400).json({ error: msg })
   }
+})
+
+// Kill agent process without deleting the record
+app.post('/api/workerbees/:id/kill', requireAuth, async (req, res) => {
+  const killed = processManager.kill(req.params.id)
+  if (killed) {
+    await workerBeeManager.updateStatus(req.params.id, 'zombie' as any, 'Killed by user').catch(() => {})
+  }
+  res.json({ ok: true, killed })
 })
 
 app.post('/api/workerbees/:id/restart', requireAuth, async (req, res) => {
@@ -1879,11 +1896,7 @@ migrate().then(async () => {
     console.warn(`[startup] .squan/ sync error:`, err)
   }
 
-  // Reconnect any surviving tmux sessions from a previous server run
-  const reconnected = ptyManager.reconnectTmuxSessions()
-  if (reconnected.length > 0) {
-    console.log(`[startup] Reconnected ${reconnected.length} tmux agent session(s)`)
-  }
+  // PTY/tmux disabled — no sessions to reconnect
 
   startWitness()
   startSnapshotScheduler(() => workerBeeManager.listAll())

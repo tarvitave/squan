@@ -6,14 +6,14 @@ import { v4 as uuidv4 } from 'uuid'
 import { getDb } from '../db/index.js'
 // PTY disabled — agents use DirectRunner (direct API calls)
 const ptyManager = {
-  spawn: () => 'disabled',
-  write: () => {},
-  kill: () => {},
-  subscribe: () => {},
-  unsubscribe: () => {},
+  spawn: (_opts: any) => 'disabled',
+  write: (_id: string, _data: string) => {},
+  kill: (_id: string) => {},
+  subscribe: (_id: string, _subId: string, _cb: (data: string) => void) => {},
+  unsubscribe: (_id: string, _subId: string) => {},
   list: () => [] as string[],
-  onSessionExit: () => {},
-  getOwnerUserId: () => null,
+  onSessionExit: (_id: string, _cb: (code: number) => void) => {},
+  getOwnerUserId: (_id: string) => null as string | null,
 }
 import { rigManager } from '../rig/manager.js'
 import { releaseTrainManager } from '../releasetrain/manager.js'
