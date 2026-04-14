@@ -884,6 +884,55 @@ app.post('/api/workerbees/:id/done', async (req, res) => {
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
+// Mark agent complete and advance the kanban: in_progress → pr_review (not straight to landed)
+app.post('/api/workerbees/:id/mark-complete', requireAuth, async (req, res) => {
+  try {
+    const userId = res.locals.userId as string
+    const bee = await workerBeeManager.getById(req.params.id)
+    if (!bee) return res.status(404).json({ error: 'Agent not found' })
+    if (bee.userId && bee.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
+
+    // Kill the child process if still alive
+    processManager.kill(req.params.id)
+
+    // Mark agent as done in DB (without the auto-land side-effect)
+    const db = getDb()
+    await db.execute({
+      sql: `UPDATE workerbees SET status = 'done', completion_note = ?, updated_at = datetime('now') WHERE id = ?`,
+      args: [req.body?.note ?? 'Manually marked complete', req.params.id],
+    })
+
+    broadcastEvent({
+      id: randomUUID(), type: 'workerbee.done',
+      payload: { workerBeeId: req.params.id, id: req.params.id, name: bee.name, note: req.body?.note ?? 'Manually marked complete' },
+      timestamp: new Date().toISOString(),
+    })
+
+    // Advance the assigned release train to pr_review (not landed)
+    const rtResult = await db.execute({
+      sql: `SELECT id, status FROM release_trains WHERE assigned_workerbee_id = ? AND status = 'in_progress'`,
+      args: [req.params.id],
+    })
+    const advancedRts: string[] = []
+    for (const row of rtResult.rows) {
+      const rtId = row.id as string
+      await db.execute({
+        sql: `UPDATE release_trains SET status = 'pr_review', updated_at = datetime('now') WHERE id = ?`,
+        args: [rtId],
+      })
+      advancedRts.push(rtId)
+      broadcastEvent({
+        id: randomUUID(), type: 'releasetrain.pr_review',
+        payload: { releaseTrainId: rtId },
+        timestamp: new Date().toISOString(),
+      })
+      console.log(`[mark-complete] Release train ${rtId} advanced to pr_review`)
+    }
+
+    res.json({ ok: true, advancedReleaseTrains: advancedRts })
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
+})
+
 app.delete('/api/workerbees/:id', async (req, res) => {
   try {
     const userId = res.locals.userId as string

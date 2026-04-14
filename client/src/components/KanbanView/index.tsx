@@ -327,14 +327,50 @@ function Board() {
 
                     {/* Assigned agent */}
                     {!rt.manual && bee && (
-                      <div className="flex items-center gap-2 py-1 px-2 bg-bg-secondary rounded-md">
-                        <span className={cn('text-sm', STATUS_COLOR[bee.status] ?? 'text-text-tertiary')}>●</span>
-                        <span className="text-xs text-text-primary flex-1 truncate cursor-pointer hover:underline" onClick={() => openTerminal(bee)}>{bee.name}</span>
-                        <span className={cn('text-[11px]', STATUS_COLOR[bee.status])}>{bee.status}</span>
-                        {(bee.status === 'zombie' || bee.status === 'stalled') && (
-                          <button className="text-yellow-200 hover:text-yellow-100 transition-colors" onClick={() => restartAgent(bee.id, rt.id)} disabled={restarting === rt.id}>
-                            <RefreshCw className={cn('w-3.5 h-3.5', restarting === rt.id && 'animate-spin')} />
-                          </button>
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-2 py-1 px-2 bg-bg-secondary rounded-md">
+                          <span className={cn('text-sm', STATUS_COLOR[bee.status] ?? 'text-text-tertiary')}>●</span>
+                          <span className="text-xs text-text-primary flex-1 truncate cursor-pointer hover:underline" onClick={() => { openTerminal(bee); useStore.getState().setMainView('terminals'); useStore.getState().setSelectedAgentId(bee.id) }}>{bee.name}</span>
+                          <span className={cn('text-[11px]', STATUS_COLOR[bee.status])}>{bee.status}</span>
+                          {(bee.status === 'zombie' || bee.status === 'stalled') && (
+                            <button className="text-yellow-200 hover:text-yellow-100 transition-colors" onClick={() => restartAgent(bee.id, rt.id)} disabled={restarting === rt.id}>
+                              <RefreshCw className={cn('w-3.5 h-3.5', restarting === rt.id && 'animate-spin')} />
+                            </button>
+                          )}
+                        </div>
+                        {/* Agent done but RT still in progress → show quick actions */}
+                        {bee.status === 'done' && col.status === 'in_progress' && (
+                          <div className="flex items-center gap-1.5 px-2">
+                            <button
+                              className="flex items-center gap-1 px-2 py-0.5 rounded border border-green-200/30 text-green-500 text-[10px] font-medium hover:bg-green-200/10 transition-colors"
+                              onClick={() => { useStore.getState().setMainView('terminals'); useStore.getState().setSelectedAgentId(bee.id) }}
+                            >
+                              💬 View Chat
+                            </button>
+                            <button
+                              className="flex items-center gap-1 px-2 py-0.5 rounded border border-block-teal/30 text-block-teal text-[10px] font-medium hover:bg-block-teal/10 transition-colors"
+                              onClick={async () => {
+                                try {
+                                  const res = await apiFetch(`/api/workerbees/${bee.id}/mark-complete`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({}),
+                                  })
+                                  if (res.ok) {
+                                    const data = await res.json()
+                                    for (const rtId of (data.advancedReleaseTrains ?? [])) {
+                                      updateReleaseTrain(rtId, { status: 'pr_review' })
+                                    }
+                                    addToast('Task moved to PR Review', 'info')
+                                  }
+                                } catch (err) {
+                                  addToast(`Failed: ${(err as Error).message}`)
+                                }
+                              }}
+                            >
+                              ✓ Mark Complete
+                            </button>
+                          </div>
                         )}
                       </div>
                     )}
