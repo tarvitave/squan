@@ -1,0 +1,139 @@
+# Changelog
+
+All notable changes to Squan are documented here.
+
+## [0.4.0] - 2026-04-14
+
+### 🆕 Post-Completion Agent Interaction
+- **Follow-up input bar** — always visible at the bottom of agent chat, allowing you to send follow-up questions or new instructions even after an agent finishes
+- **Completion Action Bar** — inline card after agent completes with two clear paths:
+  - "Mark Complete & Advance Board" — moves release train to PR Review
+  - "or type below to continue" — keeps the conversation going
+- **`POST /api/workerbees/:id/followup`** — server endpoint to resume agent conversations
+- **`POST /api/workerbees/:id/mark-complete`** — server endpoint to manually advance kanban
+- Agent child processes stay alive after completion (no `process.exit`) to support follow-up IPC messages
+
+### 🔧 Kanban Board Improvements
+- **Inline agent actions** — when agent is done but task still in "In Progress", shows "💬 View Chat" and "✓ Mark Complete" buttons directly on the card
+- **Fixed status sync** — agent status now correctly propagates from server to kanban cards (fixed `workerbeeId` → `workerBeeId` camelCase mismatch in WebSocket events)
+- **Client-side fallback** — `workerbee.done` event auto-advances assigned release train to PR Review in the store
+- **Resilient field parsing** — WebSocket handler reads both `workerBeeId` and `workerbeeId` variants
+
+### ✏️ Task Editor Improvements
+- **Fixed focus jumping** — replaced callback ref with `useRef` + `useEffect` for one-time auto-focus (typing in description no longer jumps cursor to name field)
+- **Larger text fields** — description textarea is now 4 rows with `min-h-[80px]`
+- **Pop-out modal editor** — expand icon (↗) opens a full-screen modal with labeled fields for writing detailed agent instructions
+- Agent name click in kanban now navigates directly to Agent chat view
+
+## [0.3.11] - 2026-04-13
+
+### Fixed
+- API retry logic: 429/529 overload errors auto-retry with exponential backoff (5s, 15s, 30s)
+- Fixed Unicode corruption in AgentChat (arrows showed as garbled text)
+- Fixed charter query (project_id vs rig_id column mismatch)
+
+## [0.3.10] - 2026-04-13
+
+### Fixed
+- Charters query uses `project_id` not `rig_id`
+- Persist agent messages to DB for chat history
+- Status sync between agent and kanban
+- Unicode rendering in agent chat
+- Suppress error flash on agent start
+
+## [0.3.9] - 2026-04-13
+
+### Fixed
+- DB column name (`assigned_workerbee_id`)
+- Agent chat shows conversation history
+- Error flash suppressed during startup
+
+## [0.3.8] - 2026-04-13
+
+### Fixed
+- 5 issues: clickable agents, settings cleanup, error flash, status sync, PR review auto-advance
+
+## [0.3.7] - 2026-04-13
+
+### Changed
+- Help menu links to squan.dev and Colin Wynd LinkedIn
+- Removed Claude Code from View menu
+
+## [0.3.6] - 2026-04-13
+
+### Changed
+- Error flash on agent start suppressed
+- Renamed Terminals to Agents in sidebar
+- Removed Claude Code panel
+
+## [0.3.5] - 2026-04-13
+
+### Changed
+- Auto-move release train to PR Review when agent completes
+- Dispatch toast uses info style instead of error
+
+## [0.3.4] - 2026-04-13
+
+### Changed
+- Sidebar nav: Terminals → Agents (with Bot icon)
+- Claude Code view removed
+- Command palette updated
+- Keyboard shortcuts 1-6 instead of 1-7
+
+## [0.3.3] - 2026-04-13
+
+### Fixed
+- `__dirname` in ESM for process-manager
+- KanbanView input focus with delayed ref
+- Kill + remove agent in sidebar
+
+## [0.3.2] - 2026-04-13
+
+### Fixed
+- Kill removes agent from sidebar
+- Kanban dispatch works with loading state + toast + auto-switch to Agents view
+- SQ taskbar icon
+
+## [0.3.0] - 2026-04-13
+
+### 🆕 Major: Child Process Isolation
+- Each agent runs in a separate Node.js child process
+- Kill button in sidebar for running agents
+- Full process isolation and independent lifecycle
+
+## [0.2.12] - 2026-04-12
+
+### 🆕 Major: No More Claude CLI
+- **NUCLEAR:** Completely removed PTY/terminal system
+- Stubbed out ptyManager — agents use ONLY DirectRunner
+- Terminal API endpoints return empty/410
+- Zero possibility of spawning `claude.exe`
+
+## [0.2.8] - 2026-04-12
+
+### 🆕 Major: Direct API (like Goose)
+- **DirectRunner**: Calls Anthropic API directly instead of CLI
+- **Goose-style AgentChat UI**: Left-aligned AI messages, right-aligned dark pills, expandable tool cards
+- Loading indicator with animated bouncing dots
+- Removed all `workerBeeManager.spawn` calls (zero CLI usage)
+
+## [0.2.4] - 2026-04-12
+
+### Added
+- Structured runner with init-squan CLI commands
+- GitHub repos API integration
+- Pass ANTHROPIC_API_KEY to runner (prevents OAuth login prompt)
+
+## [0.2.0] - 2026-04-11
+
+### 🆕 Initial Release
+- Multi-agent orchestration with Claude Code CLI
+- Kanban board (Open → In Progress → PR Review → Landed)
+- Git worktree isolation per agent
+- Everything-as-Code (`.squan/` directory)
+- Electron desktop app
+- GitHub integration (browse, create, clone repos)
+- Real-time WebSocket events
+- `sq>` console
+- Command palette
+- Metrics, Events, Costs views
