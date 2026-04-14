@@ -18,6 +18,10 @@ RUN npm run build
 # Runtime stage
 FROM node:22-bookworm-slim AS runtime
 
+LABEL org.opencontainers.image.source=https://github.com/tarvitave/squan
+LABEL org.opencontainers.image.description="Squan Server - Multi-agent AI development command center"
+LABEL org.opencontainers.image.licenses=MIT
+
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -37,11 +41,9 @@ RUN mkdir -p /data
 ENV PORT=3001
 ENV DB_URL=file:/data/squansq.db
 ENV SQUANSQ_REPO_PATH=/repo
-# ANTHROPIC_API_KEY and other secrets are injected at runtime via docker-compose or env — not set here
 
 EXPOSE 3001
 
-# Startup script: configure claude with the API key, then start server
 COPY start.sh ./
 RUN chmod +x start.sh
 CMD ["./start.sh"]
