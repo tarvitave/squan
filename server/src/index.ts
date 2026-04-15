@@ -115,7 +115,7 @@ import { snapshotManager, replayManager, startSnapshotScheduler } from './snapsh
 import { handleMcpCall, handleMcpToolsList } from './mcp/server.js'
 import { getDb, migrate, seedSystemTemplates } from './db/index.js'
 import { register, login, getUserById, updateApiKey, requireAuth, updateGithubToken, updateClaudeTheme } from './auth/index.js'
-import { recipeManager } from './recipes/index.js'
+import { skillManager } from './skills/index.js'
 import { parseGithubRepo, detectDefaultBranch, createPullRequest, getPullRequestStatus } from './github/index.js'
 import { preconfigureClaudeAuth, restoreClaudeConfigOnStartup } from './claude-auth.js'
 import { listSessions, parseSession, handleHook, configureHooks } from './claudecode/index.js'
@@ -2126,27 +2126,27 @@ app.delete('/api/extensions/:id', requireAuth, async (req, res) => {
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
-// ── Recipes API ────────────────────────────────────────────────────────────
+// ── Skills API ────────────────────────────────────────────────────────────
 
-app.get('/api/recipes', requireAuth, async (req, res) => {
+app.get('/api/skills', requireAuth, async (req, res) => {
   try {
     const projectId = req.query.projectId as string | undefined
-    const dbRecipes = await recipeManager.list(projectId)
-    const builtins = recipeManager.builtins()
-    res.json([...builtins, ...dbRecipes])
+    const dbSkills = await skillManager.list(projectId)
+    const builtins = skillManager.builtins()
+    res.json([...builtins, ...dbSkills])
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
-app.post('/api/recipes', requireAuth, async (req, res) => {
+app.post('/api/skills', requireAuth, async (req, res) => {
   try {
-    const recipe = await recipeManager.save(req.body)
-    res.json(recipe)
+    const skill = await skillManager.save(req.body)
+    res.json(skill)
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
-app.delete('/api/recipes/:id', requireAuth, async (req, res) => {
+app.delete('/api/skills/:id', requireAuth, async (req, res) => {
   try {
-    await recipeManager.delete(req.params.id)
+    await skillManager.delete(req.params.id)
     res.json({ ok: true })
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })

@@ -1,6 +1,6 @@
 /**
- * Recipe System — declarative YAML workflows for chaining agent tasks.
- * Recipes define multi-step automation: test→fix→PR, review→refactor, etc.
+ * Skill System — declarative YAML workflows for chaining agent tasks.
+ * Skills define multi-step automation: test→fix→PR, review→refactor, etc.
  */
 
 import { readFileSync, existsSync, readdirSync } from 'fs'
@@ -10,7 +10,7 @@ import { v4 as uuidv4 } from 'uuid'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export interface RecipeStep {
+export interface SkillStep {
   name: string
   task: string
   role?: string           // agent role: coder, tester, reviewer, devops, lead
@@ -20,18 +20,18 @@ export interface RecipeStep {
   depends_on?: string[]   // step names this depends on
 }
 
-export interface Recipe {
+export interface Skill {
   id: string
   name: string
   description: string
   version?: string
-  steps: RecipeStep[]
-  projectId?: string      // null = global recipe
+  steps: SkillStep[]
+  projectId?: string      // null = global skill
 }
 
-export interface RecipeRun {
+export interface SkillRun {
   id: string
-  recipeId: string
+  skillId: string
   projectId: string
   status: 'running' | 'completed' | 'failed' | 'cancelled'
   currentStep: number
@@ -50,7 +50,7 @@ export interface RecipeRun {
 // ── YAML Parser (simple, no dependency) ──────────────────────────────────────
 
 function parseSimpleYaml(text: string): any {
-  // Minimal YAML parser for recipe files — handles basic structures
+  // Minimal YAML parser for skill files — handles basic structures
   const lines = text.split('\n')
   const result: any = {}
   let currentKey = ''
@@ -110,14 +110,14 @@ function parseSimpleYaml(text: string): any {
   return result
 }
 
-// ── Recipe Manager ───────────────────────────────────────────────────────────
+// ── Skill Manager ───────────────────────────────────────────────────────────
 
-export const recipeManager = {
-  /** Parse a recipe from YAML text */
-  parse(yamlText: string): Omit<Recipe, 'id'> {
+export const skillManager = {
+  /** Parse a skill from YAML text */
+  parse(yamlText: string): Omit<Skill, 'id'> {
     const data = parseSimpleYaml(yamlText)
     return {
-      name: data.name ?? 'Untitled Recipe',
+      name: data.name ?? 'Untitled Skill',
       description: data.description ?? '',
       version: data.version,
       steps: (data.steps ?? []).map((s: any) => ({
@@ -132,31 +132,31 @@ export const recipeManager = {
     }
   },
 
-  /** Load recipes from .squan/recipes/ directory */
-  async loadFromProject(projectPath: string): Promise<Recipe[]> {
-    const recipesDir = join(projectPath, '.squan', 'recipes')
-    if (!existsSync(recipesDir)) return []
+  /** Load skills from .squan/skills/ directory */
+  async loadFromProject(projectPath: string): Promise<Skill[]> {
+    const skillsDir = join(projectPath, '.squan', 'skills')
+    if (!existsSync(skillsDir)) return []
 
-    const recipes: Recipe[] = []
-    for (const file of readdirSync(recipesDir)) {
+    const skills: Skill[] = []
+    for (const file of readdirSync(skillsDir)) {
       if (!file.endsWith('.yaml') && !file.endsWith('.yml')) continue
       try {
-        const content = readFileSync(join(recipesDir, file), 'utf8')
-        const recipe = this.parse(content)
-        recipes.push({ id: file.replace(/\.ya?ml$/, ''), ...recipe })
+        const content = readFileSync(join(skillsDir, file), 'utf8')
+        const skill = this.parse(content)
+        skills.push({ id: file.replace(/\.ya?ml$/, ''), ...skill })
       } catch (err) {
-        console.warn(`[recipes] Failed to parse ${file}: ${(err as Error).message}`)
+        console.warn(`[skills] Failed to parse ${file}: ${(err as Error).message}`)
       }
     }
-    return recipes
+    return skills
   },
 
-  /** List all recipes (DB + project files) */
-  async list(projectId?: string): Promise<Recipe[]> {
+  /** List all skills (DB + project files) */
+  async list(projectId?: string): Promise<Skill[]> {
     const db = getDb()
     const sql = projectId
-      ? 'SELECT * FROM recipes WHERE project_id = ? OR project_id IS NULL ORDER BY name'
-      : 'SELECT * FROM recipes ORDER BY name'
+      ? 'SELECT * FROM skills WHERE project_id = ? OR project_id IS NULL ORDER BY name'
+      : 'SELECT * FROM skills ORDER BY name'
     const result = await db.execute({ sql, args: projectId ? [projectId] : [] })
     return result.rows.map((r: any) => ({
       id: r.id,
@@ -168,25 +168,25 @@ export const recipeManager = {
     }))
   },
 
-  /** Save a recipe to DB */
-  async save(recipe: Omit<Recipe, 'id'> & { projectId?: string }): Promise<Recipe> {
+  /** Save a skill to DB */
+  async save(skill: Omit<Skill, 'id'> & { projectId?: string }): Promise<Skill> {
     const db = getDb()
     const id = uuidv4()
     await db.execute({
-      sql: `INSERT INTO recipes (id, name, description, version, steps_json, project_id) VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [id, recipe.name, recipe.description, recipe.version ?? '1.0', JSON.stringify(recipe.steps), recipe.projectId ?? null],
+      sql: `INSERT INTO skills (id, name, description, version, steps_json, project_id) VALUES (?, ?, ?, ?, ?, ?)`,
+      args: [id, skill.name, skill.description, skill.version ?? '1.0', JSON.stringify(skill.steps), skill.projectId ?? null],
     })
-    return { id, ...recipe }
+    return { id, ...skill }
   },
 
-  /** Delete a recipe */
+  /** Delete a skill */
   async delete(id: string): Promise<void> {
     const db = getDb()
-    await db.execute({ sql: 'DELETE FROM recipes WHERE id = ?', args: [id] })
+    await db.execute({ sql: 'DELETE FROM skills WHERE id = ?', args: [id] })
   },
 
-  /** Get built-in recipes */
-  builtins(): Recipe[] {
+  /** Get built-in skills */
+  builtins(): Skill[] {
     return [
       {
         id: 'builtin-test-fix-pr',
