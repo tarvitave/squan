@@ -2042,15 +2042,23 @@ setupWsServer(httpServer)
 restoreClaudeConfigOnStartup()
 
 migrate().then(async () => {
-  // On startup, WorkerBees in transient states have dead PTY sessions (in-memory only).
-  // Mark them as zombie so the UI doesn't show "[session ended]" for stale entries.
+  // On startup, agent child processes are gone (they were in-memory).
+  // Mark working/idle agents as 'done' (not zombie) since their work may be valid.
+  // Only mark stalled agents as zombie since they were already in trouble.
   const db = getDb()
-  const staleResult = await db.execute({
-    sql: `UPDATE workerbees SET status = 'zombie', updated_at = datetime('now') WHERE status IN ('working', 'idle', 'stalled')`,
+  const doneResult = await db.execute({
+    sql: `UPDATE workerbees SET status = 'done', completion_note = COALESCE(completion_note, 'Server restarted — agent work preserved'), updated_at = datetime('now') WHERE status IN ('working', 'idle')`,
     args: [],
   })
-  if (staleResult.rowsAffected > 0) {
-    console.log(`[startup] Marked ${staleResult.rowsAffected} stale WorkerBee(s) as zombie`)
+  if (doneResult.rowsAffected > 0) {
+    console.log(`[startup] Marked ${doneResult.rowsAffected} working/idle agent(s) as done (server restart)`)
+  }
+  const stalledResult = await db.execute({
+    sql: `UPDATE workerbees SET status = 'zombie', updated_at = datetime('now') WHERE status = 'stalled'`,
+    args: [],
+  })
+  if (stalledResult.rowsAffected > 0) {
+    console.log(`[startup] Marked ${stalledResult.rowsAffected} stalled agent(s) as zombie`)
   }
 
   // Clear stale Mayor Lee session IDs â€” PTY sessions are in-memory only and lost on restart

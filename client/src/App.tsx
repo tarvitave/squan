@@ -203,23 +203,69 @@ export default function App() {
   }, [setMainView, toggleCommandPalette, toggleSidebar, setShowPreferences])
 
   // Data loading
-  const loadData = useCallback(() => {
-    apiFetch('/api/workerbees').then(r => r.json()).then((d: Array<{
-      id: string; name: string; projectId: string; role?: string; status: string;
-      sessionId: string | null; taskDescription?: string; completionNote?: string;
-      worktreePath?: string; branch?: string
-    }>) =>
-      setAgents(d.map(p => ({
+  // Fetch with retry — retries up to 3 times with backoff if server isn't ready
+  const fetchWithRetry = useCallback(async (url: string, retries = 3, delay = 1000): Promise<Response> => {
+    for (let i = 0; i <= retries; i++) {
+      try {
+        const r = await apiFetch(url)
+        if (r.ok) return r
+        if (r.status === 401) throw new Error('Unauthorized')
+        if (i < retries) {
+          console.warn(`[loadData] ${url} returned ${r.status}, retrying in ${delay}ms (${i + 1}/${retries})`)
+          await new Promise(resolve => setTimeout(resolve, delay))
+          delay *= 2
+          continue
+        }
+        throw new Error(`${url} failed with ${r.status}`)
+      } catch (err) {
+        if ((err as Error).message === 'Unauthorized') throw err
+        if (i < retries) {
+          console.warn(`[loadData] ${url} failed: ${(err as Error).message}, retrying in ${delay}ms (${i + 1}/${retries})`)
+          await new Promise(resolve => setTimeout(resolve, delay))
+          delay *= 2
+          continue
+        }
+        throw err
+      }
+    }
+    throw new Error(`${url} failed after ${retries} retries`)
+  }, [])
+
+  const [dataLoaded, setDataLoaded] = useState(false)
+  const [dataError, setDataError] = useState<string | null>(null)
+
+  const loadData = useCallback(async () => {
+    setDataError(null)
+    try {
+      const [wbRes, rtRes, atRes, tplRes] = await Promise.all([
+        fetchWithRetry('/api/workerbees'),
+        fetchWithRetry('/api/release-trains'),
+        fetchWithRetry('/api/atomictasks'),
+        fetchWithRetry('/api/templates'),
+      ])
+      const wb = await wbRes.json()
+      setAgents(wb.map((p: any) => ({
         id: p.id, name: p.name, projectId: p.projectId, role: p.role ?? 'coder',
         status: p.status as 'idle' | 'working' | 'stalled' | 'zombie' | 'done',
         sessionId: p.sessionId, taskDescription: p.taskDescription ?? '',
         completionNote: p.completionNote ?? '', worktreePath: p.worktreePath ?? '', branch: p.branch ?? '',
       })))
-    ).catch(() => {})
-    apiFetch('/api/release-trains').then(r => r.json()).then(setReleaseTrains).catch(() => {})
-    apiFetch('/api/atomictasks').then(r => r.json()).then(setAtomicTasks).catch(() => {})
-    apiFetch('/api/templates').then(r => r.json()).then(setTemplates).catch(() => {})
-  }, [setAgents, setReleaseTrains, setAtomicTasks, setTemplates])
+      setReleaseTrains(await rtRes.json())
+      setAtomicTasks(await atRes.json())
+      setTemplates(await tplRes.json())
+      setDataLoaded(true)
+      console.log('[loadData] All data loaded successfully')
+    } catch (err) {
+      const msg = (err as Error).message
+      console.error('[loadData] Failed to load data:', msg)
+      if (msg === 'Unauthorized') {
+        // Token is stale — clear auth so user can re-login
+        useStore.getState().clearAuth()
+      } else {
+        setDataError(`Failed to connect to server: ${msg}`)
+      }
+    }
+  }, [setAgents, setReleaseTrains, setAtomicTasks, setTemplates, fetchWithRetry])
 
   useEffect(() => { if (token) loadData() }, [token, activeTownId, loadData])
   useEffect(() => {
@@ -255,6 +301,14 @@ export default function App() {
       {!connected && (
         <div className="fixed top-0 inset-x-0 z-[9999] bg-bg-warning/20 text-text-warning text-xs text-center py-1.5 font-medium">
           Reconnecting to server…
+        </div>
+      )}
+
+      {/* Data load error banner */}
+      {dataError && (
+        <div className="fixed top-0 inset-x-0 z-[9998] bg-red-500/10 text-red-400 text-xs text-center py-2 font-medium flex items-center justify-center gap-3">
+          <span>{dataError}</span>
+          <button onClick={() => loadData()} className="underline hover:text-red-300">Retry</button>
         </div>
       )}
 

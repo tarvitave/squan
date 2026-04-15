@@ -5,7 +5,7 @@ import {
   Settings, ChevronDown, FolderGit2, Plus,
   Monitor, Columns3, BarChart3, Activity,
   DollarSign, Terminal, Code2, Bot, X, Loader2,
-  GitBranch, Search, Lock, Globe, ChevronRight,
+  GitBranch, Search, Lock, Globe, ChevronRight, RefreshCw,
 } from 'lucide-react'
 import type { MainView, Rig } from '../../store/index.js'
 
@@ -496,6 +496,29 @@ export function Sidebar() {
             Agents{activeProject ? ` · ${activeProject.name}` : ''}
           </span>
           {activeCount > 0 && <span style={{ fontSize: 11, color: '#13bbaf', fontWeight: 500 }}>{activeCount} active</span>}
+          <button
+            onClick={async () => {
+              try {
+                const [wbRes, rtRes] = await Promise.all([apiFetch('/api/workerbees'), apiFetch('/api/release-trains')])
+                if (wbRes.ok) {
+                  const wb = await wbRes.json()
+                  useStore.getState().setAgents(wb.map((p: any) => ({
+                    id: p.id, name: p.name, projectId: p.projectId, role: p.role ?? 'coder',
+                    status: p.status, sessionId: p.sessionId, taskDescription: p.taskDescription ?? '',
+                    completionNote: p.completionNote ?? '', worktreePath: p.worktreePath ?? '', branch: p.branch ?? '',
+                  })))
+                }
+                if (rtRes.ok) useStore.getState().setReleaseTrains(await rtRes.json())
+                useStore.getState().addToast('Data refreshed', 'info')
+              } catch { useStore.getState().addToast('Refresh failed') }
+            }}
+            title="Refresh data from server"
+            style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#a7b0b9', padding: 2, display: 'flex', alignItems: 'center' }}
+            onMouseOver={(e) => (e.currentTarget.style.color = '#13bbaf')}
+            onMouseOut={(e) => (e.currentTarget.style.color = '#a7b0b9')}
+          >
+            <RefreshCw style={{ width: 13, height: 13 }} />
+          </button>
         </div>
         <div style={{ borderRadius: 8, border: '1px solid #e3e6ea', backgroundColor: '#ffffff', overflow: 'hidden' }}>
           {projectAgents.length === 0 ? (
