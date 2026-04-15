@@ -36,9 +36,15 @@ const structuredRunners = new Map<string, DirectRunner | StructuredRunner>()
 // Helper: spawn an agent in a separate child process (like Goose)
 async function spawnDirectAgent(projectId: string, taskDescription: string, userId: string): Promise<any> {
   const user = await getUserById(userId)
-  if (!user?.anthropicApiKey) throw new Error('No Anthropic API key configured. Add one in Settings.')
+  const provider = (user as any).provider || 'anthropic'
+  const apiKey = provider === 'openai' ? (user as any).openai_api_key : provider === 'google' ? (user as any).google_api_key : user?.anthropicApiKey
+  if (!apiKey && provider !== 'ollama') throw new Error('No API key configured for ' + provider + '. Add one in Settings.')
 
   const setup = await setupAgentSpawn(projectId, taskDescription, userId)
+
+  // Load MCP extensions for this project
+  const extensionsRes = await getDb().execute({ sql: 'SELECT * FROM extensions WHERE (project_id = ? OR project_id IS NULL) AND enabled = 1', args: [projectId] })
+  const extensions = extensionsRes.rows.map((r: any) => ({ name: r.name, type: r.type, command: r.command, args: JSON.parse(r.args_json || '[]'), url: r.url, env: JSON.parse(r.env_json || '{}'), enabled: true }))
 
   // Spawn in a separate process â€” full isolation, can be killed independently
   const agent = processManager.spawn({
@@ -46,7 +52,11 @@ async function spawnDirectAgent(projectId: string, taskDescription: string, user
     name: setup.name,
     cwd: setup.worktreePath,
     task: taskDescription,
-    apiKey: user.anthropicApiKey,
+    apiKey: apiKey || '',
+    provider: provider,
+    providerUrl: (user as any).provider_url || undefined,
+    model: (user as any).provider_model || undefined,
+    extensions: extensions.length > 0 ? extensions : undefined,
   })
 
   // Forward IPC messages to WebSocket
@@ -105,6 +115,7 @@ import { snapshotManager, replayManager, startSnapshotScheduler } from './snapsh
 import { handleMcpCall, handleMcpToolsList } from './mcp/server.js'
 import { getDb, migrate, seedSystemTemplates } from './db/index.js'
 import { register, login, getUserById, updateApiKey, requireAuth, updateGithubToken, updateClaudeTheme } from './auth/index.js'
+import { recipeManager } from './recipes/index.js'
 import { parseGithubRepo, detectDefaultBranch, createPullRequest, getPullRequestStatus } from './github/index.js'
 import { preconfigureClaudeAuth, restoreClaudeConfigOnStartup } from './claude-auth.js'
 import { listSessions, parseSession, handleHook, configureHooks } from './claudecode/index.js'
@@ -2080,6 +2091,102 @@ migrate().then(async () => {
   }
 
   // PTY/tmux disabled â€” no sessions to reconnect
+
+
+// ── Extensions API ─────────────────────────────────────────────────────────
+
+app.get('/api/extensions', requireAuth, async (req, res) => {
+  try {
+    const db = getDb()
+    const projectId = req.query.projectId as string | undefined
+    const sql = projectId ? 'SELECT * FROM extensions WHERE project_id = ? ORDER BY name' : 'SELECT * FROM extensions ORDER BY name'
+    const result = await db.execute({ sql, args: projectId ? [projectId] : [] })
+    res.json(result.rows.map((r: any) => ({ ...r, args: JSON.parse(r.args_json || '[]'), env: JSON.parse(r.env_json || '{}') })))
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
+})
+
+app.post('/api/extensions', requireAuth, async (req, res) => {
+  try {
+    const db = getDb()
+    const { name, type, command, args, url, env, projectId, enabled } = req.body
+    const id = randomUUID()
+    await db.execute({
+      sql: 'INSERT INTO extensions (id, project_id, name, type, command, args_json, url, env_json, enabled) VALUES (?,?,?,?,?,?,?,?,?)',
+      args: [id, projectId || null, name, type || 'stdio', command || null, JSON.stringify(args || []), url || null, JSON.stringify(env || {}), enabled !== false ? 1 : 0],
+    })
+    res.json({ id, name, type, command, args, url, env, projectId, enabled: enabled !== false })
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
+})
+
+app.delete('/api/extensions/:id', requireAuth, async (req, res) => {
+  try {
+    const db = getDb()
+    await db.execute({ sql: 'DELETE FROM extensions WHERE id = ?', args: [req.params.id] })
+    res.json({ ok: true })
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
+})
+
+// ── Recipes API ────────────────────────────────────────────────────────────
+
+app.get('/api/recipes', requireAuth, async (req, res) => {
+  try {
+    const projectId = req.query.projectId as string | undefined
+    const dbRecipes = await recipeManager.list(projectId)
+    const builtins = recipeManager.builtins()
+    res.json([...builtins, ...dbRecipes])
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
+})
+
+app.post('/api/recipes', requireAuth, async (req, res) => {
+  try {
+    const recipe = await recipeManager.save(req.body)
+    res.json(recipe)
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
+})
+
+app.delete('/api/recipes/:id', requireAuth, async (req, res) => {
+  try {
+    await recipeManager.delete(req.params.id)
+    res.json({ ok: true })
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
+})
+
+// ── Provider config API ────────────────────────────────────────────────────
+
+app.get('/api/user/provider', requireAuth, async (req, res) => {
+  try {
+    const user = await getUserById(res.locals.userId as string)
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    res.json({
+      provider: (user as any).provider || 'anthropic',
+      model: (user as any).provider_model || null,
+      providerUrl: (user as any).provider_url || null,
+      hasAnthropicKey: !!(user as any).anthropicApiKey,
+      hasOpenaiKey: !!(user as any).openai_api_key,
+      hasGoogleKey: !!(user as any).google_api_key,
+    })
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
+})
+
+app.put('/api/user/provider', requireAuth, async (req, res) => {
+  try {
+    const db = getDb()
+    const { provider, model, providerUrl, openaiApiKey, googleApiKey } = req.body
+    const updates = []
+    const args = []
+    if (provider !== undefined) { updates.push('provider = ?'); args.push(provider) }
+    if (model !== undefined) { updates.push('provider_model = ?'); args.push(model) }
+    if (providerUrl !== undefined) { updates.push('provider_url = ?'); args.push(providerUrl) }
+    if (openaiApiKey !== undefined) { updates.push('openai_api_key = ?'); args.push(openaiApiKey) }
+    if (googleApiKey !== undefined) { updates.push('google_api_key = ?'); args.push(googleApiKey) }
+    if (updates.length > 0) {
+      args.push(res.locals.userId)
+      await db.execute({ sql: 'UPDATE users SET ' + updates.join(', ') + ' WHERE id = ?', args })
+    }
+    res.json({ ok: true })
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
+})
+
 
   startWitness()
   startSnapshotScheduler(() => workerBeeManager.listAll())

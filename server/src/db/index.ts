@@ -207,6 +207,14 @@ export async function migrate() {
     `ALTER TABLE users ADD COLUMN github_token TEXT`,
     `ALTER TABLE users ADD COLUMN claude_theme TEXT NOT NULL DEFAULT 'dark'`,
     `ALTER TABLE workerbees ADD COLUMN role TEXT NOT NULL DEFAULT 'coder'`,
+    // v0.4.0: recipes + extensions
+    `CREATE TABLE IF NOT EXISTS recipes (id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, version TEXT, steps_json TEXT NOT NULL DEFAULT '[]', project_id TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')))`,
+    `CREATE TABLE IF NOT EXISTS extensions (id TEXT PRIMARY KEY, project_id TEXT, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'stdio', command TEXT, args_json TEXT, url TEXT, env_json TEXT, enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')))`,
+    `ALTER TABLE users ADD COLUMN provider TEXT`,
+    `ALTER TABLE users ADD COLUMN provider_model TEXT`,
+    `ALTER TABLE users ADD COLUMN provider_url TEXT`,
+    `ALTER TABLE users ADD COLUMN openai_api_key TEXT`,
+    `ALTER TABLE users ADD COLUMN google_api_key TEXT`,
   ]
   for (const sql of alterStatements) {
     try {

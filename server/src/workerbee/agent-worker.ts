@@ -1,16 +1,19 @@
-﻿/**
- * Agent Worker ƒ?" runs in a separate child process.
- * Each agent gets its own Node.js process for full isolation.
- * Communicates with the main server via IPC (process.send / process.on).
+/**
+ * Agent Worker — runs in a separate child process.
+ * Uses the provider abstraction for multi-model support,
+ * MCP client for external tool servers, and built-in tools.
  *
- * Usage: fork('agent-worker.js') then send { type: 'start', ... }
+ * Supports: Anthropic, OpenAI, Google Gemini, Ollama + any MCP server.
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync } from 'fs'
 import { execSync } from 'child_process'
 import { join, relative, dirname } from 'path'
+import { createProvider, defaultModel, type ChatProvider, type ToolDef, type ChatResponse } from '../providers/index.js'
+import { McpManager, type McpExtensionConfig } from '../mcp/client.js'
+import { fetchUrl, searchWeb } from '../tools/web.js'
 
-// ƒ"?ƒ"? Types ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?
+// ── Types ────────────────────────────────────────────────────────────────────
 
 interface StartMessage {
   type: 'start'
@@ -18,19 +21,16 @@ interface StartMessage {
   task: string
   apiKey: string
   model?: string
+  provider?: string       // 'anthropic' | 'openai' | 'google' | 'ollama'
+  providerUrl?: string    // base URL for openai-compatible / ollama
   maxTokens?: number
   maxTurns?: number
+  extensions?: McpExtensionConfig[]  // MCP servers to connect
 }
 
-interface KillMessage {
-  type: 'kill'
-}
+// ── Built-in tool definitions ────────────────────────────────────────────────
 
-type WorkerMessage = StartMessage | KillMessage
-
-// ƒ"?ƒ"? Tool definitions ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?
-
-const TOOLS = [
+const BUILTIN_TOOLS: ToolDef[] = [
   {
     name: 'read_file',
     description: 'Read the contents of a file at the given path.',
@@ -103,6 +103,30 @@ const TOOLS = [
     },
   },
   {
+    name: 'fetch_url',
+    description: 'Fetch a URL and return its content as text. HTML is converted to readable plain text. Works for web pages, APIs, docs.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        url: { type: 'string', description: 'URL to fetch' },
+        max_length: { type: 'number', description: 'Max response length (default 50000)' },
+      },
+      required: ['url'],
+    },
+  },
+  {
+    name: 'search_web',
+    description: 'Search the web for information. Returns relevant results with links.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        query: { type: 'string', description: 'Search query' },
+        max_results: { type: 'number', description: 'Max results (default 5)' },
+      },
+      required: ['query'],
+    },
+  },
+  {
     name: 'task_complete',
     description: 'Signal that the task is complete with a summary.',
     input_schema: {
@@ -113,9 +137,9 @@ const TOOLS = [
   },
 ]
 
-// ƒ"?ƒ"? Tool execution ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?
+// ── Built-in tool execution ──────────────────────────────────────────────────
 
-function executeTool(name: string, input: Record<string, unknown>, cwd: string): { result: string; isError: boolean } {
+function executeBuiltinTool(name: string, input: Record<string, unknown>, cwd: string): { result: string; isError: boolean } {
   try {
     switch (name) {
       case 'read_file': {
@@ -193,24 +217,22 @@ function executeTool(name: string, input: Record<string, unknown>, cwd: string):
       case 'task_complete':
         return { result: `DONE: ${input.summary}`, isError: false }
       default:
-        return { result: `Unknown tool: ${name}`, isError: true }
+        return { result: `Unknown built-in tool: ${name}`, isError: true }
     }
   } catch (err) {
     return { result: `Error: ${(err as Error).message}`, isError: true }
   }
 }
 
-// ƒ"?ƒ"? IPC send helper ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?
+// ── IPC helpers ──────────────────────────────────────────────────────────────
 
 function send(msg: Record<string, unknown>) {
   if (process.send) process.send(msg)
 }
 
-
-// ƒ"?ƒ"? Conversation state for follow-ups ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?
+// ── Conversation state ───────────────────────────────────────────────────────
 
 let aborted = false
-
 let savedApiMessages: Array<{ role: string; content: any }> = []
 let savedSystemPrompt = ''
 let savedOpts: StartMessage | null = null
@@ -218,119 +240,179 @@ let savedCost = 0
 let savedInputTokens = 0
 let savedOutputTokens = 0
 let savedTotalTurns = 0
+let chatProvider: ChatProvider | null = null
+let mcpManager: McpManager | null = null
+let allTools: ToolDef[] = []
 
-// Modified agent loop that preserves conversation state instead of exiting
+// ── Initialize provider + MCP ────────────────────────────────────────────────
+
+async function initializeAgent(opts: StartMessage): Promise<void> {
+  // Create the chat provider
+  const providerType = (opts.provider ?? 'anthropic') as any
+  chatProvider = createProvider({
+    provider: providerType,
+    apiKey: opts.apiKey,
+    model: opts.model ?? defaultModel(providerType),
+    baseUrl: opts.providerUrl,
+  })
+  console.log(`[agent-worker] Provider: ${chatProvider.name}, Model: ${opts.model ?? defaultModel(providerType)}`)
+
+  // Start with built-in tools
+  allTools = [...BUILTIN_TOOLS]
+
+  // Connect to MCP servers if configured
+  if (opts.extensions && opts.extensions.length > 0) {
+    mcpManager = new McpManager()
+    const results = await mcpManager.connectAll(opts.extensions)
+    const mcpToolDefs = mcpManager.getToolDefs()
+    console.log(`[agent-worker] MCP: ${results.size} server(s) connected, ${mcpToolDefs.length} tools discovered`)
+
+    // Merge MCP tools with built-in tools
+    allTools = [...BUILTIN_TOOLS, ...mcpToolDefs]
+  }
+}
+
+// ── Execute any tool (built-in or MCP) ───────────────────────────────────────
+
+async function executeTool(name: string, input: Record<string, unknown>, cwd: string): Promise<{ result: string; isError: boolean }> {
+  // Web tools (built-in but async)
+  if (name === 'fetch_url') {
+    const result = await fetchUrl(input.url as string, (input.max_length as number) ?? 50000)
+    return { result, isError: result.startsWith('Error') }
+  }
+  if (name === 'search_web') {
+    const result = await searchWeb(input.query as string, (input.max_results as number) ?? 5)
+    return { result, isError: result.startsWith('Search error') }
+  }
+
+  // MCP tools (prefixed with serverName__)
+  if (mcpManager?.isMcpTool(name)) {
+    try {
+      const result = await mcpManager.callTool(name, input)
+      return { result, isError: false }
+    } catch (err) {
+      return { result: `MCP Error: ${(err as Error).message}`, isError: true }
+    }
+  }
+
+  // Built-in tools
+  return executeBuiltinTool(name, input, cwd)
+}
+
+// ── Main agent loop ──────────────────────────────────────────────────────────
+
 async function runAgentPersistent(opts: StartMessage) {
   savedOpts = opts
-  const { cwd, task, apiKey, model, maxTokens, maxTurns } = opts
-  const useModel = model ?? 'claude-sonnet-4-20250514'
-  const useMaxTokens = maxTokens ?? 8192
-  const useTurns = maxTurns ?? 50
+  const useModel = opts.model ?? defaultModel(opts.provider ?? 'anthropic')
+  const useMaxTokens = opts.maxTokens ?? 8192
+  const useTurns = opts.maxTurns ?? 50
+
+  // Initialize provider + MCP
+  await initializeAgent(opts)
+  if (!chatProvider) throw new Error('Failed to initialize provider')
 
   send({ type: 'status', status: 'working' })
-  send({ type: 'message', data: { type: 'user', text: task } })
+  send({ type: 'message', data: { type: 'user', text: opts.task } })
 
   savedSystemPrompt = `You are an expert software engineer working on a coding task.
-You have tools for reading, writing, editing files, running commands, and searching code.
+You have tools for reading, writing, editing files, running commands, searching code, browsing the web, and more.
 Work autonomously to complete the task. When done, use task_complete with a summary.
 
-Working directory: ${cwd}
+Working directory: ${opts.cwd}
 `
 
-  savedApiMessages = [{ role: 'user', content: task }]
+  savedApiMessages = [{ role: 'user', content: opts.task }]
 
+  await runLoop(useModel, useMaxTokens, useTurns, opts.cwd)
+}
+
+async function runLoop(model: string, maxTokens: number, maxTurns: number, cwd: string) {
   const startTime = Date.now()
   let turn = 0
 
-  while (turn < useTurns && !aborted) {
+  while (turn < maxTurns && !aborted) {
     turn++
 
     try {
-      let response: Response | null = null
+      // Call provider with retry logic
+      let response: ChatResponse | null = null
       const maxRetries = 3
       const retryDelays = [5000, 15000, 30000]
 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        response = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-          },
-          body: JSON.stringify({
-            model: useModel,
-            max_tokens: useMaxTokens,
+        try {
+          response = await chatProvider!.chat({
+            messages: savedApiMessages as any,
             system: savedSystemPrompt,
-            tools: TOOLS,
-            messages: savedApiMessages,
-          }),
-        })
-
-        if (response.status === 429 || response.status === 529 || response.status === 500 || response.status === 502 || response.status === 503) {
-          if (attempt < maxRetries) {
+            tools: allTools,
+            maxTokens: maxTokens,
+            model: model,
+          })
+          break
+        } catch (err: any) {
+          const status = err.status ?? 0
+          if ((status === 429 || status === 529 || status >= 500) && attempt < maxRetries) {
             const delay = retryDelays[attempt]
-            send({ type: 'message', data: { type: 'assistant', message: { content: [{ type: 'text', text: `API overloaded (${response.status}). Retrying in ${delay / 1000}s... (attempt ${attempt + 1}/${maxRetries})` }] } } })
+            send({ type: 'message', data: { type: 'assistant', message: { content: [{ type: 'text', text: `API overloaded (${status}). Retrying in ${delay / 1000}s... (attempt ${attempt + 1}/${maxRetries})` }] } } })
             await new Promise(r => setTimeout(r, delay))
             continue
           }
+          throw err
         }
-        break
       }
 
-      if (!response!.ok) {
-        const errText = await response!.text()
-        send({ type: 'message', data: { type: 'error', text: `API ${response!.status}: ${errText.slice(0, 200)}` } })
-        send({ type: 'status', status: 'error' })
-        send({ type: 'done', result: `API error: ${response!.status}`, cost: savedCost, duration: Date.now() - startTime, turns: savedTotalTurns + turn, inputTokens: savedInputTokens, outputTokens: savedOutputTokens, isError: true })
-        return // Don't exit ƒ?" allow follow-ups
-      }
+      if (!response) throw new Error('No response from provider')
 
-      const data = await response!.json() as any
-
-      savedInputTokens += data.usage.input_tokens
-      savedOutputTokens += data.usage.output_tokens
-      savedCost += (data.usage.input_tokens / 1e6) * 3.0 + (data.usage.output_tokens / 1e6) * 15.0
+      // Track cost
+      const [inputCostPer1M, outputCostPer1M] = chatProvider!.costPer1M(model)
+      savedInputTokens += response.usage.input_tokens
+      savedOutputTokens += response.usage.output_tokens
+      savedCost += (response.usage.input_tokens / 1e6) * inputCostPer1M + (response.usage.output_tokens / 1e6) * outputCostPer1M
 
       send({ type: 'usage', inputTokens: savedInputTokens, outputTokens: savedOutputTokens, totalCost: savedCost })
 
-      savedApiMessages.push({ role: 'assistant', content: data.content })
+      // Add assistant response to conversation
+      savedApiMessages.push({ role: 'assistant', content: response.content })
 
-      for (const block of data.content) {
+      // Emit content blocks
+      for (const block of response.content) {
         if (block.type === 'text') {
-          send({ type: 'message', data: { type: 'assistant', message: { content: [{ type: 'text', text: block.text }], usage: data.usage } } })
+          send({ type: 'message', data: { type: 'assistant', message: { content: [{ type: 'text', text: block.text }], usage: response.usage } } })
         }
         if (block.type === 'tool_use') {
           send({ type: 'message', data: { type: 'assistant', message: { content: [{ type: 'tool_use', id: block.id, name: block.name, input: block.input }] } } })
         }
       }
 
-      if (data.stop_reason === 'end_turn') {
-        const text = data.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n')
+      // No tool use = done
+      if (response.stop_reason === 'end_turn') {
+        const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('\n')
         savedTotalTurns += turn
         send({ type: 'done', result: text, cost: savedCost, duration: Date.now() - startTime, turns: savedTotalTurns, inputTokens: savedInputTokens, outputTokens: savedOutputTokens, isError: false })
         send({ type: 'status', status: 'done' })
-        return // Don't exit ƒ?" wait for follow-up messages
+        return
       }
 
-      if (data.stop_reason === 'tool_use') {
+      // Execute tools
+      if (response.stop_reason === 'tool_use') {
         const toolResults: any[] = []
 
-        for (const block of data.content) {
-          if (block.type !== 'tool_use') continue
+        for (const block of response.content) {
+          if (block.type !== 'tool_use' || !block.id || !block.name) continue
 
+          // task_complete — signal done
           if (block.name === 'task_complete') {
-            const summary = (block.input as any).summary
+            const summary = (block.input as any)?.summary ?? ''
             toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: 'Task marked as complete.' })
             savedApiMessages.push({ role: 'user', content: toolResults })
             savedTotalTurns += turn
             send({ type: 'done', result: summary, cost: savedCost, duration: Date.now() - startTime, turns: savedTotalTurns, inputTokens: savedInputTokens, outputTokens: savedOutputTokens, isError: false })
             send({ type: 'status', status: 'done' })
-            return // Don't exit ƒ?" wait for follow-up
+            return
           }
 
           console.log(`[agent-worker] Tool: ${block.name}`)
-          const { result, isError } = executeTool(block.name, block.input, cwd)
+          const { result, isError } = await executeTool(block.name, block.input ?? {}, cwd)
 
           send({ type: 'message', data: { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: block.id, content: result }] } } })
 
@@ -350,10 +432,11 @@ Working directory: ${cwd}
       savedTotalTurns += turn
       send({ type: 'done', result: `Error: ${(err as Error).message}`, cost: savedCost, duration: Date.now() - startTime, turns: savedTotalTurns, inputTokens: savedInputTokens, outputTokens: savedOutputTokens, isError: true })
       send({ type: 'status', status: 'error' })
-      return // Don't exit
+      return
     }
   }
 
+  // Max turns
   if (!aborted) {
     savedTotalTurns += turn
     send({ type: 'done', result: 'Reached maximum turns', cost: savedCost, duration: Date.now() - startTime, turns: savedTotalTurns, inputTokens: savedInputTokens, outputTokens: savedOutputTokens, isError: false })
@@ -361,9 +444,10 @@ Working directory: ${cwd}
   }
 }
 
-// Handle follow-up messages by injecting into the conversation and resuming
+// ── Follow-up handler ────────────────────────────────────────────────────────
+
 async function handleFollowUp(message: string) {
-  if (!savedOpts) {
+  if (!savedOpts || !chatProvider) {
     send({ type: 'message', data: { type: 'error', text: 'No previous conversation to follow up on' } })
     return
   }
@@ -372,134 +456,16 @@ async function handleFollowUp(message: string) {
   send({ type: 'status', status: 'working' })
   send({ type: 'message', data: { type: 'user', text: message } })
 
-  // Inject user follow-up into conversation
   savedApiMessages.push({ role: 'user', content: message })
 
-  const startTime = Date.now()
-  const useModel = savedOpts.model ?? 'claude-sonnet-4-20250514'
+  const useModel = savedOpts.model ?? defaultModel(savedOpts.provider ?? 'anthropic')
   const useMaxTokens = savedOpts.maxTokens ?? 8192
   const useTurns = savedOpts.maxTurns ?? 50
-  let turn = 0
 
-  while (turn < useTurns && !aborted) {
-    turn++
-
-    try {
-      let response: Response | null = null
-      const maxRetries = 3
-      const retryDelays = [5000, 15000, 30000]
-
-      for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        response = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': savedOpts.apiKey,
-            'anthropic-version': '2023-06-01',
-          },
-          body: JSON.stringify({
-            model: useModel,
-            max_tokens: useMaxTokens,
-            system: savedSystemPrompt,
-            tools: TOOLS,
-            messages: savedApiMessages,
-          }),
-        })
-
-        if (response.status === 429 || response.status === 529 || response.status === 500 || response.status === 502 || response.status === 503) {
-          if (attempt < maxRetries) {
-            const delay = retryDelays[attempt]
-            send({ type: 'message', data: { type: 'assistant', message: { content: [{ type: 'text', text: `API overloaded (${response.status}). Retrying in ${delay / 1000}s...` }] } } })
-            await new Promise(r => setTimeout(r, delay))
-            continue
-          }
-        }
-        break
-      }
-
-      if (!response!.ok) {
-        const errText = await response!.text()
-        send({ type: 'message', data: { type: 'error', text: `API ${response!.status}: ${errText.slice(0, 200)}` } })
-        send({ type: 'status', status: 'error' })
-        send({ type: 'done', result: `API error: ${response!.status}`, cost: savedCost, duration: Date.now() - startTime, turns: savedTotalTurns + turn, inputTokens: savedInputTokens, outputTokens: savedOutputTokens, isError: true })
-        return
-      }
-
-      const data = await response!.json() as any
-
-      savedInputTokens += data.usage.input_tokens
-      savedOutputTokens += data.usage.output_tokens
-      savedCost += (data.usage.input_tokens / 1e6) * 3.0 + (data.usage.output_tokens / 1e6) * 15.0
-
-      send({ type: 'usage', inputTokens: savedInputTokens, outputTokens: savedOutputTokens, totalCost: savedCost })
-
-      savedApiMessages.push({ role: 'assistant', content: data.content })
-
-      for (const block of data.content) {
-        if (block.type === 'text') {
-          send({ type: 'message', data: { type: 'assistant', message: { content: [{ type: 'text', text: block.text }], usage: data.usage } } })
-        }
-        if (block.type === 'tool_use') {
-          send({ type: 'message', data: { type: 'assistant', message: { content: [{ type: 'tool_use', id: block.id, name: block.name, input: block.input }] } } })
-        }
-      }
-
-      if (data.stop_reason === 'end_turn') {
-        const text = data.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n')
-        savedTotalTurns += turn
-        send({ type: 'done', result: text, cost: savedCost, duration: Date.now() - startTime, turns: savedTotalTurns, inputTokens: savedInputTokens, outputTokens: savedOutputTokens, isError: false })
-        send({ type: 'status', status: 'done' })
-        return
-      }
-
-      if (data.stop_reason === 'tool_use') {
-        const toolResults: any[] = []
-
-        for (const block of data.content) {
-          if (block.type !== 'tool_use') continue
-
-          if (block.name === 'task_complete') {
-            const summary = (block.input as any).summary
-            toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: 'Task marked as complete.' })
-            savedApiMessages.push({ role: 'user', content: toolResults })
-            savedTotalTurns += turn
-            send({ type: 'done', result: summary, cost: savedCost, duration: Date.now() - startTime, turns: savedTotalTurns, inputTokens: savedInputTokens, outputTokens: savedOutputTokens, isError: false })
-            send({ type: 'status', status: 'done' })
-            return
-          }
-
-          console.log(`[agent-worker] Follow-up tool: ${block.name}`)
-          const { result, isError } = executeTool(block.name, block.input, savedOpts.cwd)
-
-          send({ type: 'message', data: { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: block.id, content: result }] } } })
-
-          toolResults.push({
-            type: 'tool_result',
-            tool_use_id: block.id,
-            content: result,
-            ...(isError ? { is_error: true } : {}),
-          })
-        }
-
-        savedApiMessages.push({ role: 'user', content: toolResults })
-      }
-    } catch (err) {
-      send({ type: 'message', data: { type: 'error', text: `Follow-up turn ${turn}: ${(err as Error).message}` } })
-      savedTotalTurns += turn
-      send({ type: 'done', result: `Error: ${(err as Error).message}`, cost: savedCost, duration: Date.now() - startTime, turns: savedTotalTurns, inputTokens: savedInputTokens, outputTokens: savedOutputTokens, isError: true })
-      send({ type: 'status', status: 'error' })
-      return
-    }
-  }
-
-  if (!aborted) {
-    savedTotalTurns += turn
-    send({ type: 'done', result: 'Reached maximum turns', cost: savedCost, duration: Date.now() - startTime, turns: savedTotalTurns, inputTokens: savedInputTokens, outputTokens: savedOutputTokens, isError: false })
-    send({ type: 'status', status: 'done' })
-  }
+  await runLoop(useModel, useMaxTokens, useTurns, savedOpts.cwd)
 }
 
-// ƒ"?ƒ"? IPC message handler ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?
+// ── IPC message handler ──────────────────────────────────────────────────────
 
 process.on('message', (msg: any) => {
   if (msg.type === 'start') {
@@ -516,6 +482,7 @@ process.on('message', (msg: any) => {
   }
   if (msg.type === 'kill') {
     aborted = true
+    if (mcpManager) mcpManager.disconnectAll()
     send({ type: 'status', status: 'error' })
     process.exit(0)
   }

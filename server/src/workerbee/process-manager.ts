@@ -43,7 +43,10 @@ class ProcessManager extends EventEmitter {
     task: string
     apiKey: string
     model?: string
+    provider?: string
+    providerUrl?: string
     maxTurns?: number
+    extensions?: any[]
   }): AgentProcess {
     // Resolve the worker script path
     const workerPath = join(__dirname, 'agent-worker.js')
@@ -86,7 +89,10 @@ class ProcessManager extends EventEmitter {
             task: opts.task,
             apiKey: opts.apiKey,
             model: opts.model,
+            provider: opts.provider,
+            providerUrl: opts.providerUrl,
             maxTurns: opts.maxTurns,
+            extensions: opts.extensions,
           })
           // Immediately mark as working â€” don't wait for the first status update
           agent.status = 'working'
