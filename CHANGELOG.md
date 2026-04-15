@@ -2,6 +2,44 @@
 
 All notable changes to Squan are documented here.
 
+## [0.5.0] - 2026-04-15
+
+### 🆕 MCP Extension Support
+- **MCP Client**: Agents connect to external MCP tool servers (stdio + HTTP transports)
+- **Extension Config UI**: Settings → Extensions tab to add/remove MCP servers
+- **Tool Discovery**: Agents auto-discover tools from connected MCP servers
+- **Prefixed Names**: MCP tools use `serverName__toolName` to avoid collisions
+- Works with 1000+ community MCP servers (databases, Slack, Jira, GitHub, etc.)
+
+### 🆕 Multi-Model Provider Support
+- **Provider Abstraction**: Anthropic, OpenAI, Google Gemini, Ollama, OpenAI-compatible
+- **Settings UI**: AI Provider tab with model grid and API key management
+- **Per-user Config**: Each user can choose their own provider + model
+- **Ollama**: Run local models with no API key needed
+- **Cost Tracking**: Adjusted per-provider pricing
+
+### 🆕 Built-in Skills (formerly Recipes)
+- **Skill System**: Multi-step declarative workflows for chaining agent tasks
+- **4 Built-in Skills**: Test→Fix→PR, Review→Refactor, Generate Docs, Security Audit
+- **Skills API**: CRUD endpoints (`/api/skills`)
+- Loadable from `.squan/skills/` directory per project
+
+### 🆕 Web Browsing Tools
+- **fetch_url**: HTTP GET with HTML→text conversion for readability
+- **search_web**: DuckDuckGo instant answer API integration
+- Both available as built-in tools for all agents
+
+### 🔧 State Recovery on Restart
+- `loadData()` retries 3x with exponential backoff (1s → 2s → 4s)
+- Red error banner with Retry button if data fails to load
+- Stale auth tokens auto-clear (forces re-login)
+- Working/idle agents marked 'done' on restart (not zombie)
+- Sidebar refresh button (↻) for manual data reload
+
+### 🔧 Agent Chat Fix
+- Fixed FollowUpInput pushed off-screen for long conversations
+- Changed layout from `h-full` to `flex-1 min-h-0` for proper flex constraint
+
 ## [0.4.0] - 2026-04-14
 
 ### 🆕 Post-Completion Agent Interaction

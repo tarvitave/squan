@@ -4,31 +4,46 @@
 
 Squan orchestrates multiple AI agents working in parallel across your git repositories. Create tasks, dispatch agents, interact with them in real-time, and watch them build — all from a single desktop app.
 
-![Squan](https://img.shields.io/badge/version-0.4.0-teal) ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue) ![License](https://img.shields.io/badge/license-MIT-green)
+![Squan](https://img.shields.io/badge/version-0.5.0-teal) ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue) ![License](https://img.shields.io/badge/license-MIT-green)
 
 ---
 
-## What's New in v0.4.0
+## What's New in v0.5.0
+
+### 🔌 MCP Extension Support
+- **Connect any MCP tool server** — databases, Slack, Jira, GitHub Issues, Figma, Notion, Stripe
+- 1000+ community MCP servers available — add them in Settings → Extensions
+- Agents automatically discover and use MCP tools alongside built-in tools
+- Support for both **stdio** (command-line) and **HTTP** transports
+
+### 🧠 Multi-Model Providers
+- **Anthropic** — Claude Sonnet, Opus, Haiku
+- **OpenAI** — GPT-4o, GPT-4o-mini, o3
+- **Google Gemini** — 1.5 Flash, 1.5 Pro, 2.0 Flash
+- **Ollama** — run local models (Llama3, CodeLlama, Mistral)
+- **OpenAI-compatible** — any endpoint (Azure, vLLM, etc.)
+- Switch providers in Settings → AI Provider
+
+### 🎯 Built-in Skills
+- **Test → Fix → PR** — run tests, fix failures, create PR
+- **Review → Refactor** — code review then address findings
+- **Generate Docs** — analyze codebase and write documentation
+- **Security Audit** — scan, fix, verify vulnerabilities
+
+### 🌐 Web Browsing Tools
+- **fetch_url** — agents can read any web page (HTML auto-converted to text)
+- **search_web** — agents can search the web for information
 
 ### 🔄 Post-Completion Agent Interaction
 - **Follow-up questions** — keep chatting with agents after they finish
 - **Mark Complete** button — manually advance tasks through the kanban board
 - Agents stay alive after completion — resume conversations anytime
 
-### 🤖 Direct API Agents
-- Agents call the Anthropic API directly (like Goose) — no CLI spawning
-- Faster, more reliable, zero OAuth issues
-- Each agent runs in an isolated child process
-
-### 📋 Smarter Kanban
-- Real-time status sync between agents and kanban cards
-- Agent completion auto-advances cards to PR Review
-- Inline "View Chat" and "Mark Complete" actions on kanban cards
-
-### ✏️ Better Task Editor
-- Larger description fields with auto-resize
-- Pop-out modal editor for writing detailed instructions
-- Fixed input focus issues
+### 🛡️ State Recovery
+- Retry logic on data loading (3x with exponential backoff)
+- Error banner with Retry button if server is unreachable
+- Agents marked "done" (not zombie) on server restart
+- Refresh button in sidebar to re-fetch data
 
 ---
 
@@ -38,7 +53,9 @@ Squan orchestrates multiple AI agents working in parallel across your git reposi
 - Dispatch multiple AI agents to work on tasks simultaneously
 - Each agent works in an isolated git worktree — no conflicts
 - Monitor agent progress in real-time via Goose-style chat interface
-- **NEW:** Interact with agents after they complete — ask follow-up questions or give more instructions
+- Interact with agents after they complete — ask follow-up questions or give more instructions
+- **NEW:** Agents use any AI model (Anthropic, OpenAI, Gemini, Ollama)
+- **NEW:** MCP extensions give agents access to databases, APIs, and external tools
 
 ### 📋 Kanban Board
 - Visual task management with 5 columns: Open → In Progress → PR Review → Landed → Cancelled
@@ -278,7 +295,8 @@ docker-compose up -d
 | Backend | Express + TypeScript |
 | Database | SQLite (libsql) — cache layer |
 | State source of truth | `.squan/` files in git |
-| Agent runtime | DirectRunner (Anthropic API) |
+| Agent runtime | Multi-provider (Anthropic, OpenAI, Gemini, Ollama) |
+| Tool ecosystem | MCP (Model Context Protocol) extensions |
 | Build | Vite 5 + electron-forge |
 | Deployment | Docker + GitHub Actions |
 
