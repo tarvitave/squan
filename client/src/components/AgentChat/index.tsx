@@ -1,4 +1,4 @@
-/**
+﻿/**
  * AgentChat \u2014 Goose-style chat renderer for agent messages.
  * - GooseMessage: left-aligned, full width, markdown text + tool cards
  * - UserMessage: right-aligned dark pill
@@ -460,7 +460,7 @@ export function AgentChat({ workerbeeId, taskDescription }: { workerbeeId: strin
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center flex-1">
         <Loader2 className="w-6 h-6 text-text-tertiary animate-spin" />
       </div>
     )
@@ -468,7 +468,7 @@ export function AgentChat({ workerbeeId, taskDescription }: { workerbeeId: strin
 
   if (!state) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-text-tertiary gap-3 p-8">
+      <div className="flex flex-col items-center justify-center flex-1 text-text-tertiary gap-3 p-8">
         <Bot className="w-8 h-8" />
         <div className="text-sm text-center">Loading agent data...</div>
       </div>
@@ -478,7 +478,7 @@ export function AgentChat({ workerbeeId, taskDescription }: { workerbeeId: strin
   // If no_runner but we have messages from a previous run, show them
   if (state.status === 'no_runner' && state.messages.length === 0) {
     return (
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col flex-1 min-h-0">
         <div className="flex flex-col items-center justify-center flex-1 text-text-tertiary gap-3 p-8">
           <Bot className="w-8 h-8" />
           <div className="text-sm text-center">
@@ -495,7 +495,7 @@ export function AgentChat({ workerbeeId, taskDescription }: { workerbeeId: strin
   const isFinished = displayStatus === 'done' || displayStatus === 'error'
 
   return (
-    <div className="flex flex-col h-full bg-bg-primary">
+    <div className="flex flex-col flex-1 min-h-0 bg-bg-primary">
       {/* Header bar */}
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border-primary shrink-0">
         <span className={`w-2 h-2 rounded-full shrink-0 ${
