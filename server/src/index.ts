@@ -720,8 +720,14 @@ app.post('/api/projects/:projectId/workerbees', async (req, res) => {
     if (!project) return res.status(404).json({ error: 'Project not found' })
     if (project.userId && project.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
     const { taskDescription, task } = validate(SpawnSchema, req.body)
-    const bee = await spawnDirectAgent(req.params.projectId, (taskDescription ?? task) || 'No task specified', userId)
-    res.json(bee)
+    const taskText = (taskDescription ?? task) || 'No task specified'
+    const bee = await spawnDirectAgent(req.params.projectId, taskText, userId)
+    // Auto-create release train so agent appears on kanban board
+    const rt = await releaseTrainManager.create(taskText.slice(0, 80), req.params.projectId, [], taskText, userId)
+    await releaseTrainManager.assignWorkerBee(rt.id, bee.id)
+    await releaseTrainManager.start(rt.id)
+    broadcastEvent({ id: randomUUID(), type: 'releasetrain.created', payload: rt as any, timestamp: new Date().toISOString() })
+    res.json({ ...bee, releaseTrainId: rt.id })
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 app.post('/api/rigs/:rigId/polecats', async (req, res) => {  // backwards compat
@@ -731,8 +737,14 @@ app.post('/api/rigs/:rigId/polecats', async (req, res) => {  // backwards compat
     if (!project) return res.status(404).json({ error: 'Project not found' })
     if (project.userId && project.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
     const { taskDescription, task } = validate(SpawnSchema, req.body)
-    const bee = await spawnDirectAgent(req.params.rigId, (taskDescription ?? task) || 'No task specified', userId)
-    res.json(bee)
+    const taskText2 = (taskDescription ?? task) || 'No task specified'
+    const bee = await spawnDirectAgent(req.params.rigId, taskText2, userId)
+    // Auto-create release train so agent appears on kanban board
+    const rt2 = await releaseTrainManager.create(taskText2.slice(0, 80), req.params.rigId, [], taskText2, userId)
+    await releaseTrainManager.assignWorkerBee(rt2.id, bee.id)
+    await releaseTrainManager.start(rt2.id)
+    broadcastEvent({ id: randomUUID(), type: 'releasetrain.created', payload: rt2 as any, timestamp: new Date().toISOString() })
+    res.json({ ...bee, releaseTrainId: rt2.id })
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
