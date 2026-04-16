@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════════════
-   Squan Theme — matching Goose Desktop exactly
+   Squan Theme — matching Squan Desktop
    ═══════════════════════════════════════════════════════════ */
 
 @theme {
-  /* Palette (from Goose theme-tokens.ts) */
+  /* Palette (from Squan theme) */
   --color-white: #ffffff;
   --color-black: #000000;
   --color-block-teal: #13bbaf;
@@ -31,7 +31,7 @@
   --color-yellow-100: #ffd966;
   --color-yellow-200: #fbcd44;
 
-  /* Semantic tokens — light theme (Goose default) */
+  /* Semantic tokens — light theme */
   --color-bg-primary: #ffffff;
   --color-bg-secondary: #f4f6f7;
   --color-bg-tertiary: #e3e6ea;
@@ -58,11 +58,11 @@
   --color-border-danger: #f94b4b;
   --color-border-success: #91cb80;
 
-  /* Typography — match Goose */
+  /* Typography — Squan typography */
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
 
-  /* Shadows — from Goose */
+  /* Shadows — Squan shadows */
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
   --shadow-default: 0px 12px 32px 0px rgba(0, 0, 0, 0.04), 0px 8px 16px 0px rgba(0, 0, 0, 0.02), 0px 2px 4px 0px rgba(0, 0, 0, 0.04), 0px 0px 1px 0px rgba(0, 0, 0, 0.2);
@@ -90,7 +90,7 @@ html, body, #root {
   font-family: var(--font-sans);
 }
 
-/* Scrollbar — Goose style */
+/* Scrollbar — Squan style */
 ::-webkit-scrollbar {
   width: 12px;
   height: 12px;
@@ -135,7 +135,7 @@ html, body, #root {
 }
 .no-drag { -webkit-app-region: no-drag; }
 
-/* Sidebar animation — Goose staggered entrance */
+/* Sidebar animation — staggered entrance */
 @keyframes sidebar-item-in {
   from { opacity: 0; transform: translateX(20px); }
   to { opacity: 1; transform: translateX(0); }
@@ -157,7 +157,7 @@ html, body, #root {
   .sidebar-item { animation: none; opacity: 1; transform: none; }
 }
 
-/* User message bubble — Goose style */
+/* User message bubble — Squan style */
 .user-message-bubble {
   background-color: var(--color-text-primary);
   color: var(--color-bg-primary);

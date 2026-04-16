@@ -238,7 +238,7 @@ async function runCommand(input: string, activeTownId: string | null): Promise<S
       const projectId = await resolveProjectId(args[0])
       const task = args.slice(1).join(' ')
       const bee = await apiPost(`/api/projects/${projectId}/workerbees/structured`, { taskDescription: task }) as Record<string, unknown>
-      push(...[mk('✓ Spawned  ', '#4ec9b0'), teal(bee.name as string), gray('  mode: structured (Goose-style chat)')])
+      push(...[mk('✓ Spawned  ', '#4ec9b0'), teal(bee.name as string), gray('  mode: structured (agent chat)')])
       break
     }
 

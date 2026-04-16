@@ -52,7 +52,7 @@ Squan orchestrates multiple AI agents working in parallel across your git reposi
 ### 🤖 Multi-Agent Orchestration
 - Dispatch multiple AI agents to work on tasks simultaneously
 - Each agent works in an isolated git worktree — no conflicts
-- Monitor agent progress in real-time via Goose-style chat interface
+- Monitor agent progress in real-time via agent chat interface
 - Interact with agents after they complete — ask follow-up questions or give more instructions
 - **NEW:** Agents use any AI model (Anthropic, OpenAI, Gemini, Ollama)
 - **NEW:** MCP extensions give agents access to databases, APIs, and external tools
@@ -63,7 +63,7 @@ Squan orchestrates multiple AI agents working in parallel across your git reposi
 - **NEW:** "Mark Complete" button to manually advance tasks
 - **NEW:** Inline agent status and quick actions on cards
 
-### 💬 Agent Chat (Goose-style)
+### 💬 Agent Chat (agent chat)
 - Left-aligned AI messages with expandable tool call cards
 - Right-aligned user messages in dark pills
 - Real-time streaming with loading indicators
@@ -309,7 +309,7 @@ squan/
 ├── client/                  # React frontend
 │   ├── src/
 │   │   ├── components/      # 25+ UI components
-│   │   │   ├── AgentChat/   # Goose-style chat with follow-up input
+│   │   │   ├── AgentChat/   # agent chat with follow-up input
 │   │   │   ├── KanbanView/  # Kanban board with Mark Complete
 │   │   │   └── Sidebar/     # Project selector + agent list
 │   │   ├── hooks/           # WebSocket, real-time state sync

@@ -149,9 +149,9 @@ All notable changes to Squan are documented here.
 
 ## [0.2.8] - 2026-04-12
 
-### 🆕 Major: Direct API (like Goose)
+### 🆕 Major: Direct API 
 - **DirectRunner**: Calls Anthropic API directly instead of CLI
-- **Goose-style AgentChat UI**: Left-aligned AI messages, right-aligned dark pills, expandable tool cards
+- **New AgentChat UI**: Left-aligned AI messages, right-aligned dark pills, expandable tool cards
 - Loading indicator with animated bouncing dots
 - Removed all `workerBeeManager.spawn` calls (zero CLI usage)
 

@@ -8,7 +8,7 @@ import { EventStream } from './components/EventStream/index.js'
 import { AuthPage } from './components/AuthPage/index.js'
 import { KanbanView } from './components/KanbanView/index.js'
 import { ConsolePanel } from './components/ConsolePanel/index.js'
-// ClaudeCodePanel removed — agents now use DirectRunner with Goose-style chat
+// ClaudeCodePanel removed — agents now use DirectRunner with agent chat
 import { MetricsPanel } from './components/MetricsPanel/index.js'
 import { CostPanel } from './components/CostPanel/index.js'
 import { ToastContainer } from './components/Toast/index.js'
@@ -24,7 +24,7 @@ import { PanelLeft } from 'lucide-react'
 import type { MainView } from './store/index.js'
 
 /* ────────────────────────────────────────────────────────
-   Goose-style layout:
+   Chat layout:
    ┌─ bg-secondary shell (with 2px padding) ───────────┐
    │ ┌── nav panel ─┬── bg-primary rounded-lg card ──┐ │
    │ │ sidebar       │                                 │ │
@@ -343,7 +343,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* ── Status bar (bottom — like Goose) ──────────── */}
+      {/* ── Status bar (bottom — ) ──────────── */}
       <StatusBar />
     </div>
   )

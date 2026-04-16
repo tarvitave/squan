@@ -13,7 +13,7 @@ import { z } from 'zod'
 import { setupWsServer } from './ws/server.js'
 import { startWitness } from './witness/index.js'
 import * as squanFs from './squan-fs/index.js'
-// PTY completely disabled â€” agents use DirectRunner (direct API calls like Goose)
+// PTY completely disabled â€” agents use DirectRunner (direct API calls )
 const ptyManager = {
   activeBackendName: 'disabled' as string,
   tmuxAvailable: false,
@@ -33,7 +33,7 @@ import { broadcastEvent } from './ws/server.js'
 // Store runners by workerbee ID (DirectRunner or StructuredRunner)
 const structuredRunners = new Map<string, DirectRunner | StructuredRunner>()
 
-// Helper: spawn an agent in a separate child process (like Goose)
+// Helper: spawn an agent in a separate child process 
 async function spawnDirectAgent(projectId: string, taskDescription: string, userId: string): Promise<any> {
   const user = await getUserById(userId)
   const provider = (user as any).provider || 'anthropic'
@@ -749,7 +749,7 @@ app.post('/api/rigs/:rigId/polecats', async (req, res) => {  // backwards compat
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
-// Get messages for an agent (Goose-style chat view)
+// Get messages for an agent (agent chat view)
 app.get('/api/workerbees/:id/messages', requireAuth, async (req, res) => {
   const agent = processManager.get(req.params.id)
   if (agent) {
@@ -784,8 +784,8 @@ app.get('/api/workerbees/:id/messages', requireAuth, async (req, res) => {
   }
 })
 
-// Spawn agent with structured runner (Option B - Goose-style)
-// Spawn agent with direct API calls (Goose-style) â€” no CLI needed
+// Spawn agent with structured runner (Option B - agent chat)
+// Spawn agent with direct API calls (agent chat) â€” no CLI needed
 app.post('/api/projects/:projectId/workerbees/structured', requireAuth, async (req, res) => {
   try {
     const userId = res.locals.userId as string
@@ -1358,7 +1358,7 @@ app.post('/api/release-trains/:id/dispatch', async (req, res) => {
     const taskDescription = releaseTrain.description || releaseTrain.name
 
     {
-      // Direct API mode â€” calls Anthropic API directly like Goose
+      // Direct API mode â€” calls Anthropic API directly like Squan
       // No Claude Code CLI, no OAuth, no terminal
       const bee = await spawnDirectAgent(releaseTrain.projectId, taskDescription, userId)
       await releaseTrainManager.assignWorkerBee(releaseTrain.id, bee.id, userId)
@@ -1779,7 +1779,7 @@ app.get('/api/events', async (req, res) => {
 
 // --- Terminals REMOVED ---
 // Terminal PTY endpoints have been removed. Agents use DirectRunner (direct Anthropic API calls).
-// The "Agents" view shows Goose-style chat windows instead of raw terminals.
+// The "Agents" view shows agent chat windows instead of raw terminals.
 app.get('/api/terminals', (_req, res) => { res.json([]) })
 app.post('/api/terminals', (_req, res) => { res.status(410).json({ error: 'Terminal PTY disabled. Agents use direct API mode.' }) })
 app.delete('/api/terminals/:id', (_req, res) => { res.json({ ok: true }) })

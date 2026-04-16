@@ -1,7 +1,7 @@
 ﻿/**
  * ProcessManager â€” manages agent child processes.
  * Each agent runs in its own Node.js child process for full isolation.
- * Like Goose: each agent is a separate process that can be killed independently.
+ * Like Squan: each agent is a separate process that can be killed independently.
  */
 
 import { fork, ChildProcess } from 'child_process'

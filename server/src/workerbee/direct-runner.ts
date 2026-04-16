@@ -1,5 +1,5 @@
 /**
- * DirectRunner — Calls Anthropic API directly like Goose does.
+ * DirectRunner — Calls Anthropic API directly directly.
  * No Claude Code CLI, no OAuth, no terminal. Just HTTP API calls.
  *
  * Uses the Anthropic Messages API with tool_use for:
@@ -53,7 +53,7 @@ export interface ToolResultBlock {
   is_error?: boolean
 }
 
-// ── Tool definitions (like Goose/Claude Code) ────────────────────────────────
+// ── Tool definitions  ────────────────────────────────
 
 const TOOLS = [
   {

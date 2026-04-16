@@ -1,7 +1,7 @@
 /**
  * spawn-setup.ts — Shared setup logic for agent spawning.
  * Creates git worktree, CLAUDE.md, config dir, etc.
- * Used by both PTY (terminal) and StructuredRunner (Goose-style) modes.
+ * Used by both PTY (terminal) and StructuredRunner (agent chat) modes.
  */
 
 import { execFileSync, type ExecFileSyncOptions } from 'child_process'

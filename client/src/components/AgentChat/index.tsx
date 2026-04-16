@@ -1,6 +1,6 @@
 ﻿/**
- * AgentChat \u2014 Goose-style chat renderer for agent messages.
- * - GooseMessage: left-aligned, full width, markdown text + tool cards
+ * AgentChat \u2014 Chat renderer for agent messages.
+ * - SquanMessage: left-aligned, full width, markdown text + tool cards
  * - UserMessage: right-aligned dark pill
  * - ToolCallWithResponse: bordered expandable card
  * - Follow-up input: always available to continue giving instructions
@@ -160,11 +160,11 @@ function ExpandableSection({ label, children, startExpanded = false }: { label: 
   )
 }
 
-// \u2500\u2500 GooseMessage \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// \u2500\u2500 SquanMessage \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
-function GooseMessageBubble({ content, toolResults }: { content: Array<TextContent | ToolUseContent>; toolResults: Map<string, string> }) {
+function SquanMessageBubble({ content, toolResults }: { content: Array<TextContent | ToolUseContent>; toolResults: Map<string, string> }) {
   return (
-    <div className="goose-message flex w-[90%] justify-start min-w-0 py-2">
+    <div className="agent-message flex w-[90%] justify-start min-w-0 py-2">
       <div className="flex flex-col w-full min-w-0">
         {content.map((c, i) => {
           if (c.type === 'text' && c.text.trim()) {
@@ -519,7 +519,7 @@ export function AgentChat({ workerbeeId, taskDescription }: { workerbeeId: strin
 
         {state.messages.map((msg, i) => {
           if (msg.type === 'assistant' && (msg as AssistantMsg).message?.content) {
-            return <GooseMessageBubble key={i} content={(msg as AssistantMsg).message.content} toolResults={toolResults} />
+            return <SquanMessageBubble key={i} content={(msg as AssistantMsg).message.content} toolResults={toolResults} />
           }
           if (msg.type === 'result') {
             return <ResultCard key={i} result={msg as ResultMsg} />
