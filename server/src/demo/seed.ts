@@ -236,19 +236,26 @@ export async function loadDemo(userId: string): Promise<{ projectId: string; age
   // Clean up any existing demo data first
   await resetDemo()
 
+  // Find or create a town for the demo project
+  const towns = await db.execute({ sql: 'SELECT id FROM towns LIMIT 1', args: [] })
+  const townId = towns.rows[0]?.id as string ?? 'demo-town'
+  if (!towns.rows[0]) {
+    await db.execute({ sql: `INSERT INTO towns (id, name, user_id, created_at) VALUES (?, 'Demo', ?, ?)`, args: ['demo-town', userId, now] })
+  }
+
   // Create demo project
   await db.execute({
-    sql: `INSERT OR REPLACE INTO rigs (id, name, local_path, remote_url, town_id, user_id, created_at, updated_at)
-          VALUES (?, ?, ?, ?, NULL, ?, ?, ?)`,
-    args: [DEMO_PROJECT_ID, DEMO_PROJECT_NAME, '', DEMO_REPO_URL, userId, now, now],
+    sql: `INSERT OR REPLACE INTO rigs (id, name, local_path, repo_url, town_id, user_id, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [DEMO_PROJECT_ID, DEMO_PROJECT_NAME, '', DEMO_REPO_URL, townId, userId, now],
   })
 
   // Create agents
   for (const agent of agents) {
     await db.execute({
       sql: `INSERT INTO workerbees (id, rig_id, name, branch, worktree_path, task_description, completion_note, role, status, hook_id, session_id, user_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)`,
-      args: [agent.id, DEMO_PROJECT_ID, agent.name, `workerbee/${agent.name}-demo`, '', agent.taskDescription, agent.completionNote, agent.role, agent.status, userId, now, now],
+            VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, NULL, NULL, ?, ?, ?)`,
+      args: [agent.id, DEMO_PROJECT_ID, agent.name, `workerbee/${agent.name}-demo`, agent.taskDescription, agent.completionNote, agent.role, agent.status, userId, now, now],
     })
 
     // Insert conversation messages
@@ -263,8 +270,8 @@ export async function loadDemo(userId: string): Promise<{ projectId: string; age
   // Create release trains
   for (const rt of releaseTrains) {
     await db.execute({
-      sql: `INSERT INTO release_trains (id, name, description, project_id, status, assigned_workerbee_id, user_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      sql: `INSERT INTO release_trains (id, name, description, rig_id, status, assigned_workerbee_id, user_id, created_at, updated_at, atomic_task_ids_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[]')`,
       args: [rt.id, rt.name, rt.description, DEMO_PROJECT_ID, rt.status, rt.agentId || null, userId, now, now],
     })
   }
