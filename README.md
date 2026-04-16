@@ -4,7 +4,7 @@
 
 Squan orchestrates multiple AI agents working in parallel across your git repositories. Create tasks, dispatch agents, interact with them in real-time, and watch them build — all from a single desktop app.
 
-![Squan](https://img.shields.io/badge/version-0.5.0-teal) ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue) ![License](https://img.shields.io/badge/license-MIT-green)
+![Squan](https://img.shields.io/badge/version-0.5.0-teal) ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue) ![License](https://img.shields.io/badge/license-Apache-2.0-green)
 
 ---
 
@@ -366,7 +366,7 @@ squan/
 
 ## License
 
-MIT
+Apache-2.0
 
 ---
 

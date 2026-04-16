@@ -49,5 +49,6 @@
   },
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1"
-  }
+  },
+  "license": "Apache-2.0"
 }
