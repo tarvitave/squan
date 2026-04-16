@@ -2,6 +2,7 @@ import type { ForgeConfig } from '@electron-forge/shared-types'
 import { MakerSquirrel } from '@electron-forge/maker-squirrel'
 import { MakerZIP } from '@electron-forge/maker-zip'
 import { MakerDeb } from '@electron-forge/maker-deb'
+import { MakerDMG } from '@electron-forge/maker-dmg'
 import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-natives'
 import { VitePlugin } from '@electron-forge/plugin-vite'
 
@@ -20,6 +21,10 @@ const config: ForgeConfig = {
       './assets/icon.ico',
     ],
     icon: './assets/icon',
+    // macOS-specific
+    appCategoryType: 'public.app-category.developer-tools',
+    darwinDarkModeSupport: true,
+    osxSign: false as any, // Skip code signing for now
   },
 
   // ── Installers ────────────────────────────────────────────────────
@@ -36,6 +41,12 @@ const config: ForgeConfig = {
     // All platforms: ZIP (portable, no install needed)
     new MakerZIP({}),
 
+    // macOS: DMG installer
+    new MakerDMG({
+      name: 'Squan',
+      format: 'ULFO',
+    }),
+
     // Linux: .deb package
     new MakerDeb({
       options: {
@@ -44,7 +55,7 @@ const config: ForgeConfig = {
         genericName: 'AI Development Tool',
         description: 'Multi-agent AI development command center',
         categories: ['Development', 'IDE'],
-        homepage: 'https://squansq.com',
+        homepage: 'https://squan.dev',
         maintainer: 'Colin',
         section: 'devel',
         depends: ['git', 'nodejs'],
