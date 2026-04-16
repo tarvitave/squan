@@ -180,6 +180,8 @@ export type EventType =
   | 'hook.activated'
   | 'hook.completed'
   | 'atomictask.created'
+  | 'demo.loaded'
+  | 'demo.reset'
   | 'atomictask.assigned'
   | 'atomictask.done'
   | 'rootagent.started'
