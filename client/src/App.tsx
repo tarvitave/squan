@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, Component } from 'react'
-import { Bot, Terminal as TerminalIcon } from 'lucide-react'
+import { Bot } from 'lucide-react'
 import type { ReactNode, ErrorInfo } from 'react'
 import { apiFetch } from './lib/api.js'
 import { TabBar } from './components/TabBar/index.js'
@@ -120,20 +120,7 @@ function AgentDashboard({ activeTab }: { activeTab: any }) {
             {agent.name}
           </button>
         ))}
-        {/* Fallback to terminal tab */}
-        {activeTab && (
-          <button
-            onClick={() => setSelectedAgentId(null)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors shrink-0 ${
-              selectedAgentId === null
-                ? 'bg-bg-primary text-text-primary shadow-sm'
-                : 'text-text-secondary hover:text-text-primary hover:bg-bg-primary/50'
-            }`}
-          >
-            <TerminalIcon className="w-3 h-3" />
-            Terminal
-          </button>
-        )}
+        {/* All agents shown above */}
       </div>
 
       {/* Content */}
@@ -143,11 +130,11 @@ function AgentDashboard({ activeTab }: { activeTab: any }) {
             workerbeeId={selectedAgentId}
             taskDescription={allVisible.find((a) => a.id === selectedAgentId)?.taskDescription}
           />
-        ) : activeTab ? (
-          <PaneGrid tab={activeTab} />
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-text-tertiary">
-            <p>Select an agent above</p>
+          <div className="flex-1 flex flex-col items-center justify-center gap-4 text-text-tertiary p-8">
+            <Bot className="w-10 h-10 opacity-30" />
+            <p className="text-sm">Select an agent above to view its conversation</p>
+            <p className="text-xs opacity-50">Or dispatch a new agent from the sidebar [+] button</p>
           </div>
         )}
       </div>
