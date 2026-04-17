@@ -13,6 +13,7 @@ import { MetricsPanel } from './components/MetricsPanel/index.js'
 import { CostPanel } from './components/CostPanel/index.js'
 import { ToastContainer } from './components/Toast/index.js'
 import { Sidebar } from './components/Sidebar/index.js'
+import { AutomationsView } from './components/AutomationsView/index.js'
 import { CommandPalette } from './components/CommandPalette/index.js'
 import { PreferencesPanel } from './components/PreferencesPanel/index.js'
 import { AgentChat } from './components/AgentChat/index.js'
@@ -338,7 +339,9 @@ export default function App() {
             {mainView === 'metrics' && <MetricsPanel />}
             {mainView === 'costs' && <CostPanel />}
             {mainView === 'events' && <div className="flex-1 overflow-hidden flex flex-col"><EventStream /></div>}
-            {mainView === 'console' && <ConsolePanel />}
+            {mainView === 'automations' ? (
+                  <AutomationsView />
+                ) : mainView === 'console' && <ConsolePanel />}
           </div>
         </div>
       </div>

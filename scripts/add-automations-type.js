@@ -1,0 +1,5 @@
+const fs = require('fs')
+let s = fs.readFileSync('client/src/store/index.ts', 'utf8')
+s = s.replace("'costs' | 'console'", "'costs' | 'console' | 'automations'")
+fs.writeFileSync('client/src/store/index.ts', s)
+console.log('Added automations to MainView')

@@ -120,6 +120,7 @@ import { loadDemo, resetDemo, isDemoLoaded, DEMO_PROJECT } from './demo/seed.js'
 import { parseGithubRepo, detectDefaultBranch, createPullRequest, getPullRequestStatus } from './github/index.js'
 import { preconfigureClaudeAuth, restoreClaudeConfigOnStartup } from './claude-auth.js'
 import { listSessions, parseSession, handleHook, configureHooks } from './claudecode/index.js'
+import { getSchedulerManager } from './scheduler/index.js'
 
 const app = express()
 app.use(express.json())
@@ -2242,4 +2243,65 @@ app.post('/api/demo/reset', requireAuth, async (_req, res) => {
   console.error('Failed to run migrations:', err)
   process.exit(1)
 })
+
+
+  // ── Automations API ─────────────────────────────────────────
+  app.get('/api/automations', requireAuth, async (req: any, res) => {
+    try {
+      const sm = getSchedulerManager()
+      const automations = await sm.list(req.user.userId)
+      res.json(automations)
+    } catch (e: any) { res.status(500).json({ error: e.message }) }
+  })
+
+  app.post('/api/automations', requireAuth, async (req: any, res) => {
+    try {
+      const sm = getSchedulerManager()
+      const automation = await sm.create({ ...req.body, userId: req.user.userId })
+      res.json(automation)
+    } catch (e: any) { res.status(400).json({ error: e.message }) }
+  })
+
+  app.put('/api/automations/:id', requireAuth, async (req: any, res) => {
+    try {
+      const sm = getSchedulerManager()
+      const automation = await sm.update(req.params.id, req.body)
+      res.json(automation)
+    } catch (e: any) { res.status(400).json({ error: e.message }) }
+  })
+
+  app.delete('/api/automations/:id', requireAuth, async (req: any, res) => {
+    try {
+      const sm = getSchedulerManager()
+      await sm.delete(req.params.id)
+      res.json({ ok: true })
+    } catch (e: any) { res.status(400).json({ error: e.message }) }
+  })
+
+  app.post('/api/automations/:id/enable', requireAuth, async (req: any, res) => {
+    try {
+      const sm = getSchedulerManager()
+      await sm.enable(req.params.id)
+      res.json({ ok: true })
+    } catch (e: any) { res.status(400).json({ error: e.message }) }
+  })
+
+  app.post('/api/automations/:id/disable', requireAuth, async (req: any, res) => {
+    try {
+      const sm = getSchedulerManager()
+      await sm.disable(req.params.id)
+      res.json({ ok: true })
+    } catch (e: any) { res.status(400).json({ error: e.message }) }
+  })
+
+  app.post('/api/automations/:id/run', requireAuth, async (req: any, res) => {
+    try {
+      const sm = getSchedulerManager()
+      const automations = await sm.list(req.user.userId)
+      const auto = automations.find(a => a.id === req.params.id)
+      if (!auto) return res.status(404).json({ error: 'Automation not found' })
+      await sm.recordRun(auto.id)
+      res.json({ ok: true, message: 'Automation triggered' })
+    } catch (e: any) { res.status(400).json({ error: e.message }) }
+  })
 
