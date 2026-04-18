@@ -17,6 +17,7 @@ const NAV_ITEMS: { view: MainView; icon: typeof Monitor; label: string }[] = [
   { view: 'events', icon: Activity, label: 'Events' },
   { view: 'costs', icon: DollarSign, label: 'Costs' },
   { view: 'console', icon: Terminal, label: 'Console' },
+  { view: 'claudecode' as any, icon: Code2, label: 'Claude Code' },
   { view: 'automations' as any, icon: Clock, label: 'Automations' },
 ]
 

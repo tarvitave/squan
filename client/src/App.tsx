@@ -14,6 +14,7 @@ import { CostPanel } from './components/CostPanel/index.js'
 import { ToastContainer } from './components/Toast/index.js'
 import { Sidebar } from './components/Sidebar/index.js'
 import { AutomationsView } from './components/AutomationsView/index.js'
+import { ClaudeCodeView } from './components/ClaudeCodeView/index.js'
 import { CommandPalette } from './components/CommandPalette/index.js'
 import { PreferencesPanel } from './components/PreferencesPanel/index.js'
 import { AgentChat } from './components/AgentChat/index.js'
@@ -171,7 +172,7 @@ export default function App() {
       if (m && e.key === ',') { e.preventDefault(); setShowPreferences(true) }
       if (m && e.key >= '1' && e.key <= '7') {
         e.preventDefault()
-        const views: MainView[] = ['terminals', 'kanban', 'metrics', 'events', 'costs', 'console']
+        const views: MainView[] = ['terminals', 'kanban', 'metrics', 'events', 'costs', 'console', 'claudecode', 'automations']
         setMainView(views[parseInt(e.key) - 1] ?? 'terminals')
       }
     }

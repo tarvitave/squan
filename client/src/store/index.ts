@@ -101,7 +101,7 @@ export interface TownEntry {
   createdAt: string
 }
 
-export type MainView = 'terminals' | 'kanban' | 'metrics' | 'events' | 'costs' | 'console' | 'automations'
+export type MainView = 'terminals' | 'kanban' | 'metrics' | 'events' | 'costs' | 'console' | 'claudecode' | 'automations'
 
 /** The currently focused project — when set, all views filter to this project */
 export type ActiveProjectId = string | null

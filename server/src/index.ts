@@ -121,6 +121,7 @@ import { parseGithubRepo, detectDefaultBranch, createPullRequest, getPullRequest
 import { preconfigureClaudeAuth, restoreClaudeConfigOnStartup } from './claude-auth.js'
 import { listSessions, parseSession, handleHook, configureHooks } from './claudecode/index.js'
 import { getSchedulerManager } from './scheduler/index.js'
+import { startClaudeTerminal, getClaudeSession, killClaudeSession, writeToClaudeSession, resizeClaudeSession, killAllClaudeSessions } from './claude-terminal.js'
 
 const app = express()
 app.use(express.json())
@@ -2231,6 +2232,51 @@ app.post('/api/demo/reset', requireAuth, async (_req, res) => {
 })
 
 
+
+  // ── Claude Code Terminal ────────────────────────────────────
+  app.post('/api/claude-terminal', requireAuth, (req: any, res) => {
+    try {
+      const rigId = req.body?.rigId
+      let cwd: string | undefined
+      if (rigId) {
+        const rig = (db as any).prepare('SELECT local_path FROM rigs WHERE id = ?').get(rigId) as any
+        if (rig) cwd = rig.local_path
+      }
+      const session = startClaudeTerminal(cwd)
+
+      // Wire PTY output to WebSocket broadcast
+      session.pty.onData((data: string) => {
+        broadcastEvent({
+          type: 'terminal-data',
+          payload: { type: 'terminal-data', sessionId: session.id, data },
+        } as any)
+      })
+
+      session.pty.onExit(({ exitCode }: any) => {
+        broadcastEvent({
+          type: 'terminal-exit',
+          payload: { type: 'terminal-exit', sessionId: session.id, exitCode },
+        } as any)
+      })
+
+      res.json({ sessionId: session.id, platform: session.platform, tmuxSession: session.tmuxSession })
+    } catch (e: any) {
+      console.error('[claude-terminal] Error:', e)
+      res.status(500).json({ error: e.message })
+    }
+  })
+
+  app.delete('/api/claude-terminal/:id', requireAuth, (req: any, res) => {
+    killClaudeSession(req.params.id)
+    res.json({ ok: true })
+  })
+
+  app.get('/api/claude-terminal/sessions', requireAuth, (_req: any, res) => {
+    const { listClaudeSessions } = require('./claude-terminal.js')
+    const sessions = listClaudeSessions()
+    res.json(sessions.map((s: any) => ({ id: s.id, platform: s.platform, tmuxSession: s.tmuxSession, createdAt: s.createdAt })))
+  })
+
   startWitness()
   startSnapshotScheduler(() => workerBeeManager.listAll())
   httpServer.listen(PORT, () => {
@@ -2304,4 +2350,8 @@ app.post('/api/demo/reset', requireAuth, async (_req, res) => {
       res.json({ ok: true, message: 'Automation triggered' })
     } catch (e: any) { res.status(400).json({ error: e.message }) }
   })
+
+
+  
+
 
