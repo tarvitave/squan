@@ -2,7 +2,13 @@
 
 All notable changes to Squan are documented here.
 
-## [0.5.0] - 2026-04-15
+## [0.5.0]
+
+### 🍎 macOS Support
+- Apple Silicon (M1/M2/M3/M4) DMG installer
+- tmux-based persistent Claude Code sessions
+- Gatekeeper bypass instructions included
+ - 2026-04-15
 
 ### 🆕 MCP Extension Support
 - **MCP Client**: Agents connect to external MCP tool servers (stdio + HTTP transports)
