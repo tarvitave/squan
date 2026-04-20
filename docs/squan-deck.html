@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Squan — Presentation Deck</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0b0f;--card:#13141a;--card2:#1a1b23;--card3:#22232d;
+  --teal:#13bbaf;--teal2:#0fa89d;--teal-glow:rgba(19,187,175,.15);
+  --text:#e8eaed;--text2:#9aa0a8;--text3:#6b7280;
+  --green:#34d399;--yellow:#fbbf24;--red:#f87171;--blue:#60a5fa;--purple:#a78bfa;
+  --font:'Inter',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
+  --transition:0.5s cubic-bezier(.4,0,.2,1);
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font)}
+body{display:flex;flex-direction:column}
+
+/* PRESENTATION CONTAINER */
+.presentation{flex:1;position:relative;overflow:hidden}
+.slide{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  justify-content:center;align-items:center;padding:40px 60px;
+  opacity:0;transform:translateX(60px);pointer-events:none;
+  transition:opacity var(--transition),transform var(--transition);
+}
+.slide.active{opacity:1;transform:translateX(0);pointer-events:all}
+.slide.prev{opacity:0;transform:translateX(-60px)}
+
+/* ANIMATED ELEMENTS */
+.slide .anim{
+  opacity:0;transform:translateY(24px);
+  transition:opacity 0.5s ease,transform 0.5s ease;
+}
+.slide.active .anim{opacity:1;transform:translateY(0)}
+.slide.active .anim:nth-child(1){transition-delay:0.1s}
+.slide.active .anim:nth-child(2){transition-delay:0.2s}
+.slide.active .anim:nth-child(3){transition-delay:0.3s}
+.slide.active .anim:nth-child(4){transition-delay:0.4s}
+.slide.active .anim:nth-child(5){transition-delay:0.5s}
+.slide.active .anim:nth-child(6){transition-delay:0.6s}
+.slide.active .anim:nth-child(7){transition-delay:0.7s}
+.slide.active .anim:nth-child(8){transition-delay:0.8s}
+
+/* TYPOGRAPHY */
+.slide-title{
+  font-size:clamp(28px,4vw,48px);font-weight:800;margin-bottom:32px;
+  background:linear-gradient(135deg,var(--teal),#fff);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;text-align:center;line-height:1.2;
+}
+.slide-subtitle{font-size:clamp(16px,2vw,22px);color:var(--text2);text-align:center;max-width:800px;line-height:1.6}
+.big-title{
+  font-size:clamp(48px,8vw,96px);font-weight:900;
+  background:linear-gradient(135deg,var(--teal),#7dd9d1,#fff);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  letter-spacing:-2px;line-height:1;
+}
+.tagline{font-size:clamp(18px,2.5vw,28px);color:var(--text2);margin-top:12px}
+.highlight{color:var(--teal);font-weight:700}
+
+/* BADGE */
+.badge{
+  display:inline-block;padding:4px 14px;border-radius:20px;font-size:13px;font-weight:600;
+  background:var(--teal-glow);color:var(--teal);border:1px solid rgba(19,187,175,.3);
+  margin:4px;
+}
+.badge.new{background:rgba(251,191,36,.12);color:var(--yellow);border-color:rgba(251,191,36,.3)}
+.badge.green{background:rgba(52,211,153,.12);color:var(--green);border-color:rgba(52,211,153,.3)}
+
+/* CARDS */
+.card-grid{display:grid;gap:20px;width:100%;max-width:1100px}
+.card-grid.cols-2{grid-template-columns:1fr 1fr}
+.card-grid.cols-3{grid-template-columns:1fr 1fr 1fr}
+.card-grid.cols-4{grid-template-columns:1fr 1fr 1fr 1fr}
+.card{
+  background:var(--card);border:1px solid rgba(255,255,255,.06);
+  border-radius:16px;padding:24px;text-align:left;
+  transition:transform 0.3s,box-shadow 0.3s;
+}
+.card:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.3)}
+.card h3{font-size:17px;font-weight:700;margin-bottom:8px;color:var(--text)}
+.card p{font-size:14px;color:var(--text2);line-height:1.5}
+.card .icon{font-size:28px;margin-bottom:12px;display:block}
+
+/* PAIN POINT CARDS */
+.pain-card{text-align:center;padding:28px 20px}
+.pain-card .pain-icon{
+  width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+  margin:0 auto 16px;font-size:24px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.2);
+}
+.pain-card h3{color:var(--red);font-size:16px;margin-bottom:8px}
+
+/* AGENT CARDS */
+.agent-card{border-left:3px solid var(--teal);padding:16px 20px}
+.agent-card.done{border-left-color:var(--green)}
+.agent-name{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--teal)}
+.agent-card.done .agent-name{color:var(--green)}
+.agent-task{font-size:15px;margin:6px 0;color:var(--text)}
+.agent-status{font-size:13px;font-weight:600}
+.agent-status.working{color:var(--yellow)}
+.agent-status.complete{color:var(--green)}
+
+/* FLOW DIAGRAM */
+.flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;margin:20px 0}
+.flow-step{
+  background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:12px;
+  padding:14px 18px;font-size:14px;font-weight:600;text-align:center;min-width:120px;
+}
+.flow-arrow{color:var(--teal);font-size:20px;font-weight:700}
+
+/* KANBAN */
+.kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;width:100%;max-width:1100px}
+.kanban-col{background:var(--card);border-radius:14px;padding:16px;min-height:200px}
+.kanban-col h4{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.06)}
+.kanban-card{
+  background:var(--card2);border-radius:10px;padding:12px;margin-bottom:10px;
+  border-left:3px solid var(--teal);font-size:13px;
+}
+.kanban-card .kc-title{font-weight:600;color:var(--text);margin-bottom:4px}
+.kanban-card .kc-agent{font-family:var(--mono);font-size:11px;color:var(--teal)}
+.kanban-card.pr{border-left-color:var(--purple)}
+.kanban-card.landed{border-left-color:var(--green)}
+
+/* CHAT MOCKUP */
+.chat-mock{
+  background:var(--card);border-radius:16px;padding:20px;width:100%;max-width:700px;
+  border:1px solid rgba(255,255,255,.06);
+}
+.chat-msg{display:flex;gap:12px;margin-bottom:14px;align-items:flex-start}
+.chat-avatar{
+  width:32px;height:32px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;
+  justify-content:center;font-size:14px;font-weight:700;
+}
+.chat-avatar.agent{background:var(--teal-glow);color:var(--teal)}
+.chat-avatar.user{background:rgba(96,165,250,.15);color:var(--blue)}
+.chat-bubble{font-size:14px;color:var(--text);line-height:1.5}
+.tool-card{
+  background:var(--card2);border-radius:8px;padding:10px 14px;margin:8px 0;
+  font-family:var(--mono);font-size:12px;color:var(--text2);
+  border-left:2px solid var(--teal);
+}
+
+/* MCP GRID */
+.mcp-grid{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;max-width:800px}
+.mcp-item{
+  background:var(--card);border:1px solid rgba(255,255,255,.06);border-radius:12px;
+  padding:14px 22px;font-size:14px;font-weight:600;color:var(--text);
+  display:flex;align-items:center;gap:8px;
+}
+.mcp-item .mcp-icon{font-size:18px}
+
+/* PROVIDER CARDS */
+.provider-card{text-align:center;padding:20px}
+.provider-card .provider-name{font-size:18px;font-weight:700;margin-bottom:10px}
+.provider-card .models{font-size:13px;color:var(--text2);line-height:1.8}
+
+/* SKILLS LAYOUT */
+.skills-layout{display:grid;grid-template-columns:1fr 1fr;gap:24px;width:100%;max-width:900px}
+.skills-section h3{font-size:18px;font-weight:700;margin-bottom:16px;color:var(--teal)}
+.skill-item{
+  background:var(--card);border-radius:10px;padding:14px 18px;margin-bottom:10px;
+  font-size:14px;font-weight:500;display:flex;align-items:center;gap:10px;
+}
+.skill-icon{font-size:18px}
+
+/* DEMO STEPS */
+.demo-steps{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:900px;width:100%}
+.demo-step{
+  background:var(--card);border-radius:14px;padding:20px;display:flex;align-items:flex-start;gap:14px;
+}
+.step-num{
+  width:32px;height:32px;border-radius:50%;background:var(--teal);color:#000;
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex-shrink:0;
+}
+.step-text{font-size:14px;color:var(--text);line-height:1.5}
+
+/* COMPARISON TABLE */
+.comp-table{width:100%;max-width:1100px;border-collapse:collapse;font-size:13px}
+.comp-table th,.comp-table td{padding:10px 12px;text-align:center;border-bottom:1px solid rgba(255,255,255,.06)}
+.comp-table th{font-weight:700;color:var(--text3);text-transform:uppercase;font-size:11px;letter-spacing:.5px}
+.comp-table th:first-child,.comp-table td:first-child{text-align:left;font-weight:600;color:var(--text)}
+.comp-table td .yes{color:var(--green);font-weight:700}
+.comp-table td .no{color:var(--text3)}
+.comp-table thead th:nth-child(2){color:var(--teal)}
+.squan-col{background:rgba(19,187,175,.05)}
+
+/* PLATFORM CARDS */
+.platform-card{text-align:center;padding:24px}
+.platform-card .plat-icon{font-size:36px;margin-bottom:12px}
+.platform-card .plat-name{font-size:20px;font-weight:700;margin-bottom:6px}
+.platform-card .plat-detail{font-size:13px;color:var(--text2)}
+.platform-card .plat-status{margin-top:10px;font-weight:700;font-size:14px}
+.platform-card .plat-status.available{color:var(--green)}
+.platform-card .plat-status.soon{color:var(--yellow)}
+
+/* ROADMAP */
+.roadmap{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;max-width:1000px;width:100%}
+.roadmap-q{background:var(--card);border-radius:16px;padding:24px;border-top:3px solid var(--teal)}
+.roadmap-q h3{font-size:18px;font-weight:700;color:var(--teal);margin-bottom:16px}
+.roadmap-q li{font-size:14px;color:var(--text2);margin-bottom:10px;list-style:none;padding-left:20px;position:relative;line-height:1.4}
+.roadmap-q li::before{content:'→';position:absolute;left:0;color:var(--teal)}
+
+/* CTA */
+.cta-steps{display:flex;gap:40px;margin:24px 0;align-items:flex-start}
+.cta-step{text-align:center;flex:1}
+.cta-num{
+  width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--teal),var(--teal2));
+  color:#000;font-weight:800;font-size:20px;display:flex;align-items:center;justify-content:center;
+  margin:0 auto 12px;
+}
+.cta-step p{font-size:15px;color:var(--text);font-weight:500}
+.cta-buttons{display:flex;gap:16px;margin-top:24px}
+.btn{
+  padding:14px 36px;border-radius:12px;font-size:16px;font-weight:700;
+  border:none;cursor:pointer;text-decoration:none;display:inline-block;
+  transition:transform 0.2s,box-shadow 0.2s;
+}
+.btn:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(19,187,175,.3)}
+.btn-primary{background:linear-gradient(135deg,var(--teal),var(--teal2));color:#000}
+.btn-secondary{background:var(--card);color:var(--text);border:1px solid rgba(255,255,255,.1)}
+
+/* BOTTOM BAR */
+.bottom-bar{
+  height:48px;background:var(--card);border-top:1px solid rgba(255,255,255,.06);
+  display:flex;align-items:center;padding:0 20px;gap:16px;flex-shrink:0;
+}
+.slide-counter{font-size:13px;color:var(--text3);font-family:var(--mono);min-width:60px}
+.progress-track{flex:1;height:3px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}
+.progress-fill{height:100%;background:var(--teal);transition:width 0.4s ease;border-radius:2px}
+.nav-hint{font-size:12px;color:var(--text3)}
+.nav-btn{
+  width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,.1);
+  background:transparent;color:var(--text2);cursor:pointer;display:flex;align-items:center;
+  justify-content:center;font-size:16px;transition:background 0.2s;
+}
+.nav-btn:hover{background:var(--card2)}
+
+/* STAT */
+.stat-row{display:flex;gap:32px;margin-top:20px}
+.stat{text-align:center}
+.stat-val{font-size:36px;font-weight:800;color:var(--teal)}
+.stat-label{font-size:13px;color:var(--text3);margin-top:4px}
+
+/* UTILITY */
+.mt-8{margin-top:8px}.mt-12{margin-top:12px}.mt-16{margin-top:16px}.mt-20{margin-top:20px}.mt-24{margin-top:24px}.mt-32{margin-top:32px}
+.mb-8{margin-bottom:8px}.mb-16{margin-bottom:16px}
+.text-center{text-align:center}
+.text-sm{font-size:14px}.text-xs{font-size:12px}
+.text-muted{color:var(--text2)}.text-muted2{color:var(--text3)}
+.max-w-800{max-width:800px}.max-w-1000{max-width:1000px}
+.w-full{width:100%}
+
+/* SCROLLABLE CONTENT */
+.slide-inner{
+  width:100%;max-width:1200px;display:flex;flex-direction:column;
+  align-items:center;overflow-y:auto;max-height:100%;padding:10px 0;
+}
+.slide-inner::-webkit-scrollbar{width:4px}
+.slide-inner::-webkit-scrollbar-thumb{background:var(--card3);border-radius:2px}
+
+/* Decorative bg */
+.bg-glow{
+  position:absolute;width:500px;height:500px;border-radius:50%;
+  background:radial-gradient(circle,rgba(19,187,175,.08),transparent 70%);
+  pointer-events:none;
+}
+
+@media(max-width:900px){
+  .slide{padding:24px 28px}
+  .card-grid.cols-4{grid-template-columns:1fr 1fr}
+  .kanban{grid-template-columns:1fr 1fr}
+  .roadmap{grid-template-columns:1fr}
+  .comp-table{font-size:11px}
+  .cta-steps{flex-direction:column;gap:20px}
+  .demo-steps{grid-template-columns:1fr}
+  .skills-layout{grid-template-columns:1fr}
+}
+@media(max-width:600px){
+  .card-grid.cols-3,.card-grid.cols-2{grid-template-columns:1fr}
+  .kanban{grid-template-columns:1fr}
+  .flow{flex-direction:column}
+  .flow-arrow{transform:rotate(90deg)}
+}
+
+/* PRINT STYLESHEET — Ctrl+P to export as PDF */
+@media print{
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
+  html,body{width:100%;height:auto;overflow:visible!important;background:#0a0b0f!important}
+  body{display:block}
+  .presentation{position:static;overflow:visible!important}
+  .bottom-bar{display:none!important}
+  .slide{
+    position:static!important;opacity:1!important;transform:none!important;
+    pointer-events:all!important;display:flex!important;
+    page-break-after:always;break-after:page;
+    min-height:100vh;width:100%;
+    background:var(--bg)!important;
+  }
+  .slide .anim{opacity:1!important;transform:none!important;transition:none!important}
+  .bg-glow{display:none!important}
+  @page{size:landscape;margin:0}
+}
+</style>
+  <script type="application/ld+json">
+{
+  "@context": "urn:goose.ai:schema",
+  "@type": "GooseApp",
+  "name": "squan-deck",
+  "description": "Interactive PowerPoint-style presentation deck for Squan Multi-Agent AI Development Command Center.",
+  "width": 1280,
+  "height": 800,
+  "resizable": true,
+  "mcpServers": [
+    "apps"
+  ]
+}
+  </script>
+  <script type="application/x-goose-prd">
+Create a stunning, professional PowerPoint-style presentation viewer for "Squan" - a Multi-Agent AI Development Command Center. The presentation should be interactive with slide navigation (arrow keys + click), transitions, and a modern dark theme matching Squan's branding (teal #13bbaf accent, dark backgrounds).
+
+## Slides (15 total):
+
+### Slide 1 - Title
+- "Squan" in large gradient text (teal to white)
+- Subtitle: "Multi-Agent AI Development Command Center"
+- "Orchestrate AI Agents. Ship 4x Faster."
+- Version badge: v0.5.0
+- Small text: "Open Source · Apache 2.0 · squan.dev"
+
+### Slide 2 - The Problem
+- Title: "The Problem with AI Coding Today"
+- 3 pain points with icons:
+  1. "One agent at a time" - hourglass icon - "You wait for one AI to finish before starting the next task"
+  2. "No visibility" - eye-off icon - "Terminal output scrolls by. No dashboard. No tracking."
+  3. "No workflow" - shuffle icon - "Copy-paste tasks. Manual git branches. No project management."
+- Bottom: "What if you could run 4+ agents in parallel with full visibility?"
+
+### Slide 3 - The Solution
+- Title: "Meet Squan"
+- Large screenshot placeholder (dark UI mockup showing kanban + agent chat)
+- 3 key bullets:
+  - "Dispatch multiple AI agents simultaneously"
+  - "Visual kanban board tracks every task"  
+  - "Chat with agents, even after they finish"
+- "Desktop app. One click to launch. Zero setup."
+
+### Slide 4 - How It Works (Architecture)
+- Title: "How It Works"
+- Visual flow diagram:
+  You → Squan Desktop App → [Create Task] → [Dispatch Agent] → [Agent works in isolated git branch] → [Review & Land]
+- Show the loop: "Each agent gets its own git worktree — zero conflicts"
+- Bottom: "Agents call AI APIs directly. No CLI spawning. Fast & reliable."
+
+### Slide 5 - Multi-Agent Orchestration
+- Title: "4 Agents, Working in Parallel"
+- Show 4 agent cards side by side:
+  - bee-alpha: "Building charts" ● working
+  - bee-bravo: "Setting up CI/CD" ✓ done  
+  - bee-charlie: "Adding auth" ● working
+  - bee-delta: "Fixing JWT bug" ✓ done
+- "Each agent works on its own git branch. No merge conflicts. True parallelism."
+- Stat: "4x throughput vs single-agent tools"
+
+### Slide 6 - Visual Kanban Board
+- Title: "Visual Project Management"
+- Show kanban columns: Open → In Progress → PR Review → Landed
+- Cards in each column with agent names and status badges
+- "Drag tasks through the workflow. See everything at a glance."
+- "Auto-advances when agents complete work"
+
+### Slide 7 - Interactive Agent Chat
+- Title: "Talk to Your Agents"
+- Show chat interface mockup:
+  - Agent message: "I've added the login page with form validation..."
+  - Tool card: "▸ writing src/LoginPage.jsx"
+  - Tool card: "▸ running npm test — 12 passed"
+  - User message: "Can you also add error handling?"
+  - Agent: "Sure! Adding try-catch blocks..."
+- "Follow-up questions after completion. Refine until perfect."
+- Badge: "NEW in v0.5.0"
+
+### Slide 8 - MCP Extensions
+- Title: "Connect to Everything"
+- Grid of MCP extension logos/names:
+  - PostgreSQL, MySQL, Slack, GitHub Issues, Jira, Notion, Figma, Stripe, Firebase
+- "1000+ community MCP servers available"
+- "Add in Settings → agents get the tools automatically"
+- "Your agent can query databases, post to Slack, create Jira tickets — all autonomously"
+- Badge: "NEW in v0.5.0"
+
+### Slide 9 - Multi-Model Support  
+- Title: "Choose Your AI"
+- 4 provider cards:
+  - Anthropic: Claude Sonnet 4, Opus 4, Haiku
+  - OpenAI: GPT-4o, GPT-4o Mini, o3
+  - Google: Gemini Flash, Gemini Pro
+  - Ollama: Llama 3, Code Llama (local, free)
+- "Switch models in one click. All support tool use."
+- "Run local models with Ollama — zero API costs"
+
+### Slide 10 - Skills & Automations
+- Title: "Automate Your Workflow"
+- Left side - Built-in Skills:
+  - Test → Fix → PR
+  - Review → Refactor
+  - Generate Docs
+  - Security Audit
+- Right side - Automations:
+  - 🕐 "Every morning 9am: run tests"
+  - ⚡ "On PR opened: code review"
+  - 🔗 "After tests pass: generate docs"
+- "Schedule skills. React to events. Chain workflows."
+
+### Slide 11 - Demo Finance Dashboard
+- Title: "See It In Action"
+- Show the demo flow:
+  1. Click "Load Demo Project"
+  2. Fork squan-demo-finance repo
+  3. 7 agents + 8 tasks appear on kanban
+  4. Browse agent conversations
+  5. Mark complete → cards advance
+  6. Dispatch new agents on open tasks
+- "Built-in demo with real code branches. Reset anytime."
+
+### Slide 12 - vs Competition
+- Title: "How Squan Compares"
+- Comparison table:
+  | Feature | Squan | Goose | Cursor | GitHub Copilot |
+  | Multi-agent | ✅ N agents | ❌ 1 | ❌ 1 | ❌ 1 |
+  | Visual board | ✅ Kanban | ❌ | ❌ | ❌ |
+  | Agent chat | ✅ Follow-up | ❌ | ✅ | ❌ |
+  | MCP extensions | ✅ 1000+ | ✅ | ❌ | ❌ |
+  | Multi-model | ✅ 4 providers | ✅ | ❌ | ❌ |
+  | Git isolation | ✅ Worktrees | ❌ | ❌ | ❌ |
+  | Open source | ✅ Apache 2.0 | ✅ | ❌ | ❌ |
+  | Desktop app | ✅ | ✅ | ✅ | ❌ |
+  | Cost tracking | ✅ Per-agent | ❌ | ❌ | ❌ |
+
+### Slide 13 - Platform Support
+- Title: "Available Now"
+- macOS card: Apple Silicon DMG (116 MB) — Available ✅
+- Windows card: Electron app (180 MB) — Available ✅  
+- Linux card: Coming soon
+- Docker: ghcr.io/tarvitave/squan-server + squan-client
+- "Open source. Apache 2.0. Free forever."
+- QR code placeholder linking to squan.dev
+
+### Slide 14 - Roadmap
+- Title: "What's Next"
+- Q2 2026:
+  - Windows installer (code-signed)
+  - Linux builds (.deb, AppImage)
+  - macOS Intel build
+- Q3 2026:
+  - Agent-to-agent collaboration
+  - Visual diff viewer
+  - PR review workflow
+  - Mobile companion app
+- Q4 2026:
+  - Cloud-hosted version
+  - Team collaboration
+  - Enterprise SSO
+  - Custom model fine-tuning
+
+### Slide 15 - Call to Action
+- Title: "Get Started in 60 Seconds"
+- 3 steps:
+  1. Download from squan.dev
+  2. Add your API key
+  3. Dispatch your first agent
+- Big buttons: "Download Free" and "View on GitHub"
+- Links: squan.dev | github.com/tarvitave/squan
+- "Built by Colin Wynd"
+- Apache 2.0 License
+
+## Design Requirements:
+- Dark theme (#0a0b0f background, #13141a cards)
+- Teal accent (#13bbaf) for highlights
+- Inter font for text, JetBrains Mono for code
+- Smooth slide transitions (fade + slide)
+- Progress bar at bottom showing current slide
+- Keyboard navigation (←→ arrows, space, escape)
+- Slide counter (e.g., "5 / 15")
+- Click anywhere to advance
+- Animated entrances for each element (staggered fade-in)
+- Responsive (works on projector and laptop)
+- Export hint: "Press Ctrl+P to print/save as PDF"
+
+  </script>
+</head>
+<body>
+
+<div class="presentation" id="presentation">
+
+<!-- SLIDE 1: Title -->
+<div class="slide active" data-slide="0">
+  <div class="bg-glow" style="top:-200px;right:-200px"></div>
+  <div class="bg-glow" style="bottom:-200px;left:-100px"></div>
+  <div class="slide-inner">
+    <div class="anim big-title">Squan</div>
+    <div class="anim tagline" style="font-weight:600">Multi-Agent AI Development Command Center</div>
+    <div class="anim mt-24" style="font-size:clamp(16px,2vw,22px);color:var(--text2)">Orchestrate AI Agents. <span class="highlight">Ship 4× Faster.</span></div>
+    <div class="anim mt-24">
+      <span class="badge">v0.5.0</span>
+    </div>
+    <div class="anim mt-16 text-xs text-muted2">Open Source · Apache 2.0 · squan.dev</div>
+  </div>
+</div>
+
+<!-- SLIDE 2: The Problem -->
+<div class="slide" data-slide="1">
+  <div class="slide-inner">
+    <div class="anim slide-title">The Problem with AI Coding Today</div>
+    <div class="anim card-grid cols-3 mt-16">
+      <div class="card pain-card">
+        <div class="pain-icon">⏳</div>
+        <h3>One Agent at a Time</h3>
+        <p>You wait for one AI to finish before starting the next task</p>
+      </div>
+      <div class="card pain-card">
+        <div class="pain-icon">🙈</div>
+        <h3>No Visibility</h3>
+        <p>Terminal output scrolls by. No dashboard. No tracking.</p>
+      </div>
+      <div class="card pain-card">
+        <div class="pain-icon">🔀</div>
+        <h3>No Workflow</h3>
+        <p>Copy-paste tasks. Manual git branches. No project management.</p>
+      </div>
+    </div>
+    <div class="anim mt-32 slide-subtitle">What if you could run <span class="highlight">4+ agents in parallel</span> with full visibility?</div>
+  </div>
+</div>
+
+<!-- SLIDE 3: The Solution -->
+<div class="slide" data-slide="2">
+  <div class="slide-inner">
+    <div class="anim slide-title">Meet Squan</div>
+    <div class="anim" style="width:100%;max-width:800px;height:280px;background:var(--card);border-radius:16px;border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden">
+      <div style="position:absolute;inset:0;opacity:.15;background:linear-gradient(135deg,var(--teal),transparent 60%)"></div>
+      <div style="display:flex;gap:20px;padding:24px;width:100%;z-index:1">
+        <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:11px;text-transform:uppercase;color:var(--text3);letter-spacing:1px;margin-bottom:4px">Kanban Board</div>
+          <div style="background:var(--card2);border-radius:8px;padding:10px;border-left:3px solid var(--teal);font-size:12px">🔄 Building charts</div>
+          <div style="background:var(--card2);border-radius:8px;padding:10px;border-left:3px solid var(--green);font-size:12px">✅ Setting up CI/CD</div>
+          <div style="background:var(--card2);border-radius:8px;padding:10px;border-left:3px solid var(--yellow);font-size:12px">⚡ Adding auth</div>
+        </div>
+        <div style="flex:1.5;background:var(--card2);border-radius:12px;padding:16px;font-size:12px">
+          <div style="font-size:11px;text-transform:uppercase;color:var(--text3);letter-spacing:1px;margin-bottom:8px">Agent Chat</div>
+          <div style="color:var(--teal);margin-bottom:6px">🤖 bee-alpha:</div>
+          <div style="color:var(--text2);font-size:12px">I've added the chart component with responsive sizing...</div>
+        </div>
+      </div>
+    </div>
+    <div class="anim card-grid cols-3 mt-24">
+      <div class="card" style="text-align:center;padding:18px"><p style="font-size:14px;color:var(--text)">🚀 Dispatch multiple AI agents simultaneously</p></div>
+      <div class="card" style="text-align:center;padding:18px"><p style="font-size:14px;color:var(--text)">📋 Visual kanban board tracks every task</p></div>
+      <div class="card" style="text-align:center;padding:18px"><p style="font-size:14px;color:var(--text)">💬 Chat with agents, even after they finish</p></div>
+    </div>
+    <div class="anim mt-20 text-sm text-muted">Desktop app. One click to launch. <span class="highlight">Zero setup.</span></div>
+  </div>
+</div>
+
+<!-- SLIDE 4: How It Works -->
+<div class="slide" data-slide="3">
+  <div class="slide-inner">
+    <div class="anim slide-title">How It Works</div>
+    <div class="anim flow mt-16">
+      <div class="flow-step">👤 You</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step" style="border-color:var(--teal);border:1px solid var(--teal)">Squan Desktop</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">📝 Create Task</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">🤖 Dispatch Agent</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step" style="border:1px solid var(--green)">🌿 Isolated Branch</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step" style="border:1px solid var(--purple)">✅ Review & Land</div>
+    </div>
+    <div class="anim mt-32" style="background:var(--card);border-radius:14px;padding:20px 28px;max-width:700px;text-align:center;border:1px solid rgba(255,255,255,.06)">
+      <p style="font-size:16px;color:var(--text)">🔄 Each agent gets its own <span class="highlight">git worktree</span> — zero conflicts</p>
+    </div>
+    <div class="anim mt-20 text-sm text-muted">Agents call AI APIs directly. No CLI spawning. <span class="highlight">Fast & reliable.</span></div>
+  </div>
+</div>
+
+<!-- SLIDE 5: Multi-Agent -->
+<div class="slide" data-slide="4">
+  <div class="slide-inner">
+    <div class="anim slide-title">4 Agents, Working in Parallel</div>
+    <div class="anim card-grid cols-4 mt-16">
+      <div class="card agent-card">
+        <div class="agent-name">bee-alpha</div>
+        <div class="agent-task">Building charts</div>
+        <div class="agent-status working">● working</div>
+      </div>
+      <div class="card agent-card done">
+        <div class="agent-name">bee-bravo</div>
+        <div class="agent-task">Setting up CI/CD</div>
+        <div class="agent-status complete">✓ done</div>
+      </div>
+      <div class="card agent-card">
+        <div class="agent-name">bee-charlie</div>
+        <div class="agent-task">Adding auth</div>
+        <div class="agent-status working">● working</div>
+      </div>
+      <div class="card agent-card done">
+        <div class="agent-name">bee-delta</div>
+        <div class="agent-task">Fixing JWT bug</div>
+        <div class="agent-status complete">✓ done</div>
+      </div>
+    </div>
+    <div class="anim mt-24 slide-subtitle">Each agent works on its own git branch. No merge conflicts. <span class="highlight">True parallelism.</span></div>
+    <div class="anim stat-row mt-24">
+      <div class="stat"><div class="stat-val">4×</div><div class="stat-label">throughput vs single-agent tools</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 6: Kanban Board -->
+<div class="slide" data-slide="5">
+  <div class="slide-inner">
+    <div class="anim slide-title">Visual Project Management</div>
+    <div class="anim kanban mt-16">
+      <div class="kanban-col">
+        <h4>📋 Open</h4>
+        <div class="kanban-card"><div class="kc-title">Add dark mode</div><div class="kc-agent">unassigned</div></div>
+        <div class="kanban-card"><div class="kc-title">Write unit tests</div><div class="kc-agent">unassigned</div></div>
+      </div>
+      <div class="kanban-col">
+        <h4>🔄 In Progress</h4>
+        <div class="kanban-card"><div class="kc-title">Building charts</div><div class="kc-agent">🤖 bee-alpha</div></div>
+        <div class="kanban-card"><div class="kc-title">Adding auth</div><div class="kc-agent">🤖 bee-charlie</div></div>
+      </div>
+      <div class="kanban-col">
+        <h4>🔍 PR Review</h4>
+        <div class="kanban-card pr"><div class="kc-title">CI/CD pipeline</div><div class="kc-agent">🤖 bee-bravo</div></div>
+      </div>
+      <div class="kanban-col">
+        <h4>✅ Landed</h4>
+        <div class="kanban-card landed"><div class="kc-title">Fix JWT bug</div><div class="kc-agent">🤖 bee-delta</div></div>
+      </div>
+    </div>
+    <div class="anim mt-20 text-sm text-muted">Drag tasks through the workflow. See everything at a glance.</div>
+    <div class="anim mt-8 text-xs text-muted2">Auto-advances when agents complete work</div>
+  </div>
+</div>
+
+<!-- SLIDE 7: Agent Chat -->
+<div class="slide" data-slide="6">
+  <div class="slide-inner">
+    <div class="anim slide-title">Talk to Your Agents</div>
+    <div class="anim chat-mock mt-16">
+      <div class="chat-msg">
+        <div class="chat-avatar agent">🤖</div>
+        <div class="chat-bubble">I've added the login page with form validation and responsive layout.</div>
+      </div>
+      <div class="tool-card">▸ writing src/LoginPage.jsx</div>
+      <div class="tool-card">▸ running npm test — <span style="color:var(--green)">12 passed</span></div>
+      <div class="chat-msg" style="justify-content:flex-end;flex-direction:row-reverse">
+        <div class="chat-avatar user">👤</div>
+        <div class="chat-bubble" style="background:var(--card2);padding:10px 14px;border-radius:10px">Can you also add error handling?</div>
+      </div>
+      <div class="chat-msg">
+        <div class="chat-avatar agent">🤖</div>
+        <div class="chat-bubble">Sure! Adding try-catch blocks and user-friendly error messages...</div>
+      </div>
+    </div>
+    <div class="anim mt-20 text-sm text-muted">Follow-up questions after completion. <span class="highlight">Refine until perfect.</span></div>
+    <div class="anim mt-12"><span class="badge new">NEW in v0.5.0</span></div>
+  </div>
+</div>
+
+<!-- SLIDE 8: MCP Extensions -->
+<div class="slide" data-slide="7">
+  <div class="slide-inner">
+    <div class="anim slide-title">Connect to Everything</div>
+    <div class="anim mcp-grid mt-20">
+      <div class="mcp-item"><span class="mcp-icon">🐘</span> PostgreSQL</div>
+      <div class="mcp-item"><span class="mcp-icon">🐬</span> MySQL</div>
+      <div class="mcp-item"><span class="mcp-icon">💬</span> Slack</div>
+      <div class="mcp-item"><span class="mcp-icon">🐙</span> GitHub Issues</div>
+      <div class="mcp-item"><span class="mcp-icon">📋</span> Jira</div>
+      <div class="mcp-item"><span class="mcp-icon">📝</span> Notion</div>
+      <div class="mcp-item"><span class="mcp-icon">🎨</span> Figma</div>
+      <div class="mcp-item"><span class="mcp-icon">💳</span> Stripe</div>
+      <div class="mcp-item"><span class="mcp-icon">🔥</span> Firebase</div>
+    </div>
+    <div class="anim mt-24 text-sm text-muted"><span class="highlight">1,000+</span> community MCP servers available</div>
+    <div class="anim mt-8 text-sm text-muted">Add in Settings → agents get the tools automatically</div>
+    <div class="anim mt-12" style="background:var(--card);border-radius:12px;padding:16px 24px;max-width:700px;text-align:center;border:1px solid rgba(255,255,255,.06)">
+      <p style="font-size:14px;color:var(--text2)">Your agent can query databases, post to Slack, create Jira tickets — <span class="highlight">all autonomously</span></p>
+    </div>
+    <div class="anim mt-12"><span class="badge new">NEW in v0.5.0</span></div>
+  </div>
+</div>
+
+<!-- SLIDE 9: Multi-Model -->
+<div class="slide" data-slide="8">
+  <div class="slide-inner">
+    <div class="anim slide-title">Choose Your AI</div>
+    <div class="anim card-grid cols-4 mt-16">
+      <div class="card provider-card" style="border-top:3px solid #d97706">
+        <div class="provider-name">Anthropic</div>
+        <div class="models">Claude Sonnet 4<br>Claude Opus 4<br>Claude Haiku</div>
+      </div>
+      <div class="card provider-card" style="border-top:3px solid var(--green)">
+        <div class="provider-name">OpenAI</div>
+        <div class="models">GPT-4o<br>GPT-4o Mini<br>o3</div>
+      </div>
+      <div class="card provider-card" style="border-top:3px solid var(--blue)">
+        <div class="provider-name">Google</div>
+        <div class="models">Gemini Flash<br>Gemini Pro</div>
+      </div>
+      <div class="card provider-card" style="border-top:3px solid var(--purple)">
+        <div class="provider-name">Ollama</div>
+        <div class="models">Llama 3<br>Code Llama<br><span style="color:var(--green);font-weight:600">local · free</span></div>
+      </div>
+    </div>
+    <div class="anim mt-24 text-sm text-muted">Switch models in one click. All support tool use.</div>
+    <div class="anim mt-8 text-sm text-muted">Run local models with Ollama — <span class="highlight">zero API costs</span></div>
+  </div>
+</div>
+
+<!-- SLIDE 10: Skills & Automations -->
+<div class="slide" data-slide="9">
+  <div class="slide-inner">
+    <div class="anim slide-title">Automate Your Workflow</div>
+    <div class="anim skills-layout mt-16">
+      <div class="skills-section">
+        <h3>🛠 Built-in Skills</h3>
+        <div class="skill-item"><span class="skill-icon">🧪</span> Test → Fix → PR</div>
+        <div class="skill-item"><span class="skill-icon">🔍</span> Review → Refactor</div>
+        <div class="skill-item"><span class="skill-icon">📄</span> Generate Docs</div>
+        <div class="skill-item"><span class="skill-icon">🔒</span> Security Audit</div>
+      </div>
+      <div class="skills-section">
+        <h3>⚡ Automations</h3>
+        <div class="skill-item"><span class="skill-icon">🕐</span> Every morning 9am: run tests</div>
+        <div class="skill-item"><span class="skill-icon">⚡</span> On PR opened: code review</div>
+        <div class="skill-item"><span class="skill-icon">🔗</span> After tests pass: generate docs</div>
+      </div>
+    </div>
+    <div class="anim mt-24 text-sm text-muted">Schedule skills. React to events. <span class="highlight">Chain workflows.</span></div>
+  </div>
+</div>
+
+<!-- SLIDE 11: Demo -->
+<div class="slide" data-slide="10">
+  <div class="slide-inner">
+    <div class="anim slide-title">See It In Action</div>
+    <div class="anim demo-steps mt-16">
+      <div class="demo-step"><div class="step-num">1</div><div class="step-text">Click <strong>"Load Demo Project"</strong></div></div>
+      <div class="demo-step"><div class="step-num">2</div><div class="step-text">Fork <span style="font-family:var(--mono);color:var(--teal)">squan-demo-finance</span> repo</div></div>
+      <div class="demo-step"><div class="step-num">3</div><div class="step-text"><strong>7 agents + 8 tasks</strong> appear on kanban</div></div>
+      <div class="demo-step"><div class="step-num">4</div><div class="step-text">Browse agent conversations</div></div>
+      <div class="demo-step"><div class="step-num">5</div><div class="step-text">Mark complete → cards advance</div></div>
+      <div class="demo-step"><div class="step-num">6</div><div class="step-text">Dispatch new agents on open tasks</div></div>
+    </div>
+    <div class="anim mt-24" style="background:var(--card);border-radius:14px;padding:18px 28px;max-width:600px;text-align:center;border:1px solid rgba(255,255,255,.06)">
+      <p style="font-size:15px;color:var(--text)">Built-in demo with real code branches. <span class="highlight">Reset anytime.</span></p>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 12: Comparison -->
+<div class="slide" data-slide="11">
+  <div class="slide-inner">
+    <div class="anim slide-title">How Squan Compares</div>
+    <div class="anim mt-16" style="width:100%;max-width:1100px;overflow-x:auto">
+      <table class="comp-table">
+        <thead>
+          <tr><th>Feature</th><th class="squan-col">Squan</th><th>Goose</th><th>Cursor</th><th>GitHub Copilot</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Multi-agent</td><td class="squan-col"><span class="yes">✅ N agents</span></td><td><span class="no">❌ 1</span></td><td><span class="no">❌ 1</span></td><td><span class="no">❌ 1</span></td></tr>
+          <tr><td>Visual board</td><td class="squan-col"><span class="yes">✅ Kanban</span></td><td><span class="no">❌</span></td><td><span class="no">❌</span></td><td><span class="no">❌</span></td></tr>
+          <tr><td>Agent chat</td><td class="squan-col"><span class="yes">✅ Follow-up</span></td><td><span class="no">❌</span></td><td><span class="yes">✅</span></td><td><span class="no">❌</span></td></tr>
+          <tr><td>MCP extensions</td><td class="squan-col"><span class="yes">✅ 1000+</span></td><td><span class="yes">✅</span></td><td><span class="no">❌</span></td><td><span class="no">❌</span></td></tr>
+          <tr><td>Multi-model</td><td class="squan-col"><span class="yes">✅ 4 providers</span></td><td><span class="yes">✅</span></td><td><span class="no">❌</span></td><td><span class="no">❌</span></td></tr>
+          <tr><td>Git isolation</td><td class="squan-col"><span class="yes">✅ Worktrees</span></td><td><span class="no">❌</span></td><td><span class="no">❌</span></td><td><span class="no">❌</span></td></tr>
+          <tr><td>Open source</td><td class="squan-col"><span class="yes">✅ Apache 2.0</span></td><td><span class="yes">✅</span></td><td><span class="no">❌</span></td><td><span class="no">❌</span></td></tr>
+          <tr><td>Desktop app</td><td class="squan-col"><span class="yes">✅</span></td><td><span class="yes">✅</span></td><td><span class="yes">✅</span></td><td><span class="no">❌</span></td></tr>
+          <tr><td>Cost tracking</td><td class="squan-col"><span class="yes">✅ Per-agent</span></td><td><span class="no">❌</span></td><td><span class="no">❌</span></td><td><span class="no">❌</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 13: Platform Support -->
+<div class="slide" data-slide="12">
+  <div class="slide-inner">
+    <div class="anim slide-title">Available Now</div>
+    <div class="anim card-grid cols-3 mt-16">
+      <div class="card platform-card">
+        <div class="plat-icon">🍎</div>
+        <div class="plat-name">macOS</div>
+        <div class="plat-detail">Apple Silicon DMG · 116 MB</div>
+        <div class="plat-status available">✅ Available</div>
+      </div>
+      <div class="card platform-card">
+        <div class="plat-icon">🪟</div>
+        <div class="plat-name">Windows</div>
+        <div class="plat-detail">Electron app · 180 MB</div>
+        <div class="plat-status available">✅ Available</div>
+      </div>
+      <div class="card platform-card">
+        <div class="plat-icon">🐧</div>
+        <div class="plat-name">Linux</div>
+        <div class="plat-detail">.deb & AppImage</div>
+        <div class="plat-status soon">⏳ Coming Soon</div>
+      </div>
+    </div>
+    <div class="anim mt-20" style="background:var(--card);border-radius:12px;padding:16px 24px;max-width:600px;text-align:center;border:1px solid rgba(255,255,255,.06)">
+      <p style="font-family:var(--mono);font-size:13px;color:var(--text2)">🐳 ghcr.io/tarvitave/<span style="color:var(--teal)">squan-server</span> + <span style="color:var(--teal)">squan-client</span></p>
+    </div>
+    <div class="anim mt-16 text-sm text-muted">Open source. Apache 2.0. <span class="highlight">Free forever.</span></div>
+    <div class="anim mt-16" style="width:120px;height:120px;background:var(--card);border-radius:12px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.08)">
+      <div style="text-align:center">
+        <div style="font-size:32px;margin-bottom:4px">📱</div>
+        <div style="font-size:10px;color:var(--text3)">squan.dev</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 14: Roadmap -->
+<div class="slide" data-slide="13">
+  <div class="slide-inner">
+    <div class="anim slide-title">What's Next</div>
+    <div class="anim roadmap mt-20">
+      <div class="roadmap-q">
+        <h3>Q2 2026</h3>
+        <ul>
+          <li>Windows installer (code-signed)</li>
+          <li>Linux builds (.deb, AppImage)</li>
+          <li>macOS Intel build</li>
+        </ul>
+      </div>
+      <div class="roadmap-q">
+        <h3>Q3 2026</h3>
+        <ul>
+          <li>Agent-to-agent collaboration</li>
+          <li>Visual diff viewer</li>
+          <li>PR review workflow</li>
+          <li>Mobile companion app</li>
+        </ul>
+      </div>
+      <div class="roadmap-q">
+        <h3>Q4 2026</h3>
+        <ul>
+          <li>Cloud-hosted version</li>
+          <li>Team collaboration</li>
+          <li>Enterprise SSO</li>
+          <li>Custom model fine-tuning</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 15: CTA -->
+<div class="slide" data-slide="14">
+  <div class="bg-glow" style="top:-150px;left:50%;transform:translateX(-50%)"></div>
+  <div class="slide-inner">
+    <div class="anim slide-title">Get Started in 60 Seconds</div>
+    <div class="anim cta-steps mt-24">
+      <div class="cta-step">
+        <div class="cta-num">1</div>
+        <p>Download from<br><span class="highlight">squan.dev</span></p>
+      </div>
+      <div class="cta-step">
+        <div class="cta-num">2</div>
+        <p>Add your<br><span class="highlight">API key</span></p>
+      </div>
+      <div class="cta-step">
+        <div class="cta-num">3</div>
+        <p>Dispatch your<br><span class="highlight">first agent</span></p>
+      </div>
+    </div>
+    <div class="anim cta-buttons mt-32">
+      <div class="btn btn-primary">⬇ Download Free</div>
+      <div class="btn btn-secondary">🐙 View on GitHub</div>
+    </div>
+    <div class="anim mt-24 text-sm text-muted">squan.dev · github.com/tarvitave/squan</div>
+    <div class="anim mt-16 text-xs text-muted2">Built by Colin Wynd · Apache 2.0 License</div>
+  </div>
+</div>
+
+</div><!-- /presentation -->
+
+<!-- BOTTOM BAR -->
+<div class="bottom-bar">
+  <button class="nav-btn" id="prevBtn" title="Previous slide">◂</button>
+  <button class="nav-btn" id="nextBtn" title="Next slide">▸</button>
+  <span class="slide-counter" id="slideCounter">1 / 15</span>
+  <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+  <span class="nav-hint">← → Space · Click to advance · Ctrl+P to export</span>
+</div>
+
+<script>
+(function(){
+  const slides = document.querySelectorAll('.slide');
+  const total = slides.length;
+  let current = 0;
+
+  function goTo(index, direction){
+    if(index < 0 || index >= total || index === current) return;
+    const prev = slides[current];
+    const next = slides[index];
+
+    // Remove all state classes
+    slides.forEach(s => {
+      s.classList.remove('active','prev');
+      s.style.pointerEvents = 'none';
+    });
+
+    // Set direction
+    if(index > current){
+      prev.classList.add('prev');
+      next.classList.remove('prev');
+    } else {
+      prev.classList.remove('prev');
+      // Incoming from left
+      next.style.transition = 'none';
+      next.style.transform = 'translateX(-60px)';
+      next.style.opacity = '0';
+      next.offsetHeight; // force reflow
+      next.style.transition = '';
+    }
+
+    next.classList.add('active');
+    current = index;
+    updateUI();
+  }
+
+  function next(){ goTo(current + 1, 1); }
+  function prev(){ goTo(current - 1, -1); }
+
+  function updateUI(){
+    document.getElementById('slideCounter').textContent = (current+1) + ' / ' + total;
+    document.getElementById('progressFill').style.width = ((current+1)/total*100) + '%';
+    document.getElementById('prevBtn').style.opacity = current === 0 ? '0.3' : '1';
+    document.getElementById('nextBtn').style.opacity = current === total-1 ? '0.3' : '1';
+  }
+
+  // Keyboard — let Ctrl/Cmd combos pass through (Ctrl+P for print, etc.)
+  document.addEventListener('keydown', function(e){
+    if(e.ctrlKey || e.metaKey) return; // allow browser shortcuts like Ctrl+P
+    if(e.key === 'ArrowRight' || e.key === ' '){
+      e.preventDefault(); next();
+    } else if(e.key === 'ArrowLeft'){
+      e.preventDefault(); prev();
+    } else if(e.key === 'ArrowUp'){
+      e.preventDefault(); goTo(0);
+    } else if(e.key === 'ArrowDown'){
+      e.preventDefault(); goTo(total-1);
+    } else if(e.key === 'Escape'){
+      e.preventDefault(); goTo(0);
+    }
+  });
+
+  // Click to advance (but not on buttons or scrollable content)
+  document.querySelector('.presentation').addEventListener('click', function(e){
+    if(e.target.closest('.nav-btn') || e.target.closest('.btn') || e.target.closest('a')) return;
+    // If click is in the right half, go next; left half, go prev
+    const rect = this.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    if(x > rect.width * 0.35){
+      next();
+    } else {
+      prev();
+    }
+  });
+
+  // Nav buttons
+  document.getElementById('prevBtn').addEventListener('click', function(e){ e.stopPropagation(); prev(); });
+  document.getElementById('nextBtn').addEventListener('click', function(e){ e.stopPropagation(); next(); });
+
+  // Touch/swipe support
+  let touchStartX = 0;
+  let touchStartY = 0;
+  document.addEventListener('touchstart', function(e){
+    touchStartX = e.changedTouches[0].screenX;
+    touchStartY = e.changedTouches[0].screenY;
+  }, {passive:true});
+  document.addEventListener('touchend', function(e){
+    const dx = e.changedTouches[0].screenX - touchStartX;
+    const dy = e.changedTouches[0].screenY - touchStartY;
+    if(Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50){
+      if(dx < 0) next(); else prev();
+    }
+  }, {passive:true});
+
+  // Init
+  updateUI();
+})();
+</script>
+</body>
+</html>
