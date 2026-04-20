@@ -910,7 +910,7 @@ app.post('/api/workerbees/:id/done', async (req, res) => {
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
-// Mark agent complete and advance the kanban: in_progress → pr_review (not straight to landed)
+// Mark agent complete and advance the kanban: in_progress ? pr_review (not straight to landed)
 app.post('/api/workerbees/:id/mark-complete', requireAuth, async (req, res) => {
   try {
     const userId = res.locals.userId as string
@@ -2108,7 +2108,7 @@ migrate().then(async () => {
   // PTY/tmux disabled â€” no sessions to reconnect
 
 
-// ── Extensions API ─────────────────────────────────────────────────────────
+// -- Extensions API ---------------------------------------------------------
 
 app.get('/api/extensions', requireAuth, async (req, res) => {
   try {
@@ -2141,7 +2141,7 @@ app.delete('/api/extensions/:id', requireAuth, async (req, res) => {
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
-// ── Skills API ────────────────────────────────────────────────────────────
+// -- Skills API ------------------------------------------------------------
 
 app.get('/api/skills', requireAuth, async (req, res) => {
   try {
@@ -2166,7 +2166,7 @@ app.delete('/api/skills/:id', requireAuth, async (req, res) => {
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
 
-// ── Provider config API ────────────────────────────────────────────────────
+// -- Provider config API ----------------------------------------------------
 
 app.get('/api/user/provider', requireAuth, async (req, res) => {
   try {
@@ -2187,8 +2187,8 @@ app.put('/api/user/provider', requireAuth, async (req, res) => {
   try {
     const db = getDb()
     const { provider, model, providerUrl, openaiApiKey, googleApiKey } = req.body
-    const updates = []
-    const args = []
+    const updates: string[] = []
+    const args: any[] = []
     if (provider !== undefined) { updates.push('provider = ?'); args.push(provider) }
     if (model !== undefined) { updates.push('provider_model = ?'); args.push(model) }
     if (providerUrl !== undefined) { updates.push('provider_url = ?'); args.push(providerUrl) }
@@ -2204,7 +2204,7 @@ app.put('/api/user/provider', requireAuth, async (req, res) => {
 
 
 
-// ── Demo API ─────────────────────────────────────────────────────────────────
+// -- Demo API -----------------------------------------------------------------
 
 app.get('/api/demo/status', requireAuth, async (_req, res) => {
   try {
@@ -2233,7 +2233,7 @@ app.post('/api/demo/reset', requireAuth, async (_req, res) => {
 
 
 
-  // ── Claude Code Terminal ────────────────────────────────────
+  // -- Claude Code Terminal ------------------------------------
   app.post('/api/claude-terminal', requireAuth, (req: any, res) => {
     try {
       const rigId = req.body?.rigId
@@ -2291,7 +2291,7 @@ app.post('/api/demo/reset', requireAuth, async (_req, res) => {
 })
 
 
-  // ── Automations API ─────────────────────────────────────────
+  // -- Automations API -----------------------------------------
   app.get('/api/automations', requireAuth, async (req: any, res) => {
     try {
       const sm = getSchedulerManager()
