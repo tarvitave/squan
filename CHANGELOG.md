@@ -2,6 +2,14 @@
 
 All notable changes to Squan are documented here.
 
+## [2.2.0] - 2026-04-21
+
+### ✨ System Tray
+- Branded system tray icon with server status indicator
+- Context menu: version, server status, agent count, show/restart/browser/quit
+- Single-click tray icon shows main window
+- Tooltip shows live status and agent count
+
 ## [2.1.0] - 2026-04-21
 
 ### ✨ Claude Code Panel
