@@ -102,7 +102,7 @@ run([
   // Ignore dev files — only ship what's needed
   '--ignore="^/(server|electron|scripts|docs|\\.squan|\\.vscode|\\.git$|\\.github|assets)"',
   '--ignore="^/(forge\\.config|vite\\.|tsconfig|postcss|\\.env|\\.gitignore)"',
-  '--ignore="^/node_modules/(@electron/packager|@electron-forge|electron-forge|vite|@vitejs|tailwindcss|@tailwindcss|typescript|concurrently|@types)"',
+  '--ignore="^/node_modules/(@electron/packager|@electron-forge|electron-forge|vite|@vitejs|tailwindcss|@tailwindcss|typescript|concurrently|@types|xterm|xterm-addon-fit|@xterm)"',
 ].join(' '))
 
 // ── Step 5: Verify ───────────────────────────────────────────────────

@@ -2,6 +2,19 @@
 
 All notable changes to Squan are documented here.
 
+## [2.1.0] - 2026-04-21
+
+### ✨ Claude Code Panel
+- **Persistent left-side panel**: Claude Code terminal accessible alongside any view
+- **Resizable**: Drag handle to adjust panel width (300–800px)
+- **Keyboard shortcut**: Ctrl+` toggles panel open/closed
+- **Platform-aware**: tmux on macOS/Linux, direct PTY on Windows
+- **Shared WebSocket**: Terminal I/O routed through existing WS infrastructure
+
+### 📦 Version Unification
+- All packages (root, client, server) now share version 2.1.0
+- Website, README, CHANGELOG all synchronized
+
 ## [0.5.0]
 
 ### 🍎 macOS Support

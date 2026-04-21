@@ -4,11 +4,19 @@
 
 Squan orchestrates multiple AI agents working in parallel across your git repositories. Create tasks, dispatch agents, interact with them in real-time, and watch them build — all from a single desktop app.
 
-![Squan](https://img.shields.io/badge/version-0.5.0-teal) ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue) ![License](https://img.shields.io/badge/license-Apache-2.0-green)
+![Squan](https://img.shields.io/badge/version-2.1.0-teal) ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue) ![License](https://img.shields.io/badge/license-Apache-2.0-green)
 
 ---
 
-## What's New in v0.5.0
+## What's New in v2.1.0
+
+### Claude Code Panel
+- Persistent left-side terminal panel for Claude Code CLI
+- Toggle with sidebar button or Ctrl+`
+- Resizable, persists across view switches
+- tmux on macOS/Linux, direct PTY on Windows
+
+### Previous: v0.5.0
 
 ### 🔌 MCP Extension Support
 - **Connect any MCP tool server** — databases, Slack, Jira, GitHub Issues, Figma, Notion, Stripe
