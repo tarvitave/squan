@@ -8,7 +8,8 @@ if (process.platform === 'win32') {
   } catch { /* not installed in dev mode */ }
 }
 
-import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, shell, dialog } from 'electron'
+import { app, BrowserWindow, Menu, ipcMain, nativeImage, shell, dialog } from 'electron'
+import { createSquanTray, updateSquanTray, destroySquanTray } from './tray.js'
 import { spawn, ChildProcess } from 'child_process'
 import { join, resolve } from 'path'
 import { existsSync } from 'fs'
@@ -48,7 +49,6 @@ function getClientDir(): string {
 // ── State ────────────────────────────────────────────────────────────
 
 let mainWindow: BrowserWindow | null = null
-let tray: Tray | null = null
 let serverProcess: ChildProcess | null = null
 let serverReady = false
 const SERVER_PORT = 3001
@@ -70,7 +70,7 @@ async function startServer(): Promise<void> {
   if (inUse) {
     console.log(`[squan] Port ${SERVER_PORT} in use — connecting to existing server`)
     serverReady = true
-    updateTray()
+    updateSquanTray({ serverReady })
     return
   }
 
@@ -112,7 +112,7 @@ async function startServer(): Promise<void> {
     if (msg) console.log(`[server] ${msg}`)
     if (msg.includes('http://localhost:') && !serverReady) {
       serverReady = true
-      updateTray()
+      updateSquanTray({ serverReady })
       mainWindow?.webContents.send('server-status', { status: 'online' })
     }
   })
@@ -130,7 +130,7 @@ async function startServer(): Promise<void> {
     console.log(`[squan] Server exited (code ${code})`)
     serverReady = false
     serverProcess = null
-    updateTray()
+    updateSquanTray({ serverReady })
     mainWindow?.webContents.send('server-status', { status: 'offline' })
   })
 
@@ -141,7 +141,7 @@ async function startServer(): Promise<void> {
       const res = await fetch(`${SERVER_URL}/api/health`)
       if (res.ok) {
         serverReady = true
-        updateTray()
+        updateSquanTray({ serverReady })
         console.log('[squan] Server ready')
         return
       }
@@ -163,7 +163,7 @@ function stopServer() {
     } catch { /* ignore — process may already be dead */ }
     serverProcess = null
     serverReady = false
-    updateTray()
+    updateSquanTray({ serverReady })
   }
 }
 
@@ -242,31 +242,17 @@ function createWindow() {
 
 // ── Tray ─────────────────────────────────────────────────────────────
 
-function createTray() {
-  const icon = nativeImage.createFromDataURL(
-    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAgklEQVQ4T2NkoBAwUqifYdAY8B8E/v9nYGBgZCQYBKgGMIIcgOIKJBcwMjIyILsCpwEoYYDsBpwGYHMFsgtwGUDIFTgNIORVnAYQ8ipOA3B5lawwwBsGxIQiXgPweRWvAfi8itcAfF4laACqV/EaQMireA0g5FW8BhDyKsEkStAAABBrMBEHiNBQAAAAAElFTkSuQmCC'
-  )
-  tray = new Tray(icon)
-  updateTray()
-}
-
-function updateTray() {
-  if (!tray) return
-  const label = serverReady ? '● Server Online' : '○ Server Offline'
-  tray.setToolTip(`Squan — ${label}`)
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Squan', enabled: false },
-    { type: 'separator' },
-    { label, enabled: false },
-    { type: 'separator' },
-    { label: 'Show Window', click: () => { mainWindow ? (mainWindow.show(), mainWindow.focus()) : createWindow() } },
-    { label: serverReady ? 'Restart Server' : 'Start Server', click: async () => { stopServer(); await startServer() } },
-    { type: 'separator' },
-    { label: 'Open in Browser', click: () => shell.openExternal(SERVER_URL) },
-    { type: 'separator' },
-    { label: 'Quit', click: () => { stopServer(); app.quit() } },
-  ]))
-  tray.on('click', () => { mainWindow ? (mainWindow.show(), mainWindow.focus()) : createWindow() })
+function setupTray() {
+  createSquanTray({
+    serverUrl: SERVER_URL,
+    onShowWindow: () => {
+      if (mainWindow) { mainWindow.show(); mainWindow.focus() }
+      else createWindow()
+    },
+    onRestartServer: async () => { stopServer(); await startServer() },
+    onQuit: () => { stopServer(); app.quit() },
+  })
+  updateSquanTray({ serverReady })
 }
 
 // ── Menu ─────────────────────────────────────────────────────────────
@@ -347,7 +333,7 @@ app.whenReady().then(async () => {
     setupIpc()
     createMenu()
     // Skip tray in dev to avoid crash
-    try { createTray() } catch (e) { console.error('[squan] Tray error:', e) }
+    try { setupTray() } catch (e) { console.error('[squan] Tray error:', e) }
     await startServer()
     createWindow()
   } catch (err) {
