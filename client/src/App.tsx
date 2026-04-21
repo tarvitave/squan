@@ -324,45 +324,28 @@ export default function App() {
           </div>
         </ErrorBoundary>
 
-        {/* Claude Code panel (persistent left-side) */}
-        {claudeCodePanelOpen && (
-          <>
-            <div style={{ width: claudeCodePanelWidth }} className="shrink-0 h-full overflow-hidden rounded-t-lg">
-              <ClaudeCodeView onClose={toggleClaudeCodePanel} />
-            </div>
-            {/* Claude panel resize handle */}
-            <div
-              className="w-[3px] shrink-0 cursor-col-resize group relative"
-              onMouseDown={(e) => {
-                const sx = e.clientX
-                const sw = claudeCodePanelWidth
-                const onMove = (ev: MouseEvent) => setClaudeCodePanelWidth(sw + ev.clientX - sx)
-                const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
-                window.addEventListener('mousemove', onMove)
-                window.addEventListener('mouseup', onUp)
-              }}
-            >
-              <div className="absolute inset-y-0 -left-[2px] -right-[2px] group-hover:bg-teal-400/20 group-active:bg-teal-400/30 transition-colors rounded-full" />
-            </div>
-          </>
-        )}
-
-        {/* Main content card */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-bg-primary rounded-t-lg min-w-0 relative">
-          <div className="flex-1 overflow-hidden flex flex-col">
-            {mainView === 'terminals' && (
-              <AgentDashboard activeTab={activeTab} />
-            )}
-            {mainView === 'kanban' && <KanbanView />}
-            {mainView === 'metrics' && <MetricsPanel />}
-            {mainView === 'costs' && <CostPanel />}
-            {mainView === 'events' && <div className="flex-1 overflow-hidden flex flex-col"><EventStream /></div>}
-            {mainView === 'automations' && <AutomationsView />}
-            {mainView === 'skills' && <SkillsView />}
-            {mainView === 'scheduler' && <SchedulerView />}
-            {mainView === 'console' && <ConsolePanel />}
+        {/* Main content — Claude Code OR regular view */}
+        {claudeCodePanelOpen ? (
+          <div className="flex-1 flex flex-col overflow-hidden bg-[#0a0b0f] rounded-t-lg min-w-0 relative">
+            <ClaudeCodeView onClose={toggleClaudeCodePanel} />
           </div>
-        </div>
+        ) : (
+          <div className="flex-1 flex flex-col overflow-hidden bg-bg-primary rounded-t-lg min-w-0 relative">
+            <div className="flex-1 overflow-hidden flex flex-col">
+              {mainView === 'terminals' && (
+                <AgentDashboard activeTab={activeTab} />
+              )}
+              {mainView === 'kanban' && <KanbanView />}
+              {mainView === 'metrics' && <MetricsPanel />}
+              {mainView === 'costs' && <CostPanel />}
+              {mainView === 'events' && <div className="flex-1 overflow-hidden flex flex-col"><EventStream /></div>}
+              {mainView === 'automations' && <AutomationsView />}
+              {mainView === 'skills' && <SkillsView />}
+              {mainView === 'scheduler' && <SchedulerView />}
+              {mainView === 'console' && <ConsolePanel />}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Status bar (bottom — ) ──────────── */}

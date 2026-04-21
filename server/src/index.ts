@@ -2234,13 +2234,13 @@ app.post('/api/demo/reset', requireAuth, async (_req, res) => {
 
 
   // -- Claude Code Terminal ------------------------------------
-  app.post('/api/claude-terminal', requireAuth, (req: any, res) => {
+  app.post('/api/claude-terminal', requireAuth, async (req: any, res) => {
     try {
       const rigId = req.body?.rigId
       let cwd: string | undefined
       if (rigId) {
-        const rig = (db as any).prepare('SELECT local_path FROM rigs WHERE id = ?').get(rigId) as any
-        if (rig) cwd = rig.local_path
+        const result = await db.execute({ sql: 'SELECT local_path FROM rigs WHERE id = ?', args: [rigId] })
+        if (result.rows.length > 0) cwd = result.rows[0].local_path as string
       }
       const session = startClaudeTerminal(cwd)
 

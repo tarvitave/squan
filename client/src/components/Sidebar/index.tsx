@@ -536,7 +536,7 @@ export function Sidebar() {
           return (
             <button
               key={view}
-              onClick={() => setMainView(view)}
+              onClick={() => { setMainView(view); if (claudeCodePanelOpen) toggleClaudeCodePanel(); }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 12, width: '100%',
                 padding: '7px 12px', borderRadius: 8, fontSize: 13, border: 'none', cursor: 'pointer', textAlign: 'left',

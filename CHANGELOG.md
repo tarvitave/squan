@@ -2,6 +2,14 @@
 
 All notable changes to Squan are documented here.
 
+## [2.5.0] - 2026-04-21
+
+### 🐛 Claude Code Panel Fixes
+- Fixed "File not found:2" error — server was using sync DB call instead of async
+- Claude Code now takes FULL main content area (no more split with Console)
+- Clicking any nav item automatically closes Claude Code panel
+- Proper navigation flow: Claude Code is a dedicated fullscreen view
+
 ## [2.4.0] - 2026-04-21
 
 ### ✨ Skills View
