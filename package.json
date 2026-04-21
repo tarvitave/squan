@@ -1,6 +1,6 @@
 {
   "name": "squan",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "description": "Squan — Multi-agent AI development command center",
   "author": "Colin",
   "main": ".vite/build/main.js",
@@ -44,6 +44,8 @@
     "@vitejs/plugin-react": "^4.3.1",
     "concurrently": "^9.1.2",
     "electron": "^33.4.11",
+    "png-to-ico": "^3.0.1",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.5.4",
     "vite": "^5.3.4"

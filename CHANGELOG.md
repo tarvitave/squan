@@ -2,6 +2,14 @@
 
 All notable changes to Squan are documented here.
 
+## [2.3.0] - 2026-04-21
+
+### 🎨 Branded App Icon
+- Proper multi-size ICO (16/32/48/64/128/256) for Windows taskbar, alt-tab, and system tray
+- Teal gradient "S" on rounded rectangle — matches Squan brand
+- Dedicated tray PNGs for crisp system tray rendering
+- Packager now embeds icon into the .exe binary
+
 ## [2.2.0] - 2026-04-21
 
 ### ✨ System Tray

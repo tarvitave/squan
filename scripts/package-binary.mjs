@@ -95,10 +95,13 @@ run([
   `--arch=${ARCH}`,
   `--out="${OUT_DIR}"`,
   '--overwrite',
+  '--icon=assets/icon',
   '--asar',
   '--asar-unpack="**/node_modules/node-pty/**"',
   '--extra-resource=dist-server',
   '--extra-resource=client/dist',
+  '--extra-resource=assets/tray-icon.png',
+  '--extra-resource=assets/tray-icon@2x.png',
   // Ignore dev files — only ship what's needed
   '--ignore="^/(server|electron|scripts|docs|\\.squan|\\.vscode|\\.git$|\\.github|assets)"',
   '--ignore="^/(forge\\.config|vite\\.|tsconfig|postcss|\\.env|\\.gitignore)"',

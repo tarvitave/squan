@@ -40,10 +40,12 @@ function createTrayImage(): Electron.NativeImage {
   // Try to load the proper icon file
   const iconPaths = isDev
     ? [
+        join(process.cwd(), 'assets', 'tray-icon.png'),
         join(process.cwd(), 'assets', 'icon.ico'),
         join(process.cwd(), 'assets', 'icon.png'),
       ]
     : [
+        join(process.resourcesPath!, 'tray-icon.png'),
         join(process.resourcesPath!, 'icon.ico'),
         join(process.resourcesPath!, 'icon.png'),
       ]
