@@ -528,7 +528,7 @@ export function Sidebar() {
         </>
       )}
       {/* ── Navigation ───────────────────────────────────────── */}
-      <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '12px 8px 4px 8px' }}>
+      <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '12px 8px 4px 8px', flexShrink: 0 }}>
         {NAV_ITEMS.map(({ view, icon: Icon, label }) => {
           const active = mainView === view
           return (
@@ -556,6 +556,7 @@ export function Sidebar() {
         })}
       
         {/* Claude Code panel toggle */}
+        <div style={{ margin: "2px 12px 2px 12px", borderTop: "1px solid #e3e6ea" }} />
         <button
           onClick={() => toggleClaudeCodePanel()}
           style={{
