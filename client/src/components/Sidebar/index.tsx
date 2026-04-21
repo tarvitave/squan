@@ -17,7 +17,6 @@ const NAV_ITEMS: { view: MainView; icon: typeof Monitor; label: string }[] = [
   { view: 'events', icon: Activity, label: 'Events' },
   { view: 'costs', icon: DollarSign, label: 'Costs' },
   { view: 'console', icon: Terminal, label: 'Console' },
-  { view: 'claudecode' as any, icon: Code2, label: 'Claude Code' },
   { view: 'automations' as any, icon: Clock, label: 'Automations' },
 ]
 
@@ -42,6 +41,8 @@ function workspacePath(name: string): string {
 export function Sidebar() {
   const mainView = useStore((s) => s.mainView)
   const setMainView = useStore((s) => s.setMainView)
+  const claudeCodePanelOpen = useStore((s) => s.claudeCodePanelOpen)
+  const toggleClaudeCodePanel = useStore((s) => s.toggleClaudeCodePanel)
   const setShowPreferences = useStore((s) => s.setShowPreferences)
   const user = useStore((s) => s.user)
   const agents = useStore((s) => s.agents)
@@ -553,7 +554,26 @@ export function Sidebar() {
             </button>
           )
         })}
-      </nav>
+      
+        {/* Claude Code panel toggle */}
+        <button
+          onClick={() => toggleClaudeCodePanel()}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 12, width: '100%',
+            padding: '7px 12px', borderRadius: 8, fontSize: 13, border: 'none', cursor: 'pointer', textAlign: 'left',
+            backgroundColor: claudeCodePanelOpen ? '#0d9488' : 'transparent',
+            color: claudeCodePanelOpen ? '#ffffff' : '#878787',
+            fontWeight: claudeCodePanelOpen ? 500 : 400,
+            boxShadow: claudeCodePanelOpen ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+          }}
+        >
+          <Code2 style={{ width: 18, height: 18, flexShrink: 0 }} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Claude Code</span>
+          {claudeCodePanelOpen && (
+            <span style={{ marginLeft: 'auto', fontSize: 10, opacity: 0.7 }}>●</span>
+          )}
+        </button>
+</nav>
 
       <div style={{ margin: '4px 16px', borderTop: '1px solid #e3e6ea' }} />
 

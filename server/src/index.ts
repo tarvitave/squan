@@ -28,7 +28,7 @@ import { StructuredRunner, type AgentMessage } from './workerbee/structured-runn
 import { DirectRunner } from './workerbee/direct-runner.js'
 import { processManager } from './workerbee/process-manager.js'
 import { setupAgentSpawn, updateSessionId } from './workerbee/spawn-setup.js'
-import { broadcastEvent } from './ws/server.js'
+import { broadcastEvent, pushClaudeTerminalData, notifyClaudeSessionEnded } from './ws/server.js'
 
 // Store runners by workerbee ID (DirectRunner or StructuredRunner)
 const structuredRunners = new Map<string, DirectRunner | StructuredRunner>()
@@ -2244,19 +2244,14 @@ app.post('/api/demo/reset', requireAuth, async (_req, res) => {
       }
       const session = startClaudeTerminal(cwd)
 
-      // Wire PTY output to WebSocket broadcast
+      // Wire PTY output to WebSocket subscribers (not broadcast)
       session.pty.onData((data: string) => {
-        broadcastEvent({
-          type: 'terminal-data',
-          payload: { type: 'terminal-data', sessionId: session.id, data },
-        } as any)
+        pushClaudeTerminalData(session.id, data)
       })
 
       session.pty.onExit(({ exitCode }: any) => {
-        broadcastEvent({
-          type: 'terminal-exit',
-          payload: { type: 'terminal-exit', sessionId: session.id, exitCode },
-        } as any)
+        console.log('[claude-terminal] Session exited:', session.id, 'code:', exitCode)
+        notifyClaudeSessionEnded(session.id)
       })
 
       res.json({ sessionId: session.id, platform: session.platform, tmuxSession: session.tmuxSession })

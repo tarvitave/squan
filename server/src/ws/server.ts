@@ -3,6 +3,7 @@ import { Server } from 'http'
 import { v4 as uuidv4 } from 'uuid'
 import jwt from 'jsonwebtoken'
 import type { WsMessage, SquansqEvent } from '../types/index.js'
+import { getClaudeSession, writeToClaudeSession, resizeClaudeSession } from '../claude-terminal.js'
 // PTY disabled — stub out all terminal methods
 const ptyManager = {
   onAnySessionExit: (_cb: (sessionId: string) => void) => {},
@@ -28,6 +29,31 @@ const subscriptions = new Map<string, Set<string>>()
 
 // Map of clientId → authenticated userId
 const clientUserIds = new Map<string, string>()
+
+// Claude terminal sessions: sessionId -> Set of clientIds subscribed
+const claudeSubscribers = new Map<string, Set<string>>()
+
+// Called from index.ts when claude terminal emits data
+export function pushClaudeTerminalData(sessionId: string, data: string) {
+  const subs = claudeSubscribers.get(sessionId)
+  if (!subs) return
+  for (const clientId of subs) {
+    const ws = clients.get(clientId)
+    if (ws && ws.readyState === 1) {
+      send(ws, { type: 'event', id: sessionId, payload: { type: 'terminal.data', data } })
+    }
+  }
+}
+
+export function notifyClaudeSessionEnded(sessionId: string) {
+  const subs = claudeSubscribers.get(sessionId)
+  if (!subs) return
+  for (const clientId of subs) {
+    const ws = clients.get(clientId)
+    if (ws) send(ws, { type: 'session.not_found', payload: { sessionId } })
+  }
+  claudeSubscribers.delete(sessionId)
+}
 
 // Notify all clients subscribed to a session that the session has ended
 export function notifySessionEnded(sessionId: string) {
@@ -84,6 +110,12 @@ export function setupWsServer(httpServer: Server) {
     ws.on('close', () => {
       subscriptions.get(clientId)?.forEach((sessionId) => {
         ptyManager.unsubscribe(sessionId, clientId)
+        // Also clean up claude subscriptions
+        const claudeSubs = claudeSubscribers.get(sessionId)
+        if (claudeSubs) {
+          claudeSubs.delete(clientId)
+          if (claudeSubs.size === 0) claudeSubscribers.delete(sessionId)
+        }
       })
       clients.delete(clientId)
       subscriptions.delete(clientId)
@@ -107,6 +139,13 @@ async function handleMessage(clientId: string, ws: WebSocket, msg: WsMessage) {
     case 'subscribe': {
       const sessionId = msg.payload?.sessionId as string
       if (!sessionId) return
+      // Check if this is a claude terminal session first
+      if (getClaudeSession(sessionId)) {
+        if (!claudeSubscribers.has(sessionId)) claudeSubscribers.set(sessionId, new Set())
+        claudeSubscribers.get(sessionId)!.add(clientId)
+        subscriptions.get(clientId)?.add(sessionId)
+        break
+      }
       if (!ptyManager.list().includes(sessionId)) {
         // Try to replay the last known output for this session before marking it dead
         try {
@@ -154,6 +193,11 @@ async function handleMessage(clientId: string, ws: WebSocket, msg: WsMessage) {
       const sessionId = msg.payload?.sessionId as string
       const data = msg.payload?.data as string
       if (sessionId && data) {
+        // Route to claude terminal if it's a claude session
+        if (getClaudeSession(sessionId)) {
+          writeToClaudeSession(sessionId, data)
+          break
+        }
         // Only allow input to sessions owned by this user (or unowned sessions)
         const ownerUserId = ptyManager.getOwnerUserId(sessionId)
         if (ownerUserId !== null && ownerUserId !== userId) {
@@ -170,6 +214,11 @@ async function handleMessage(clientId: string, ws: WebSocket, msg: WsMessage) {
       const cols = msg.payload?.cols as number
       const rows = msg.payload?.rows as number
       if (sessionId && cols && rows) {
+        // Route to claude terminal if it's a claude session
+        if (getClaudeSession(sessionId)) {
+          resizeClaudeSession(sessionId, cols, rows)
+          break
+        }
         // Only allow resize for sessions owned by this user (or unowned sessions)
         const ownerUserId = ptyManager.getOwnerUserId(sessionId)
         if (ownerUserId !== null && ownerUserId !== userId) {

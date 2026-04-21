@@ -8,7 +8,7 @@ import { EventStream } from './components/EventStream/index.js'
 import { AuthPage } from './components/AuthPage/index.js'
 import { KanbanView } from './components/KanbanView/index.js'
 import { ConsolePanel } from './components/ConsolePanel/index.js'
-// ClaudeCodePanel removed — agents now use DirectRunner with agent chat
+// ClaudeCodeView is rendered as a persistent left-side panel
 import { MetricsPanel } from './components/MetricsPanel/index.js'
 import { CostPanel } from './components/CostPanel/index.js'
 import { ToastContainer } from './components/Toast/index.js'
@@ -159,6 +159,10 @@ export default function App() {
   const ui = useStore((s) => s.ui)
   const toggleCommandPalette = useStore((s) => s.toggleCommandPalette)
   const toggleSidebar = useStore((s) => s.toggleSidebar)
+  const claudeCodePanelOpen = useStore((s) => s.claudeCodePanelOpen)
+  const toggleClaudeCodePanel = useStore((s) => s.toggleClaudeCodePanel)
+  const claudeCodePanelWidth = useStore((s) => s.claudeCodePanelWidth)
+  const setClaudeCodePanelWidth = useStore((s) => s.setClaudeCodePanelWidth)
   const setShowPreferences = useStore((s) => s.setShowPreferences)
   const activeTownId = useStore((s) => s.activeTownId)
   const { connected, serverRestarted, clearServerRestarted } = useWebSocket()
@@ -170,6 +174,7 @@ export default function App() {
       if (m && e.key === 'k') { e.preventDefault(); toggleCommandPalette() }
       if (m && e.key === 'b') { e.preventDefault(); toggleSidebar() }
       if (m && e.key === ',') { e.preventDefault(); setShowPreferences(true) }
+      if (m && e.key === '`') { e.preventDefault(); toggleClaudeCodePanel() }
       if (m && e.key >= '1' && e.key <= '7') {
         e.preventDefault()
         const views: MainView[] = ['terminals', 'kanban', 'metrics', 'events', 'costs', 'console', 'claudecode', 'automations']
@@ -317,6 +322,29 @@ export default function App() {
           </div>
         </ErrorBoundary>
 
+        {/* Claude Code panel (persistent left-side) */}
+        {claudeCodePanelOpen && (
+          <>
+            <div style={{ width: claudeCodePanelWidth }} className="shrink-0 h-full overflow-hidden rounded-t-lg">
+              <ClaudeCodeView onClose={toggleClaudeCodePanel} />
+            </div>
+            {/* Claude panel resize handle */}
+            <div
+              className="w-[3px] shrink-0 cursor-col-resize group relative"
+              onMouseDown={(e) => {
+                const sx = e.clientX
+                const sw = claudeCodePanelWidth
+                const onMove = (ev: MouseEvent) => setClaudeCodePanelWidth(sw + ev.clientX - sx)
+                const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+                window.addEventListener('mousemove', onMove)
+                window.addEventListener('mouseup', onUp)
+              }}
+            >
+              <div className="absolute inset-y-0 -left-[2px] -right-[2px] group-hover:bg-teal-400/20 group-active:bg-teal-400/30 transition-colors rounded-full" />
+            </div>
+          </>
+        )}
+
         {/* Main content card */}
         <div className="flex-1 flex flex-col overflow-hidden bg-bg-primary rounded-t-lg min-w-0 relative">
           <div className="flex-1 overflow-hidden flex flex-col">
@@ -327,9 +355,8 @@ export default function App() {
             {mainView === 'metrics' && <MetricsPanel />}
             {mainView === 'costs' && <CostPanel />}
             {mainView === 'events' && <div className="flex-1 overflow-hidden flex flex-col"><EventStream /></div>}
-            {mainView === 'automations' ? (
-                  <AutomationsView />
-                ) : mainView === 'console' && <ConsolePanel />}
+            {mainView === 'automations' && <AutomationsView />}
+            {mainView === 'console' && <ConsolePanel />}
           </div>
         </div>
       </div>

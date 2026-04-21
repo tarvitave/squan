@@ -208,6 +208,12 @@ interface SquansqState {
   toggleSidebarIconOnly: () => void
   toggleCommandPalette: () => void
   setShowPreferences: (show: boolean) => void
+
+  // Claude Code panel (left-side persistent panel)
+  claudeCodePanelOpen: boolean
+  claudeCodePanelWidth: number
+  toggleClaudeCodePanel: () => void
+  setClaudeCodePanelWidth: (w: number) => void
 }
 
 let tabCounter = 1
@@ -378,6 +384,12 @@ export const useStore = create<SquansqState>()(
       toggleSidebarIconOnly: () => set((s) => ({ ui: { ...s.ui, sidebarIconOnly: !s.ui.sidebarIconOnly } })),
       toggleCommandPalette: () => set((s) => ({ ui: { ...s.ui, commandPaletteOpen: !s.ui.commandPaletteOpen } })),
       setShowPreferences: (show) => set((s) => ({ ui: { ...s.ui, showPreferences: show } })),
+
+      // Claude Code panel
+      claudeCodePanelOpen: false,
+      claudeCodePanelWidth: 480,
+      toggleClaudeCodePanel: () => set((s) => ({ claudeCodePanelOpen: !s.claudeCodePanelOpen })),
+      setClaudeCodePanelWidth: (w) => set({ claudeCodePanelWidth: Math.max(300, Math.min(800, w)) }),
     }),
     {
       name: 'squansq-ui',
@@ -403,7 +415,7 @@ export const useStore = create<SquansqState>()(
           ui: p.ui ? { ...current.ui, ...(p.ui as Partial<typeof current.ui>), sidebarCollapsed: false } : current.ui,
         }
       },
-      partialize: (s) => ({ tabs: s.tabs, activeTabId: s.activeTabId, mainView: s.mainView, towns: s.towns, activeTownId: s.activeTownId, activeProjectId: s.activeProjectId, token: s.token, user: s.user, ui: s.ui }),
+      partialize: (s) => ({ tabs: s.tabs, activeTabId: s.activeTabId, mainView: s.mainView, towns: s.towns, activeTownId: s.activeTownId, activeProjectId: s.activeProjectId, token: s.token, user: s.user, ui: s.ui, claudeCodePanelOpen: s.claudeCodePanelOpen, claudeCodePanelWidth: s.claudeCodePanelWidth }),
     }
   )
 )
