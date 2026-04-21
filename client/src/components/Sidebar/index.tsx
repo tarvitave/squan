@@ -6,7 +6,7 @@ import {
   Monitor, Columns3, BarChart3, Activity,
   DollarSign, Terminal, Code2, Bot, X, Loader2,
   GitBranch, Search, Lock, Globe, ChevronRight, RefreshCw, Play, RotateCcw,
-  Cpu, Zap, Send, Maximize2, Clock,
+  Cpu, Zap, Send, Maximize2, Clock, BookOpen, CalendarClock,
 } from 'lucide-react'
 import type { MainView, Rig } from '../../store/index.js'
 
@@ -17,7 +17,9 @@ const NAV_ITEMS: { view: MainView; icon: typeof Monitor; label: string }[] = [
   { view: 'events', icon: Activity, label: 'Events' },
   { view: 'costs', icon: DollarSign, label: 'Costs' },
   { view: 'console', icon: Terminal, label: 'Console' },
-  { view: 'automations' as any, icon: Clock, label: 'Automations' },
+  { view: 'skills', icon: BookOpen, label: 'Skills' },
+  { view: 'automations', icon: Clock, label: 'Automations' },
+  { view: 'scheduler', icon: CalendarClock, label: 'Scheduler' },
 ]
 
 interface GithubRepo {
@@ -555,23 +557,24 @@ export function Sidebar() {
           )
         })}
       
-        {/* Claude Code panel toggle */}
-        <div style={{ margin: "2px 12px 2px 12px", borderTop: "1px solid #e3e6ea" }} />
+                {/* ── Claude Code ── */}
+        <div style={{ margin: '4px 12px', borderTop: '1px solid #e3e6ea' }} />
         <button
           onClick={() => toggleClaudeCodePanel()}
           style={{
             display: 'flex', alignItems: 'center', gap: 12, width: '100%',
-            padding: '7px 12px', borderRadius: 8, fontSize: 13, border: 'none', cursor: 'pointer', textAlign: 'left',
-            backgroundColor: claudeCodePanelOpen ? '#0d9488' : 'transparent',
-            color: claudeCodePanelOpen ? '#ffffff' : '#878787',
-            fontWeight: claudeCodePanelOpen ? 500 : 400,
-            boxShadow: claudeCodePanelOpen ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+            padding: '8px 12px', borderRadius: 8, fontSize: 13, border: 'none', cursor: 'pointer', textAlign: 'left',
+            backgroundColor: claudeCodePanelOpen ? '#0d9488' : '#f0fdfa',
+            color: claudeCodePanelOpen ? '#ffffff' : '#0d9488',
+            fontWeight: 500,
+            boxShadow: claudeCodePanelOpen ? '0 1px 3px rgba(13,148,136,0.3)' : 'inset 0 0 0 1px rgba(13,148,136,0.2)',
+            transition: 'all 0.15s ease',
           }}
         >
           <Code2 style={{ width: 18, height: 18, flexShrink: 0 }} />
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Claude Code</span>
+          <span>Claude Code</span>
           {claudeCodePanelOpen && (
-            <span style={{ marginLeft: 'auto', fontSize: 10, opacity: 0.7 }}>●</span>
+            <span style={{ marginLeft: 'auto', width: 8, height: 8, borderRadius: '50%', backgroundColor: '#4ade80' }} />
           )}
         </button>
 </nav>

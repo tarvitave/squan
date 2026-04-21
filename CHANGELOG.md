@@ -2,6 +2,24 @@
 
 All notable changes to Squan are documented here.
 
+## [2.4.0] - 2026-04-21
+
+### ✨ Skills View
+- Dedicated Skills page with 4 built-in workflows (Test→Fix→PR, Review→Refactor, Generate Docs, Security Audit)
+- Create custom multi-step skills with role assignments
+- Run skills to dispatch chained agent tasks
+
+### ✨ Scheduler View
+- Cron-based and event-driven job management
+- Cron presets (hourly, daily, weekly, monthly)
+- Event triggers (agent.completed, git.push, deploy.success, etc.)
+- Enable/disable toggle, run-now, edit, delete
+
+### 🐛 Claude Code Panel Fix
+- Redesigned sidebar button with teal accent for better visibility
+- Visual separator line before Claude Code button
+- Button now uses contrasting background color (#f0fdfa) when inactive
+
 ## [2.3.0] - 2026-04-21
 
 ### 🎨 Branded App Icon
