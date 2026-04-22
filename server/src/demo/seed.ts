@@ -240,7 +240,7 @@ export async function loadDemo(userId: string): Promise<{ projectId: string; age
   const towns = await db.execute({ sql: 'SELECT id FROM towns LIMIT 1', args: [] })
   const townId = towns.rows[0]?.id as string ?? 'demo-town'
   if (!towns.rows[0]) {
-    await db.execute({ sql: `INSERT INTO towns (id, name, user_id, created_at) VALUES (?, 'Demo', ?, ?)`, args: ['demo-town', userId, now] })
+    await db.execute({ sql: `INSERT INTO towns (id, path, name, user_id, created_at) VALUES (?, ?, 'Demo', ?, ?)`, args: ['demo-town', 'demo', userId, now] })
   }
 
   // Create demo project

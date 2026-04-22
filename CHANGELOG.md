@@ -2,6 +2,13 @@
 
 All notable changes to Squan are documented here.
 
+## [2.5.1] - 2026-04-21
+
+### 🐛 Bug Fixes
+- **Claude Code on Windows**: Fixed "File not found" — was spawning claude.exe but npm installs as claude.cmd. Now uses cmd.exe /c claude
+- **Agent + button**: Always visible now (was hidden when no project selected). Opens dispatch modal to pick project
+- **Demo load**: Fixed SQLITE_CONSTRAINT_NOTNULL on towns.path — added missing path column to INSERT
+
 ## [2.5.0] - 2026-04-21
 
 ### 🐛 Claude Code Panel Fixes

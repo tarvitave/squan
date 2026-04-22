@@ -589,9 +589,15 @@ export function Sidebar() {
             Agents{activeProject ? ` · ${activeProject.name}` : ''}
           </span>
           {activeCount > 0 && <span style={{ fontSize: 11, color: '#13bbaf', fontWeight: 500 }}>{activeCount} active</span>}
-          {activeProjectId && (
+          {(
             <button
-              onClick={() => setShowInlineDispatch(!showInlineDispatch)}
+              onClick={() => {
+                if (activeProjectId) {
+                  setShowInlineDispatch(!showInlineDispatch)
+                } else {
+                  setShowDispatchModal(true)
+                }
+              }}
               title="Quick dispatch agent"
               style={{ border: 'none', background: 'none', cursor: 'pointer', color: showInlineDispatch ? '#13bbaf' : '#a7b0b9', padding: 2, display: 'flex', alignItems: 'center' }}
               onMouseOver={(e) => (e.currentTarget.style.color = '#13bbaf')}
@@ -933,7 +939,7 @@ export function Sidebar() {
       </div>
 
       {/* Dispatch Agent Modal */}
-      {showDispatchModal && activeProjectId && (
+      {showDispatchModal && (
         <>
           <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000 }} onClick={() => setShowDispatchModal(false)} />
           <div style={{
