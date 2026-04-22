@@ -598,7 +598,7 @@ export function Sidebar() {
                   setShowDispatchModal(true)
                 }
               }}
-              title="Quick dispatch agent"
+              title="Quick dispatch agent" data-dispatch-trigger="true"
               style={{ border: 'none', background: 'none', cursor: 'pointer', color: showInlineDispatch ? '#13bbaf' : '#a7b0b9', padding: 2, display: 'flex', alignItems: 'center' }}
               onMouseOver={(e) => (e.currentTarget.style.color = '#13bbaf')}
               onMouseOut={(e) => (e.currentTarget.style.color = showInlineDispatch ? '#13bbaf' : '#a7b0b9')}

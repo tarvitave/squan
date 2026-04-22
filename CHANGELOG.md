@@ -2,6 +2,23 @@
 
 All notable changes to Squan are documented here.
 
+## [2.6.0] - 2026-04-21
+
+### ⚡ Events Pagination
+- Server returns paginated results with total count ({ events, total, limit, offset })
+- Client loads 50 events per page (was 100 all at once)
+- Prev/Next page navigation
+- Event type dropdown filter (server-side)
+- Text search filter (client-side on current page)
+- 3-column table layout: time | type | payload summary
+- No more O(n²) pushEvent loop
+
+### ➕ Agent Empty State
+- Large "+ New Agent" button when no agents are running
+- If project selected: opens sidebar dispatch form
+- If no project: prompt for task description
+- data-dispatch-trigger attribute on sidebar + button for programmatic click
+
 ## [2.5.1] - 2026-04-21
 
 ### 🐛 Bug Fixes

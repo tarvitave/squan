@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, Component } from 'react'
-import { Bot } from 'lucide-react'
+import { Bot, Plus } from 'lucide-react'
 import type { ReactNode, ErrorInfo } from 'react'
 import { apiFetch } from './lib/api.js'
 import { TabBar } from './components/TabBar/index.js'
@@ -93,10 +93,38 @@ function AgentDashboard({ activeTab }: { activeTab: any }) {
 
   if (allVisible.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 text-text-tertiary">
-        <Bot className="w-10 h-10" />
-        <p className="text-lg">No active agents</p>
-        <p className="text-sm">Dispatch an agent from the Kanban board or Console</p>
+      <div className="flex-1 flex flex-col items-center justify-center gap-4 text-text-tertiary">
+        <Bot className="w-12 h-12 opacity-30" />
+        <div className="text-center">
+          <p className="text-lg font-medium text-text-secondary">No active agents</p>
+          <p className="text-sm mt-1">Create an agent to get started</p>
+        </div>
+        <button
+          onClick={() => {
+            // Open inline dispatch in sidebar, or dispatch modal
+            const store = useStore.getState()
+            if (store.activeProjectId) {
+              // Trigger the sidebar inline dispatch
+              const sidebarPlus = document.querySelector('[data-dispatch-trigger]') as HTMLButtonElement
+              if (sidebarPlus) sidebarPlus.click()
+            } else {
+              // No project — show a dispatch form right here
+              const task = window.prompt('Describe the task for the new agent:')
+              if (task?.trim()) {
+                apiFetch('/api/agents', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ task: task.trim(), role: 'developer' }),
+                }).catch(() => {})
+              }
+            }
+          }}
+          className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-block-teal rounded-xl hover:bg-teal-600 transition-colors shadow-sm"
+        >
+          <Plus className="w-4 h-4" />
+          New Agent
+        </button>
+        <p className="text-xs text-text-tertiary/60 mt-1">Or press + in the sidebar</p>
       </div>
     )
   }

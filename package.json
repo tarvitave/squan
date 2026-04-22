@@ -1,6 +1,6 @@
 {
   "name": "squan",
-  "version": "2.5.2",
+  "version": "2.6.0",
   "description": "Squan — Multi-agent AI development command center",
   "author": "Colin",
   "main": ".vite/build/main.js",

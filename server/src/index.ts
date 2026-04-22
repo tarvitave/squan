@@ -1760,23 +1760,38 @@ app.delete('/api/templates/:id', async (req, res) => {
 // --- Events (persisted) ---
 app.get('/api/events', async (req, res) => {
   const db = getDb()
-  const { type, limit = '100', since, offset = '0' } = req.query
+  const { type, limit = '50', since, offset = '0' } = req.query
+  let countSql = 'SELECT COUNT(*) as total FROM events'
   let sql = 'SELECT * FROM events'
   const args: (string | number)[] = []
+  const countArgs: (string | number)[] = []
   const conditions: string[] = []
-  if (type) { conditions.push('type = ?'); args.push(type as string) }
-  if (since) { conditions.push('timestamp > ?'); args.push(since as string) }
-  if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ')
+  if (type) { conditions.push('type = ?'); args.push(type as string); countArgs.push(type as string) }
+  if (since) { conditions.push('timestamp > ?'); args.push(since as string); countArgs.push(since as string) }
+  if (conditions.length) {
+    const where = ' WHERE ' + conditions.join(' AND ')
+    sql += where
+    countSql += where
+  }
   sql += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?'
   args.push(Number(limit))
   args.push(Number(offset))
-  const result = await db.execute({ sql, args })
-  res.json(result.rows.map((r: Record<string, unknown>) => ({
-    id: r.id,
-    type: r.type,
-    payload: JSON.parse(r.payload_json as string),
-    timestamp: r.timestamp,
-  })))
+  const [result, countResult] = await Promise.all([
+    db.execute({ sql, args }),
+    db.execute({ sql: countSql, args: countArgs }),
+  ])
+  const total = Number((countResult.rows[0] as any)?.total ?? 0)
+  res.json({
+    events: result.rows.map((r: Record<string, unknown>) => ({
+      id: r.id,
+      type: r.type,
+      payload: JSON.parse(r.payload_json as string),
+      timestamp: r.timestamp,
+    })),
+    total,
+    limit: Number(limit),
+    offset: Number(offset),
+  })
 })
 
 // --- Terminals REMOVED ---
