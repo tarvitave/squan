@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useStore } from '../../store/index.js'
 import { apiFetch } from '../../lib/api.js'
+import { useWorkspaceInfo, buildClonePath } from '../../lib/workspace.js'
 import {
   Settings, ChevronDown, FolderGit2, Plus,
   Monitor, Columns3, BarChart3, Activity,
@@ -35,12 +36,9 @@ interface GithubRepo {
 
 type AddMode = 'pick' | 'create' | 'url'
 
-function workspacePath(name: string): string {
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-  return `C:\\Users\\colin\\squan-workspace\\${slug}`
-}
-
 export function Sidebar() {
+  const workspaceInfo = useWorkspaceInfo()
+  const workspacePath = (name: string) => buildClonePath(workspaceInfo, name)
   const mainView = useStore((s) => s.mainView)
   const setMainView = useStore((s) => s.setMainView)
   const claudeCodePanelOpen = useStore((s) => s.claudeCodePanelOpen)

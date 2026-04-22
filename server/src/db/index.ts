@@ -215,6 +215,11 @@ export async function migrate() {
     `ALTER TABLE users ADD COLUMN provider_url TEXT`,
     `ALTER TABLE users ADD COLUMN openai_api_key TEXT`,
     `ALTER TABLE users ADD COLUMN google_api_key TEXT`,
+    // Claude OAuth — shared flow with Claude Code, enables subscription-based agent usage
+    `ALTER TABLE users ADD COLUMN anthropic_oauth_access_token TEXT`,
+    `ALTER TABLE users ADD COLUMN anthropic_oauth_refresh_token TEXT`,
+    `ALTER TABLE users ADD COLUMN anthropic_oauth_expires_at TEXT`,
+    `ALTER TABLE users ADD COLUMN anthropic_oauth_scope TEXT`,
   ]
   for (const sql of alterStatements) {
     try {
