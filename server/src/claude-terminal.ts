@@ -2,7 +2,7 @@
  * Claude Code Terminal Manager
  * 
  * Manages PTY sessions for interactive Claude Code CLI.
- * - Windows: spawns claude.exe directly via node-pty
+ * - Windows: spawns claude via cmd.exe /c (npm installs as .cmd wrapper)
  * - macOS/Linux: uses tmux for persistent sessions
  */
 
@@ -36,7 +36,7 @@ function hasTmux(): boolean {
 function hasClaudeCli(): boolean {
   try {
     if (IS_WIN) {
-      execSync('where claude', { stdio: 'pipe' })
+      execSync('where claude.cmd', { stdio: 'pipe' })
     } else {
       execSync('which claude', { stdio: 'pipe' })
     }
@@ -103,7 +103,8 @@ export function startClaudeTerminal(cwd?: string): ClaudeTerminalSession {
     
     if (IS_WIN) {
       if (claudeExists) {
-        pty = ptySpawn('claude.exe', [], {
+        pty = // claude is installed as .cmd via npm — must spawn through cmd.exe
+        ptySpawn('cmd.exe', ['/c', 'claude'], {
           name: 'xterm-256color',
           cols: 120,
           rows: 40,
