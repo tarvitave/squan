@@ -190,7 +190,11 @@ export function Sidebar() {
 
 
   const dispatchAgent = async (task: string, role: string, skill?: string) => {
-    if (!task.trim() || !activeProjectId) return
+    if (!task.trim()) return
+    if (!activeProjectId) {
+      useStore.getState().addToast('Select or create a project before dispatching an agent.', 'error')
+      return
+    }
     setDispatching(true)
     try {
       const body: any = { task: task.trim(), role }
@@ -657,9 +661,9 @@ export function Sidebar() {
                 </button>
                 <button
                   onClick={() => dispatchAgent(dispatchTask, dispatchRole)}
-                  disabled={!dispatchTask.trim() || dispatching}
-                  title="Dispatch agent (Enter)"
-                  style={{ width: 22, height: 22, borderRadius: 4, border: 'none', backgroundColor: dispatchTask.trim() ? '#13bbaf' : '#e3e6ea', cursor: dispatchTask.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', padding: 0 }}
+                  disabled={!dispatchTask.trim() || dispatching || !activeProjectId}
+                  title={!activeProjectId ? 'Select or create a project first' : 'Dispatch agent (Enter)'}
+                  style={{ width: 22, height: 22, borderRadius: 4, border: 'none', backgroundColor: (dispatchTask.trim() && activeProjectId) ? '#13bbaf' : '#e3e6ea', cursor: (dispatchTask.trim() && activeProjectId) ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', padding: 0 }}
                 >
                   {dispatching ? <Loader2 style={{ width: 10, height: 10, animation: 'spin 1s linear infinite' }} /> : <Send style={{ width: 10, height: 10 }} />}
                 </button>
@@ -992,14 +996,20 @@ export function Sidebar() {
                   </select>
                 </div>
               </div>
+              {!activeProjectId && (
+                <div style={{ fontSize: 12, color: '#c6492b', backgroundColor: '#fdecec', padding: '8px 12px', borderRadius: 8 }}>
+                  Select or create a project in the sidebar before dispatching an agent.
+                </div>
+              )}
               <button
                 onClick={() => dispatchAgent(dispatchTask, dispatchRole, dispatchSkill || undefined)}
-                disabled={!dispatchTask.trim() || dispatching}
+                disabled={!dispatchTask.trim() || dispatching || !activeProjectId}
+                title={!activeProjectId ? 'Select or create a project first' : undefined}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                   padding: '10px 16px', fontSize: 14, fontWeight: 500, border: 'none', borderRadius: 8,
-                  cursor: !dispatchTask.trim() || dispatching ? 'not-allowed' : 'pointer',
-                  backgroundColor: '#13bbaf', color: '#ffffff', opacity: !dispatchTask.trim() || dispatching ? 0.5 : 1,
+                  cursor: (!dispatchTask.trim() || dispatching || !activeProjectId) ? 'not-allowed' : 'pointer',
+                  backgroundColor: '#13bbaf', color: '#ffffff', opacity: (!dispatchTask.trim() || dispatching || !activeProjectId) ? 0.5 : 1,
                 }}>
                 {dispatching ? <Loader2 style={{ width: 16, height: 16, animation: 'spin 1s linear infinite' }} /> : <Send style={{ width: 16, height: 16 }} />}
                 {dispatching ? 'Dispatching...' : 'Dispatch Agent'}
