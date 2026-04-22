@@ -2373,9 +2373,10 @@ app.get('/api/user/provider', requireAuth, async (req, res) => {
       provider: (user as any).provider || 'anthropic',
       model: (user as any).provider_model || null,
       providerUrl: (user as any).provider_url || null,
-      hasAnthropicKey: !!(user as any).anthropicApiKey,
+      hasAnthropicKey: !!(user as any).anthropicApiKey || !!user.claudeOAuth?.connected,
       hasOpenaiKey: !!(user as any).openai_api_key,
       hasGoogleKey: !!(user as any).google_api_key,
+      hasClaudeOAuth: !!user.claudeOAuth?.connected,
     })
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })
