@@ -1,5 +1,5 @@
 /**
- * DirectRunner — Calls Anthropic API directly directly.
+ * DirectRunner — Calls Anthropic API directly.
  * No Claude Code CLI, no OAuth, no terminal. Just HTTP API calls.
  *
  * Uses the Anthropic Messages API with tool_use for:
@@ -7,6 +7,15 @@
  * - Writing files
  * - Running shell commands
  * - Searching code
+ *
+ * TODO: This class is imported in index.ts and mcp/server.ts but never
+ * instantiated anywhere in the codebase. The live agent path goes through
+ * processManager.spawn → agent-worker.ts → providers/index.ts (AnthropicProvider).
+ * Decide whether to resurrect this (in-process runner, simpler for tests) or
+ * delete it along with the unused imports. If kept, any inference work done
+ * here needs OAuth scaffolding matching AnthropicProvider (Bearer auth +
+ * anthropic-beta: claude-code-20250219,oauth-2025-04-20 + "You are Claude
+ * Code..." system prefix) to work with subscription tokens.
  */
 
 import { EventEmitter } from 'events'
@@ -279,7 +288,6 @@ Current working directory: ${this.options.cwd}
       turn++
 
       try {
-        // Call Anthropic API
         const response = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {

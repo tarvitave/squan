@@ -1,9 +1,16 @@
 /**
  * Structured Agent Runner
- * 
+ *
  * Spawns Claude Code with --print --output-format stream-json --verbose
  * instead of raw PTY. Parses structured JSON output line-by-line and
  * broadcasts typed messages via WebSocket.
+ *
+ * TODO: This class is imported in index.ts but never instantiated anywhere.
+ * The live agent path uses processManager.spawn → agent-worker.ts (forked
+ * child) → providers/index.ts. If this is resurrected to invoke the Claude
+ * Code CLI, note that CLAUDE_CODE_OAUTH_TOKEN is already plumbed in
+ * spawn-setup.ts/process-manager.ts so subscription auth would work for free.
+ * Otherwise delete this file and the accompanying unused import.
  */
 
 import { spawn, type ChildProcess } from 'child_process'
