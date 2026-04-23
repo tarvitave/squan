@@ -36,3 +36,4 @@ squan-dist/
 
 # VS Code extension build
 *.vsix
+.dockerignore 

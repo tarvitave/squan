@@ -2,6 +2,32 @@
 
 All notable changes to Squan are documented here.
 
+## [2.7.0] - 2026-04-23
+
+### Anthropic OAuth (by Andrew Yochum)
+- Sign in with your Claude Pro/Max subscription - no API key needed
+- PKCE OAuth flow: Settings > General > Sign in with Claude
+- Tokens refresh automatically 60s before expiry
+- OAuth tokens forwarded to child agent workers via IPC + env vars
+
+### Credential Settings UX (by Andrew Yochum)
+- API key and GitHub token rows now show Connected with last4 when set
+- Disconnect button to clear saved credentials
+- PUT endpoints return updated user (no refetch needed)
+- New DELETE endpoints for api-key and github-token
+
+### Cross-Platform Workspace Path (by Andrew Yochum)
+- Default workspace resolves to ~/squan-workspace (was hardcoded Windows path)
+- New Settings > Workspace Path configuration
+- Auto-migration from legacy paths
+- New GET /api/workspace-info and PATCH /api/towns/:id endpoints
+
+### UX Fixes (by Andrew Yochum)
+- Dispatch button disabled with tooltip when no project selected
+- Modal shows banner explaining why dispatch is unavailable
+- External links open in system browser, not Electron window
+- .gitignore now excludes server/.squansq-worktrees/
+
 ## [2.6.0] - 2026-04-21
 
 ### ⚡ Events Pagination
