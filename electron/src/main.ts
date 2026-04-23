@@ -219,6 +219,15 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => mainWindow?.show())
 
+  // Open any window.open / target=_blank links in the user's default browser
+  // (needed for Claude OAuth, GitHub links, docs, etc.)
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      shell.openExternal(url)
+    }
+    return { action: 'deny' }
+  })
+
   if (typeof MAIN_WINDOW_VITE_DEV_SERVER_URL !== 'undefined' && !isDev) {
     // electron-forge production mode
     mainWindow.loadFile(join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`))

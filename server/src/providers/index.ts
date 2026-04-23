@@ -38,20 +38,41 @@ export interface ChatProvider {
 
 export class AnthropicProvider implements ChatProvider {
   name = 'anthropic'
-  constructor(private apiKey: string, private baseUrl = 'https://api.anthropic.com') {}
+  constructor(private apiKey: string, private baseUrl = 'https://api.anthropic.com', private oauthAccessToken?: string) {}
 
   async chat(opts: { messages: ChatMessage[]; system: string; tools: ToolDef[]; maxTokens: number; model: string }): Promise<ChatResponse> {
+    const isOAuth = Boolean(this.oauthAccessToken)
+
+    // OAuth tokens require Claude Code identity scaffolding — without the
+    // "You are Claude Code..." system prefix and specific beta headers, the
+    // Anthropic API rejects subscription-based inference requests.
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'anthropic-version': '2023-06-01',
+      ...(isOAuth
+        ? {
+            Authorization: `Bearer ${this.oauthAccessToken}`,
+            'anthropic-beta': 'claude-code-20250219,oauth-2025-04-20',
+            'user-agent': 'claude-cli/2.1.75',
+            'x-app': 'cli',
+          }
+        : { 'x-api-key': this.apiKey }),
+    }
+
+    const system = isOAuth
+      ? [
+          { type: 'text', text: "You are Claude Code, Anthropic's official CLI for Claude." },
+          ...(opts.system ? [{ type: 'text', text: opts.system }] : []),
+        ]
+      : opts.system
+
     const response = await fetch(`${this.baseUrl}/v1/messages`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.apiKey,
-        'anthropic-version': '2023-06-01',
-      },
+      headers,
       body: JSON.stringify({
         model: opts.model,
         max_tokens: opts.maxTokens,
-        system: opts.system,
+        system,
         tools: opts.tools,
         messages: opts.messages,
       }),
@@ -283,12 +304,14 @@ export type ProviderConfig = {
   apiKey: string
   model: string
   baseUrl?: string
+  /** If set, Anthropic provider uses OAuth Bearer auth (subscription usage). */
+  oauthAccessToken?: string
 }
 
 export function createProvider(config: ProviderConfig): ChatProvider {
   switch (config.provider) {
     case 'anthropic':
-      return new AnthropicProvider(config.apiKey, config.baseUrl)
+      return new AnthropicProvider(config.apiKey, config.baseUrl, config.oauthAccessToken)
     case 'openai':
       return new OpenAIProvider(config.apiKey, config.baseUrl ?? 'https://api.openai.com/v1')
     case 'google':

@@ -1,16 +1,18 @@
+// TODO: This component is currently unused — not imported or rendered anywhere.
+// The Sidebar silently creates a single "Default" town on first use and there
+// is no UI surface for managing multiple towns/namespaces. Either wire this
+// into the Sidebar (above the project dropdown) or delete it.
 import { useState, useEffect } from 'react'
 import { MapPin, ChevronDown } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
 import { useStore } from '../../store/index.js'
 import { cn } from '../../lib/utils.js'
+import { useWorkspaceInfo, buildTownPath } from '../../lib/workspace.js'
 import type { TownEntry } from '../../store/index.js'
 
-const SQUANSQ_ROOT = 'C:\\Users\\colin\\squan'
-function autoPath(name: string) {
-  return `${SQUANSQ_ROOT}\\${name.toLowerCase().replace(/\s+/g, '-')}`
-}
-
 export function TownSelector() {
+  const workspaceInfo = useWorkspaceInfo()
+  const autoPath = (name: string) => buildTownPath(workspaceInfo, name)
   const towns = useStore((s) => s.towns)
   const activeTownId = useStore((s) => s.activeTownId)
   const setTowns = useStore((s) => s.setTowns)

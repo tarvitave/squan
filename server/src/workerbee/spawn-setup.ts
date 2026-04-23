@@ -11,7 +11,7 @@ import * as os from 'os'
 import { v4 as uuidv4 } from 'uuid'
 import { getDb } from '../db/index.js'
 import { rigManager } from '../rig/manager.js'
-import { getUserById } from '../auth/index.js'
+import { getUserById, getFreshClaudeOAuthToken } from '../auth/index.js'
 
 const SERVER_URL = process.env.SERVER_URL ?? 'http://localhost:3001'
 
@@ -190,6 +190,18 @@ export async function setupAgentSpawn(
   // Pass Anthropic API key as env var so Claude Code doesn't prompt for OAuth
   if (user?.anthropicApiKey) {
     env.ANTHROPIC_API_KEY = user.anthropicApiKey
+  }
+
+  // If the user signed in via Claude OAuth, forward a fresh access token so
+  // Claude Code CLI (and the DirectRunner) can use subscription-based auth.
+  if (user?.claudeOAuth.connected) {
+    try {
+      const token = await getFreshClaudeOAuthToken(user.id)
+      env.CLAUDE_CODE_OAUTH_TOKEN = token
+      env.ANTHROPIC_AUTH_TOKEN = token
+    } catch (err) {
+      console.error('[spawn-setup] OAuth refresh failed:', err)
+    }
   }
 
   // --- Insert DB record (without session_id — that's set by the caller) ---

@@ -7,6 +7,11 @@ export interface AuthUser {
   anthropicApiKey: string | null
   githubToken: string | null
   claudeTheme: string
+  claudeOAuth: {
+    connected: boolean
+    expiresAt: string | null
+    scope: string | null
+  }
 }
 
 export interface Tab {

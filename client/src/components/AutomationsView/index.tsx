@@ -110,7 +110,11 @@ export function AutomationsView() {
   }
 
   const saveAutomation = async () => {
-    if (!formName.trim() || !activeProjectId) return
+    if (!formName.trim()) return
+    if (!activeProjectId) {
+      useStore.getState().addToast('Select or create a project before creating an automation.', 'error')
+      return
+    }
     setSaving(true)
     const body: any = {
       name: formName.trim(),

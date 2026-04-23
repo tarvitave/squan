@@ -2,6 +2,7 @@
 import { execFileSync } from 'child_process'
 import { resolve, join } from 'path'
 import express from 'express'
+import { createRateLimiter, createTokenBucketLimiter, presets } from './middleware/rate-limiter.js'
 
 // Prevent unhandled rejections from crashing the server (Node 15+ throws by default)
 process.on('unhandledRejection', (reason) => {
@@ -38,7 +39,17 @@ async function spawnDirectAgent(projectId: string, taskDescription: string, user
   const user = await getUserById(userId)
   const provider = (user as any).provider || 'anthropic'
   const apiKey = provider === 'openai' ? (user as any).openai_api_key : provider === 'google' ? (user as any).google_api_key : user?.anthropicApiKey
-  if (!apiKey && provider !== 'ollama') throw new Error('No API key configured for ' + provider + '. Add one in Settings.')
+
+  // Anthropic can also authenticate via Claude OAuth (subscription usage).
+  let oauthAccessToken: string | undefined
+  if (provider === 'anthropic' && user?.claudeOAuth.connected) {
+    try { oauthAccessToken = await getFreshClaudeOAuthToken(userId) }
+    catch (err) { console.error('[spawn] OAuth refresh failed:', err) }
+  }
+
+  if (!apiKey && !oauthAccessToken && provider !== 'ollama') {
+    throw new Error('No API key or Claude OAuth configured for ' + provider + '. Add one in Settings.')
+  }
 
   const setup = await setupAgentSpawn(projectId, taskDescription, userId)
 
@@ -53,6 +64,7 @@ async function spawnDirectAgent(projectId: string, taskDescription: string, user
     cwd: setup.worktreePath,
     task: taskDescription,
     apiKey: apiKey || '',
+    oauthAccessToken,
     provider: provider,
     providerUrl: (user as any).provider_url || undefined,
     model: (user as any).provider_model || undefined,
@@ -114,7 +126,8 @@ import { templateManager } from './templates/manager.js'
 import { snapshotManager, replayManager, startSnapshotScheduler } from './snapshots/manager.js'
 import { handleMcpCall, handleMcpToolsList } from './mcp/server.js'
 import { getDb, migrate, seedSystemTemplates } from './db/index.js'
-import { register, login, getUserById, updateApiKey, requireAuth, updateGithubToken, updateClaudeTheme } from './auth/index.js'
+import { register, login, getUserById, updateApiKey, requireAuth, updateGithubToken, updateClaudeTheme, saveClaudeOAuth, clearClaudeOAuth, getFreshClaudeOAuthToken } from './auth/index.js'
+import { createAuthUrl, exchangeCodeForTokens } from './auth/claude-oauth.js'
 import { skillManager } from './skills/index.js'
 import { loadDemo, resetDemo, isDemoLoaded, DEMO_PROJECT } from './demo/seed.js'
 import { parseGithubRepo, detectDefaultBranch, createPullRequest, getPullRequestStatus } from './github/index.js'
@@ -125,6 +138,17 @@ import { startClaudeTerminal, getClaudeSession, killClaudeSession, writeToClaude
 
 const app = express()
 app.use(express.json())
+
+// Rate limiting middleware
+const generalLimiter = createRateLimiter(presets.general)
+const apiLimiter = createRateLimiter(presets.api)
+const authLimiter = createRateLimiter(presets.strict)
+
+// Apply general rate limiting to all routes
+app.use(generalLimiter.middleware())
+
+// Stricter rate limiting for auth routes
+app.use('/api/auth', authLimiter.middleware())
 
 app.use((_req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*')
@@ -165,6 +189,53 @@ app.post('/api/auth/login', async (req, res) => {
     res.json(await login(email, password))
   } catch (e: unknown) {
     res.status(401).json({ error: (e as Error).message })
+  }
+})
+
+// --- Claude OAuth pending flows (state-keyed, public so the browser callback works) ---
+interface OAuthPending {
+  userId: string
+  verifier: string
+  redirectUri: string
+  status: 'pending' | 'complete' | 'error'
+  error?: string
+  startedAt: number
+}
+const oauthPending = new Map<string, OAuthPending>() // state → pending
+const OAUTH_PENDING_TTL_MS = 10 * 60 * 1000
+setInterval(() => {
+  const now = Date.now()
+  for (const [state, p] of oauthPending) if (now - p.startedAt > OAUTH_PENDING_TTL_MS) oauthPending.delete(state)
+}, 60_000).unref?.()
+
+// Public callback — Anthropic's OAuth only accepts a redirect path of exactly
+// `/callback` on localhost/127.0.0.1 (any port). The browser is redirected
+// here after the user clicks Authorize. Correlates by state.
+app.get('/callback', async (req, res) => {
+  const { code, state, error } = req.query as Record<string, string | undefined>
+  const pending = state ? oauthPending.get(state) : undefined
+  const html = (title: string, detail: string) =>
+    `<!doctype html><html><body style="font-family:system-ui;background:#0d0d0d;color:#eee;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center;padding:2rem;max-width:28rem"><h2>${title}</h2><p style="color:#aaa">${detail}</p></div><script>setTimeout(()=>window.close(),2000)</script></body></html>`
+
+  if (!pending) { res.status(400).send(html('Authorization failed', 'No matching OAuth session (expired or already used).')); return }
+  if (error) {
+    pending.status = 'error'; pending.error = String(error)
+    res.status(400).send(html('Authorization failed', String(error))); return
+  }
+  if (!code) {
+    pending.status = 'error'; pending.error = 'Missing authorization code'
+    res.status(400).send(html('Authorization failed', 'Missing authorization code.')); return
+  }
+  try {
+    const tokens = await exchangeCodeForTokens({
+      code, state: state!, verifier: pending.verifier, redirectUri: pending.redirectUri,
+    })
+    await saveClaudeOAuth(pending.userId, tokens)
+    pending.status = 'complete'
+    res.send(html('Squan is now connected to Claude', 'You can close this window and return to the app.'))
+  } catch (err) {
+    pending.status = 'error'; pending.error = (err as Error).message
+    res.status(500).send(html('Token exchange failed', (err as Error).message))
   }
 })
 
@@ -500,8 +571,10 @@ app.get('/api/auth/me', async (_req, res) => {
 app.put('/api/auth/api-key', async (req, res) => {
   const { anthropicApiKey } = req.body
   if (!anthropicApiKey) { res.status(400).json({ error: 'anthropicApiKey required' }); return }
-  await updateApiKey(res.locals.userId as string, anthropicApiKey)
-  res.json({ ok: true })
+  const userId = res.locals.userId as string
+  await updateApiKey(userId, anthropicApiKey)
+  const user = await getUserById(userId)
+  res.json({ ok: true, user })
 })
 
 app.put('/api/auth/github-token', requireAuth, async (req, res) => {
@@ -510,8 +583,23 @@ app.put('/api/auth/github-token', requireAuth, async (req, res) => {
     const { githubToken } = req.body
     if (!githubToken) { res.status(400).json({ error: 'githubToken required' }); return }
     await updateGithubToken(userId, githubToken)
-    res.json({ ok: true })
+    const user = await getUserById(userId)
+    res.json({ ok: true, user })
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
+})
+
+app.delete('/api/auth/api-key', async (_req, res) => {
+  const userId = res.locals.userId as string
+  await updateApiKey(userId, null)
+  const user = await getUserById(userId)
+  res.json({ ok: true, user })
+})
+
+app.delete('/api/auth/github-token', async (_req, res) => {
+  const userId = res.locals.userId as string
+  await updateGithubToken(userId, null)
+  const user = await getUserById(userId)
+  res.json({ ok: true, user })
 })
 
 app.put('/api/auth/claude-theme', requireAuth, async (req, res) => {
@@ -521,6 +609,59 @@ app.put('/api/auth/claude-theme', requireAuth, async (req, res) => {
     await updateClaudeTheme(res.locals.userId as string, theme)
     res.json({ ok: true })
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
+})
+
+// --- Claude OAuth (loopback flow via our own Express server) ---
+app.post('/api/auth/claude-oauth/start', async (req, res) => {
+  try {
+    const userId = res.locals.userId as string
+    // Drop any prior pending flows for this user
+    for (const [state, p] of oauthPending) if (p.userId === userId) oauthPending.delete(state)
+
+    // Build redirect URI against the host the browser is talking to — handles
+    // both embedded (localhost:3001) and reverse-proxied deployments.
+    const forwardedProto = (req.headers['x-forwarded-proto'] as string)?.split(',')[0]?.trim()
+    const forwardedHost = (req.headers['x-forwarded-host'] as string)?.split(',')[0]?.trim()
+    const proto = forwardedProto ?? req.protocol ?? 'http'
+    // Anthropic's OAuth only accepts redirect_uri with host `localhost` or
+    // `127.0.0.1` and path exactly `/callback` — per the client's registration.
+    // Normalize whatever host the browser is using to `localhost` + port.
+    const rawHost = forwardedHost ?? req.get('host') ?? `localhost:${process.env.PORT ?? 3001}`
+    const portPart = rawHost.includes(':') ? `:${rawHost.split(':').pop()}` : ''
+    const host = `localhost${portPart}`
+    const redirectUri = `${proto}://${host}/callback`
+
+    const { url, verifier } = createAuthUrl(redirectUri)
+    // state IS the verifier (pi-mono convention)
+    oauthPending.set(verifier, { userId, verifier, redirectUri, status: 'pending', startedAt: Date.now() })
+    res.json({ url, state: verifier })
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
+})
+
+app.get('/api/auth/claude-oauth/status', async (req, res) => {
+  const userId = res.locals.userId as string
+  const state = (req.query.state as string | undefined) ?? ''
+  const pending = oauthPending.get(state)
+  if (!pending || pending.userId !== userId) { res.json({ status: 'idle' }); return }
+  const payload: any = { status: pending.status, error: pending.error }
+  if (pending.status === 'complete' || pending.status === 'error') {
+    payload.user = await getUserById(userId)
+    oauthPending.delete(state)
+  }
+  res.json(payload)
+})
+
+app.post('/api/auth/claude-oauth/cancel', async (_req, res) => {
+  const userId = res.locals.userId as string
+  for (const [state, p] of oauthPending) if (p.userId === userId) oauthPending.delete(state)
+  res.json({ ok: true })
+})
+
+app.delete('/api/auth/claude-oauth', async (_req, res) => {
+  try {
+    await clearClaudeOAuth(res.locals.userId as string)
+    res.json({ ok: true })
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
 // --- Projects (formerly Rigs) ---
@@ -545,6 +686,26 @@ app.post('/api/towns', async (req, res) => {
     const { name, path } = req.body
     if (!name || !path) return res.status(400).json({ error: 'name and path required' })
     res.json(await townManager.create(name, path, userId))
+  } catch (err) { res.status(500).json({ error: (err as Error).message }) }
+})
+
+app.patch('/api/towns/:id', async (req, res) => {
+  try {
+    const { path: newPath } = req.body as { path?: string }
+    if (!newPath || typeof newPath !== 'string' || !newPath.trim()) {
+      return res.status(400).json({ error: 'path required' })
+    }
+    res.json(await townManager.updatePath(req.params.id, newPath.trim()))
+  } catch (err) { res.status(400).json({ error: (err as Error).message }) }
+})
+
+// Workspace info — returns the default town's path + platform separator so the
+// client can build per-project clone paths without hardcoding hosts or slashes.
+app.get('/api/workspace-info', async (_req, res) => {
+  try {
+    const town = await townManager.ensureDefault()
+    const { sep } = await import('path')
+    res.json({ root: town.path, separator: sep, platform: process.platform, townId: town.id })
   } catch (err) { res.status(500).json({ error: (err as Error).message }) }
 })
 
@@ -823,7 +984,14 @@ app.post('/api/workerbees/:id/followup', requireAuth, async (req, res) => {
     if (bee.userId && bee.userId !== userId) return res.status(403).json({ error: 'Forbidden' })
 
     const user = await getUserById(userId)
-    if (!user?.anthropicApiKey) return res.status(400).json({ error: 'No Anthropic API key' })
+    let followupOAuthToken: string | undefined
+    if (user?.claudeOAuth.connected) {
+      try { followupOAuthToken = await getFreshClaudeOAuthToken(userId) }
+      catch (err) { console.error('[followup] OAuth refresh failed:', err) }
+    }
+    if (!user?.anthropicApiKey && !followupOAuthToken) {
+      return res.status(400).json({ error: 'No Anthropic API key or Claude OAuth configured' })
+    }
 
     // Check if there's still an active process
     let agent = processManager.get(req.params.id)
@@ -871,7 +1039,8 @@ app.post('/api/workerbees/:id/followup', requireAuth, async (req, res) => {
       name: bee.name,
       cwd: bee.worktreePath,
       task: message,
-      apiKey: user.anthropicApiKey,
+      apiKey: user?.anthropicApiKey ?? '',
+      oauthAccessToken: followupOAuthToken,
     })
 
     // Restore message history into the new process
@@ -1920,13 +2089,14 @@ app.get('/api/costs/summary', requireAuth, async (req, res) => {
   })
 
   const user = await getUserById(userId)
-  const hasApiKey = !!user?.anthropicApiKey
+  // Either an API key or Claude OAuth satisfies the "can run agents" check.
+  const hasApiKey = !!user?.anthropicApiKey || !!user?.claudeOAuth?.connected
 
   res.json({
     hasApiKey,
     apiKeyMasked: user?.anthropicApiKey
       ? `sk-ant-...${user.anthropicApiKey.slice(-8)}`
-      : null,
+      : user?.claudeOAuth?.connected ? 'OAuth (Claude subscription)' : null,
     totalSpawned: bees.length,
     byStatus: bees.reduce<Record<string, number>>((acc, b) => {
       acc[b.status] = (acc[b.status] ?? 0) + 1; return acc
@@ -2105,6 +2275,18 @@ migrate().then(async () => {
   // Clear stale Mayor Lee session IDs â€” PTY sessions are in-memory only and lost on restart
   await db.execute({ sql: `UPDATE mayors SET session_id = NULL WHERE session_id IS NOT NULL`, args: [] })
 
+  // Migrate legacy default town path `/tmp/squansq-default` (volatile on macOS)
+  // to `~/.squan-workspace`. Existing rigs keep their own localPath untouched.
+  try {
+    const { homedir } = await import('os')
+    const { join } = await import('path')
+    const newDefault = join(homedir(), 'squan-workspace')
+    await db.execute({
+      sql: `UPDATE towns SET path = ? WHERE path IN ('/tmp/squansq-default', ?) OR path LIKE 'C:\\Users\\colin\\%'`,
+      args: [newDefault, join(homedir(), '.squan-workspace')],
+    })
+  } catch { /* non-fatal */ }
+
   await seedSystemTemplates()
 
   // Sync .squan/ directories for all projects
@@ -2191,9 +2373,10 @@ app.get('/api/user/provider', requireAuth, async (req, res) => {
       provider: (user as any).provider || 'anthropic',
       model: (user as any).provider_model || null,
       providerUrl: (user as any).provider_url || null,
-      hasAnthropicKey: !!(user as any).anthropicApiKey,
+      hasAnthropicKey: !!(user as any).anthropicApiKey || !!user.claudeOAuth?.connected,
       hasOpenaiKey: !!(user as any).openai_api_key,
       hasGoogleKey: !!(user as any).google_api_key,
+      hasClaudeOAuth: !!user.claudeOAuth?.connected,
     })
   } catch (err) { res.status(400).json({ error: (err as Error).message }) }
 })

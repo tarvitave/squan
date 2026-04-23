@@ -44,7 +44,17 @@ export const townManager = {
   async ensureDefault(): Promise<Town> {
     const towns = await this.list()
     if (towns.length > 0) return towns[0]
-    return this.create('default', '/tmp/squansq-default')
+    const { homedir } = await import('os')
+    const { join } = await import('path')
+    return this.create('default', join(homedir(), 'squan-workspace'))
+  },
+
+  async updatePath(id: string, newPath: string): Promise<Town> {
+    const db = getDb()
+    await db.execute({ sql: 'UPDATE towns SET path = ? WHERE id = ?', args: [newPath, id] })
+    const town = await this.getById(id)
+    if (!town) throw new Error('Town not found')
+    return town
   },
 }
 

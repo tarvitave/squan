@@ -21,6 +21,9 @@ forge.log
 # Temp files
 *.timestamp-*.mjs
 
+# Agent worktrees (created at runtime, per-agent)
+.squansq-worktrees/
+
 # IDE
 .claude/
 

@@ -20,6 +20,7 @@ interface StartMessage {
   cwd: string
   task: string
   apiKey: string
+  oauthAccessToken?: string   // Claude OAuth bearer token (Anthropic only)
   model?: string
   provider?: string       // 'anthropic' | 'openai' | 'google' | 'ollama'
   providerUrl?: string    // base URL for openai-compatible / ollama
@@ -254,6 +255,7 @@ async function initializeAgent(opts: StartMessage): Promise<void> {
     apiKey: opts.apiKey,
     model: opts.model ?? defaultModel(providerType),
     baseUrl: opts.providerUrl,
+    oauthAccessToken: opts.oauthAccessToken,
   })
   console.log(`[agent-worker] Provider: ${chatProvider.name}, Model: ${opts.model ?? defaultModel(providerType)}`)
 

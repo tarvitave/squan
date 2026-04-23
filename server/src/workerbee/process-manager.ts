@@ -42,6 +42,7 @@ class ProcessManager extends EventEmitter {
     cwd: string
     task: string
     apiKey: string
+    oauthAccessToken?: string
     model?: string
     provider?: string
     providerUrl?: string
@@ -51,12 +52,16 @@ class ProcessManager extends EventEmitter {
     // Resolve the worker script path
     const workerPath = join(__dirname, 'agent-worker.js')
 
+    const workerEnv: Record<string, string> = { ...process.env as Record<string, string> }
+    if (opts.apiKey) workerEnv.ANTHROPIC_API_KEY = opts.apiKey
+    if (opts.oauthAccessToken) {
+      workerEnv.CLAUDE_CODE_OAUTH_TOKEN = opts.oauthAccessToken
+      workerEnv.ANTHROPIC_AUTH_TOKEN = opts.oauthAccessToken
+    }
+
     const child = fork(workerPath, [], {
       stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
-      env: {
-        ...process.env,
-        ANTHROPIC_API_KEY: opts.apiKey,
-      },
+      env: workerEnv,
       // Don't inherit the server's cwd â€” each agent has its own
       cwd: opts.cwd,
     })
@@ -88,6 +93,7 @@ class ProcessManager extends EventEmitter {
             cwd: opts.cwd,
             task: opts.task,
             apiKey: opts.apiKey,
+            oauthAccessToken: opts.oauthAccessToken,
             model: opts.model,
             provider: opts.provider,
             providerUrl: opts.providerUrl,

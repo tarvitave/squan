@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '../../store/index.js'
 import { apiFetch } from '../../lib/api.js'
+import { useWorkspaceInfo, invalidateWorkspaceInfo } from '../../lib/workspace.js'
 import { Button } from '../ui/button.js'
 import { Input } from '../ui/input.js'
 import { X, Minus, Plus, Check, LogOut, Eye, EyeOff, Trash2, Puzzle, Cpu, Zap } from 'lucide-react'
@@ -28,9 +29,88 @@ export function PreferencesPanel() {
   const setFontSize = useStore((s) => s.setFontSize)
   const close = () => useStore.getState().setShowPreferences(false)
 
+  const workspaceInfo = useWorkspaceInfo()
+  const [workspacePath, setWorkspacePath] = useState('')
+  const [savingWorkspace, setSavingWorkspace] = useState(false)
+  const [savedWorkspace, setSavedWorkspace] = useState(false)
+  useEffect(() => { if (workspaceInfo) setWorkspacePath(workspaceInfo.root) }, [workspaceInfo])
+
+  const saveWorkspacePath = async () => {
+    if (!workspaceInfo || !workspacePath.trim()) return
+    setSavingWorkspace(true)
+    try {
+      await apiFetch(`/api/towns/${workspaceInfo.townId}`, { method: 'PATCH', body: JSON.stringify({ path: workspacePath.trim() }) })
+      invalidateWorkspaceInfo()
+      setSavedWorkspace(true); setTimeout(() => setSavedWorkspace(false), 2000)
+    } catch {}
+    setSavingWorkspace(false)
+  }
+
   const [apiKey, setApiKey] = useState(''); const [saving, setSaving] = useState(false); const [saved, setSaved] = useState(false)
   const [ghToken, setGhToken] = useState(''); const [savingGh, setSavingGh] = useState(false); const [savedGh, setSavedGh] = useState(false)
   const [showApiKey, setShowApiKey] = useState(false); const [showGhToken, setShowGhToken] = useState(false)
+
+  // Claude OAuth — loopback flow (browser redirects back to our own server)
+  const [oauthStep, setOauthStep] = useState<'idle' | 'waiting'>('idle')
+  const [oauthUrl, setOauthUrl] = useState('')
+  const [oauthState, setOauthState] = useState('')
+  const [oauthBusy, setOauthBusy] = useState(false)
+  const [oauthError, setOauthError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (oauthStep !== 'waiting' || !oauthState) return
+    const tick = async () => {
+      try {
+        const res = await apiFetch(`/api/auth/claude-oauth/status?state=${encodeURIComponent(oauthState)}`)
+        const data = await res.json()
+        if (data.status === 'complete') {
+          if (token && data.user) setAuth(token, data.user)
+          setOauthStep('idle'); setOauthUrl(''); setOauthState(''); setOauthError(null)
+        } else if (data.status === 'error') {
+          setOauthError(data.error ?? 'OAuth failed')
+          setOauthStep('idle'); setOauthUrl(''); setOauthState('')
+        }
+      } catch {}
+    }
+    const iv = setInterval(tick, 1500)
+    return () => clearInterval(iv)
+  }, [oauthStep, oauthState, token, setAuth])
+
+  const startClaudeOAuth = async () => {
+    setOauthBusy(true); setOauthError(null)
+    try {
+      const res = await apiFetch('/api/auth/claude-oauth/start', { method: 'POST', body: '{}' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed to start OAuth')
+      setOauthUrl(data.url); setOauthState(data.state); setOauthStep('waiting')
+      window.open(data.url, '_blank', 'noreferrer')
+    } catch (e) { setOauthError((e as Error).message) }
+    setOauthBusy(false)
+  }
+
+  const cancelClaudeOAuth = async () => {
+    try { await apiFetch('/api/auth/claude-oauth/cancel', { method: 'POST', body: '{}' }) } catch {}
+    setOauthStep('idle'); setOauthUrl(''); setOauthState(''); setOauthError(null)
+  }
+
+  const clearKey = async (type: 'api' | 'gh') => {
+    const url = type === 'api' ? '/api/auth/api-key' : '/api/auth/github-token'
+    try {
+      const res = await apiFetch(url, { method: 'DELETE' })
+      const data = await res.json()
+      if (token && data.user) setAuth(token, data.user)
+    } catch {}
+  }
+
+  const disconnectClaudeOAuth = async () => {
+    setOauthBusy(true)
+    try {
+      await apiFetch('/api/auth/claude-oauth', { method: 'DELETE' })
+      const me = await apiFetch('/api/auth/me').then(r => r.json())
+      if (token && me?.id) setAuth(token, me)
+    } catch {}
+    setOauthBusy(false)
+  }
 
   // Provider config
   const [providerConfig, setProviderConfig] = useState<{provider: string; model: string | null; providerUrl: string | null}>({ provider: 'anthropic', model: null, providerUrl: null })
@@ -156,13 +236,73 @@ export function PreferencesPanel() {
                 </div>
               </div>
 
+              {/* Workspace path */}
+              <div className="px-6 py-5">
+                <h3 className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-2">Workspace Path</h3>
+                <p className="text-xs text-text-secondary mb-3">
+                  Root directory where Squan clones new repositories. Each project lands in a subdirectory named after the repo.
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    value={workspacePath}
+                    onChange={e => setWorkspacePath(e.target.value)}
+                    placeholder="~/squan-workspace"
+                    className="font-mono text-xs"
+                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={saveWorkspacePath}
+                    disabled={savingWorkspace || !workspacePath.trim() || workspacePath.trim() === workspaceInfo?.root}
+                  >
+                    {savingWorkspace ? '…' : savedWorkspace ? <Check className="w-4 h-4 text-green-200" /> : 'Save'}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Claude OAuth (subscription) */}
+              <div className="px-6 py-5">
+                <h3 className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-2">Claude Account</h3>
+                <p className="text-xs text-text-secondary mb-3">
+                  Sign in with your Claude account to use your Pro/Max subscription for agent inference — no API credits needed.
+                </p>
+                {user?.claudeOAuth?.connected ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-sm text-text-primary">
+                      <Check className="w-4 h-4 text-green-200" />
+                      <span>Connected{user.claudeOAuth.expiresAt ? ` — expires ${new Date(user.claudeOAuth.expiresAt).toLocaleString()}` : ''}</span>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={disconnectClaudeOAuth} disabled={oauthBusy}>Disconnect</Button>
+                  </div>
+                ) : oauthStep === 'idle' ? (
+                  <Button variant="secondary" size="sm" onClick={startClaudeOAuth} disabled={oauthBusy}>
+                    {oauthBusy ? 'Opening…' : 'Sign in with Claude'}
+                  </Button>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xs text-text-secondary">
+                      Waiting for you to approve access in your browser…
+                      {oauthUrl && <> (Didn't open? <a href={oauthUrl} target="_blank" rel="noreferrer" className="underline">click here</a>.)</>}
+                    </p>
+                    <Button variant="ghost" size="sm" onClick={cancelClaudeOAuth}>Cancel</Button>
+                  </div>
+                )}
+                {oauthError && <p className="text-xs text-text-danger mt-2">{oauthError}</p>}
+              </div>
+
               {/* Anthropic key */}
               <div className="px-6 py-5">
-                <h3 className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-4">Anthropic API Key</h3>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm text-text-secondary">Current</span>
-                  <span className="text-sm text-text-primary font-mono">{user?.anthropicApiKey ? '\u2022\u2022\u2022\u2022' + user.anthropicApiKey.slice(-4) : 'Not set'}</span>
-                </div>
+                <h3 className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-2">Anthropic API Key</h3>
+                <p className="text-xs text-text-secondary mb-3">Pay-as-you-go agent inference billed to your Anthropic account.</p>
+                {user?.anthropicApiKey ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-sm text-text-primary">
+                      <Check className="w-4 h-4 text-green-200" />
+                      <span>Connected <span className="font-mono text-text-secondary">&mdash; ••••{user.anthropicApiKey.slice(-4)}</span></span>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => clearKey('api')}>Disconnect</Button>
+                  </div>
+                ) : (
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Input type={showApiKey ? 'text' : 'password'} placeholder="sk-ant-api03-..." value={apiKey} onChange={e => setApiKey(e.target.value)} className="pr-9" />
@@ -174,15 +314,22 @@ export function PreferencesPanel() {
                     {saving ? '\u2026' : saved ? <Check className="w-4 h-4 text-green-200" /> : 'Save'}
                   </Button>
                 </div>
+                )}
               </div>
 
               {/* GitHub */}
               <div className="px-6 py-5">
-                <h3 className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-4">GitHub Token</h3>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm text-text-secondary">Current</span>
-                  <span className="text-sm text-text-primary font-mono">{user?.githubToken ? '\u2022\u2022\u2022\u2022' + user.githubToken.slice(-4) : 'Not set'}</span>
-                </div>
+                <h3 className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-2">GitHub Token</h3>
+                <p className="text-xs text-text-secondary mb-3">Personal access token used for cloning repos and opening PRs on your behalf.</p>
+                {user?.githubToken ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-sm text-text-primary">
+                      <Check className="w-4 h-4 text-green-200" />
+                      <span>Connected <span className="font-mono text-text-secondary">&mdash; ••••{user.githubToken.slice(-4)}</span></span>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => clearKey('gh')}>Disconnect</Button>
+                  </div>
+                ) : (
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Input type={showGhToken ? 'text' : 'password'} placeholder="ghp_..." value={ghToken} onChange={e => setGhToken(e.target.value)} className="pr-9" />
@@ -194,6 +341,7 @@ export function PreferencesPanel() {
                     {savingGh ? '\u2026' : savedGh ? <Check className="w-4 h-4 text-green-200" /> : 'Save'}
                   </Button>
                 </div>
+                )}
               </div>
 
               {/* Account */}
