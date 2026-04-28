@@ -6,12 +6,10 @@
  * Supports: Anthropic, OpenAI, Google Gemini, Ollama + any MCP server.
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync } from 'fs'
-import { execSync } from 'child_process'
-import { join, relative, dirname } from 'path'
 import { createProvider, defaultModel, type ChatProvider, type ToolDef, type ChatResponse } from '../providers/index.js'
 import { McpManager, type McpExtensionConfig } from '../mcp/client.js'
-import { fetchUrl, searchWeb } from '../tools/web.js'
+import { getToolDefinitions, executeTool as registryExecuteTool, logToolInventory } from '../tools/index.js'
+import type { ToolContext } from '../tools/registry.js'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,203 +25,14 @@ interface StartMessage {
   maxTokens?: number
   maxTurns?: number
   extensions?: McpExtensionConfig[]  // MCP servers to connect
+  agentId?: string
+  projectId?: string
 }
 
 // ── Built-in tool definitions ────────────────────────────────────────────────
 
-const BUILTIN_TOOLS: ToolDef[] = [
-  {
-    name: 'read_file',
-    description: 'Read the contents of a file at the given path.',
-    input_schema: {
-      type: 'object' as const,
-      properties: { path: { type: 'string', description: 'File path relative to project root' } },
-      required: ['path'],
-    },
-  },
-  {
-    name: 'write_file',
-    description: 'Write content to a file. Creates parent directories if needed.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        path: { type: 'string', description: 'File path relative to project root' },
-        content: { type: 'string', description: 'Complete file content' },
-      },
-      required: ['path', 'content'],
-    },
-  },
-  {
-    name: 'edit_file',
-    description: 'Edit a file by finding and replacing text. Search must match exactly and uniquely.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        path: { type: 'string', description: 'File path relative to project root' },
-        search: { type: 'string', description: 'Exact text to find' },
-        replace: { type: 'string', description: 'Replacement text' },
-      },
-      required: ['path', 'search', 'replace'],
-    },
-  },
-  {
-    name: 'run_command',
-    description: 'Execute a shell command in the project directory.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        command: { type: 'string', description: 'Shell command to execute' },
-        timeout_ms: { type: 'number', description: 'Timeout in ms (default 60000)' },
-      },
-      required: ['command'],
-    },
-  },
-  {
-    name: 'list_directory',
-    description: 'List files and directories. Skips node_modules, .git, dist.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        path: { type: 'string', description: 'Directory path (default ".")' },
-        recursive: { type: 'boolean', description: 'List recursively (max depth 3)' },
-      },
-      required: [],
-    },
-  },
-  {
-    name: 'search_files',
-    description: 'Search for a pattern across files (like grep).',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        pattern: { type: 'string', description: 'Search pattern' },
-        path: { type: 'string', description: 'Directory to search (default ".")' },
-        file_pattern: { type: 'string', description: 'File glob (e.g. "*.ts")' },
-      },
-      required: ['pattern'],
-    },
-  },
-  {
-    name: 'fetch_url',
-    description: 'Fetch a URL and return its content as text. HTML is converted to readable plain text. Works for web pages, APIs, docs.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        url: { type: 'string', description: 'URL to fetch' },
-        max_length: { type: 'number', description: 'Max response length (default 50000)' },
-      },
-      required: ['url'],
-    },
-  },
-  {
-    name: 'search_web',
-    description: 'Search the web for information. Returns relevant results with links.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        query: { type: 'string', description: 'Search query' },
-        max_results: { type: 'number', description: 'Max results (default 5)' },
-      },
-      required: ['query'],
-    },
-  },
-  {
-    name: 'task_complete',
-    description: 'Signal that the task is complete with a summary.',
-    input_schema: {
-      type: 'object' as const,
-      properties: { summary: { type: 'string', description: 'Summary of what was done' } },
-      required: ['summary'],
-    },
-  },
-]
-
-// ── Built-in tool execution ──────────────────────────────────────────────────
-
-function executeBuiltinTool(name: string, input: Record<string, unknown>, cwd: string): { result: string; isError: boolean } {
-  try {
-    switch (name) {
-      case 'read_file': {
-        const fp = join(cwd, input.path as string)
-        if (!existsSync(fp)) return { result: `Error: File not found: ${input.path}`, isError: true }
-        const c = readFileSync(fp, 'utf8')
-        return { result: c.length > 50000 ? c.slice(0, 50000) + '\n... (truncated)' : c, isError: false }
-      }
-      case 'write_file': {
-        const fp = join(cwd, input.path as string)
-        mkdirSync(dirname(fp), { recursive: true })
-        writeFileSync(fp, input.content as string, 'utf8')
-        return { result: `Written: ${input.path} (${(input.content as string).split('\n').length} lines)`, isError: false }
-      }
-      case 'edit_file': {
-        const fp = join(cwd, input.path as string)
-        if (!existsSync(fp)) return { result: `Error: File not found: ${input.path}`, isError: true }
-        const content = readFileSync(fp, 'utf8')
-        const search = input.search as string
-        if (!content.includes(search)) return { result: `Error: Search text not found in ${input.path}`, isError: true }
-        const count = content.split(search).length - 1
-        if (count > 1) return { result: `Error: Search text found ${count} times, must be unique`, isError: true }
-        writeFileSync(fp, content.replace(search, input.replace as string), 'utf8')
-        return { result: `Edited: ${input.path}`, isError: false }
-      }
-      case 'run_command': {
-        const timeout = (input.timeout_ms as number) ?? 60000
-        try {
-          const result = execSync(input.command as string, {
-            cwd, timeout, encoding: 'utf8', maxBuffer: 2 * 1024 * 1024,
-            stdio: ['pipe', 'pipe', 'pipe'],
-          })
-          return { result: (result || '(no output)').slice(0, 10000), isError: false }
-        } catch (err: any) {
-          const stderr = err.stderr?.toString() ?? ''
-          const stdout = err.stdout?.toString() ?? ''
-          return { result: `Exit code ${err.status ?? 1}\n${stdout}\n${stderr}`.slice(0, 10000), isError: true }
-        }
-      }
-      case 'list_directory': {
-        const dirPath = join(cwd, (input.path as string) ?? '.')
-        const recursive = input.recursive as boolean ?? false
-        const items: string[] = []
-        const skip = new Set(['.git', 'node_modules', 'dist', '.vite', '__pycache__', '.next', '.squan'])
-        function scan(dir: string, depth: number) {
-          if (depth > 3) return
-          try {
-            for (const entry of readdirSync(dir)) {
-              if (entry.startsWith('.') && entry !== '.env') continue
-              if (skip.has(entry)) continue
-              const full = join(dir, entry)
-              const rel = relative(cwd, full)
-              const stat = statSync(full)
-              items.push(stat.isDirectory() ? `${rel}/` : rel)
-              if (recursive && stat.isDirectory()) scan(full, depth + 1)
-            }
-          } catch { /* permission errors */ }
-        }
-        scan(dirPath, 0)
-        return { result: items.join('\n') || '(empty directory)', isError: false }
-      }
-      case 'search_files': {
-        const searchPath = join(cwd, (input.path as string) ?? '.')
-        const pattern = input.pattern as string
-        try {
-          const cmd = process.platform === 'win32'
-            ? `findstr /srn "${pattern.replace(/"/g, '')}" "${relative(cwd, searchPath)}\\*"`
-            : `grep -rn "${pattern.replace(/"/g, '\\"')}" "${relative(cwd, searchPath)}" --include="${input.file_pattern ?? '*'}" 2>/dev/null | head -50`
-          const result = execSync(cmd, { cwd, encoding: 'utf8', maxBuffer: 1024 * 1024, timeout: 10000 })
-          return { result: result.slice(0, 10000), isError: false }
-        } catch {
-          return { result: 'No matches found', isError: false }
-        }
-      }
-      case 'task_complete':
-        return { result: `DONE: ${input.summary}`, isError: false }
-      default:
-        return { result: `Unknown built-in tool: ${name}`, isError: true }
-    }
-  } catch (err) {
-    return { result: `Error: ${(err as Error).message}`, isError: true }
-  }
-}
+// Built-in tools now come from the modular registry (server/src/tools/)
+// 53 tools across 7 categories: filesystem, git, code-analysis, network, database, system, agent
 
 // ── IPC helpers ──────────────────────────────────────────────────────────────
 
@@ -259,8 +68,9 @@ async function initializeAgent(opts: StartMessage): Promise<void> {
   })
   console.log(`[agent-worker] Provider: ${chatProvider.name}, Model: ${opts.model ?? defaultModel(providerType)}`)
 
-  // Start with built-in tools
-  allTools = [...BUILTIN_TOOLS]
+  // Start with all built-in tools from the registry
+  logToolInventory()
+  allTools = getToolDefinitions() as ToolDef[]
 
   // Connect to MCP servers if configured
   if (opts.extensions && opts.extensions.length > 0) {
@@ -270,24 +80,14 @@ async function initializeAgent(opts: StartMessage): Promise<void> {
     console.log(`[agent-worker] MCP: ${results.size} server(s) connected, ${mcpToolDefs.length} tools discovered`)
 
     // Merge MCP tools with built-in tools
-    allTools = [...BUILTIN_TOOLS, ...mcpToolDefs]
+    allTools = [...(getToolDefinitions() as ToolDef[]), ...mcpToolDefs]
   }
 }
 
 // ── Execute any tool (built-in or MCP) ───────────────────────────────────────
 
 async function executeTool(name: string, input: Record<string, unknown>, cwd: string): Promise<{ result: string; isError: boolean }> {
-  // Web tools (built-in but async)
-  if (name === 'fetch_url') {
-    const result = await fetchUrl(input.url as string, (input.max_length as number) ?? 50000)
-    return { result, isError: result.startsWith('Error') }
-  }
-  if (name === 'search_web') {
-    const result = await searchWeb(input.query as string, (input.max_results as number) ?? 5)
-    return { result, isError: result.startsWith('Search error') }
-  }
-
-  // MCP tools (prefixed with serverName__)
+  // MCP tools (prefixed with serverName__) — check first
   if (mcpManager?.isMcpTool(name)) {
     try {
       const result = await mcpManager.callTool(name, input)
@@ -297,8 +97,9 @@ async function executeTool(name: string, input: Record<string, unknown>, cwd: st
     }
   }
 
-  // Built-in tools
-  return executeBuiltinTool(name, input, cwd)
+  // All built-in tools from the registry (53 tools across 7 categories)
+  const context: ToolContext = { cwd, agentId: savedOpts?.agentId, projectId: savedOpts?.projectId }
+  return registryExecuteTool(name, input, context)
 }
 
 // ── Main agent loop ──────────────────────────────────────────────────────────

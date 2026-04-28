@@ -2,6 +2,31 @@
 
 All notable changes to Squan are documented here.
 
+## [2.8.0] - 2026-04-28
+
+### 53 Built-in Tools (was 9)
+- Modular tool registry -- tools organized into 7 categories with auto-discovery
+- Filesystem (15 tools) -- read, write, edit, tree, glob, diff, copy, move, delete, archive, checksum
+- Git (12 tools) -- status, diff, log, branch, commit, stash, blame, cherry-pick, merge, tag, remote, reset
+- Code Analysis (7 tools) -- find symbols, find references, code metrics, dependency graph, lint check, AST outline, find duplicates
+- Network (7 tools) -- fetch URL, search web, HTTP request, download file, DNS lookup, URL screenshot, port check
+- Database (4 tools) -- query SQLite, list tables, describe table, query CSV
+- System (8 tools) -- system info, env vars, process list, disk usage, network info, kill process, open URL, clipboard
+- Agent Coordination (8 new) -- delegate task, ask agent, share/read context, create skill, notify user, request review
+
+### 17 Messaging Platform Gateway
+- Gateway architecture -- route messages from any platform to Squan agents
+- Platform adapters -- Telegram, Discord, Slack, WhatsApp, Signal, Matrix, Mattermost, Microsoft Teams, Email, WeChat, WeCom, DingTalk, Feishu/Lark, LINE, QQBot, iMessage (BlueBubbles), IRC
+- Session management -- per-user/per-channel agent sessions with auto-dispatch
+- Slash commands -- /agents, /projects, /new, /switch, /status, /stop, /help from any platform
+- Access control -- per-platform user whitelists and concurrent agent limits
+
+### Architecture
+- Refactored direct-runner.ts and agent-worker.ts to use modular tool registry
+- Removed 200+ lines of duplicated tool code from agent runners
+- Tools are now shared between DirectRunner and AgentWorker
+- Gateway manager with hot-reload config and adapter lifecycle management
+
 ## [2.7.0] - 2026-04-23
 
 ### Anthropic OAuth (by Andrew Yochum)
